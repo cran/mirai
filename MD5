@@ -1,0 +1,13 @@
+50345217abad9613e88d3018141a3e6f *DESCRIPTION
+39435cea6a6c523bf2b67a8713a03786 *NAMESPACE
+f9c53e9b064c7bed409ad2e7f4eea652 *NEWS.md
+f157afde95dbe956270511d2625b49d1 *R/mirai-package.R
+ce51289ab45203b99713215fcc771d8f *R/mirai.R
+d809692b3af2eff4b71593468255b353 *README.md
+6e11e1ebb1a1cf752b64e782767dac22 *inst/CITATION
+542664380cd771879e9aa66808360b09 *man/call_mirai.Rd
+d1afd69a68a88ca6ed53cd1e887e64f8 *man/eval_mirai.Rd
+96efd46f313df389236f2610e72479b9 *man/exec.Rd
+3e2e4889988aae7ca51997fde6ee2e1e *man/figures/logo.png
+f7c22cbc242bfba079b9c49a8346a83f *man/mirai-package.Rd
+e3f4ea3da4a248f4b6b2d95e5550a9a5 *tests/tests.R
