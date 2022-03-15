@@ -2,46 +2,69 @@
 % Please edit documentation in R/mirai.R
 \name{eval_mirai}
 \alias{eval_mirai}
-\title{Eval mirai (Evaluate Async)}
+\alias{mirai}
+\title{mirai (Evaluate Async)}
 \usage{
 eval_mirai(.expr, ...)
+
+mirai(.expr, ...)
 }
 \arguments{
-\item{.expr}{an expression to evaluate in a new R process.}
+\item{.expr}{an expression to evaluate in a new R process. This may be of
+arbitrary length, wrapped in \{\} if necessary.}
 
-\item{...}{named arguments specifying the variables contained in 'expr'.}
+\item{...}{named arguments specifying the variables contained in '.expr'.}
 }
 \value{
 A 'mirai' object.
 }
 \description{
-Evaluate an expression asynchronously in a new non-blocking R process. This
-    function will return immediately with a mirai, which can be called for
-    the result.
+Evaluate an expression asynchronously in a new background R process. This
+    function will return immediately with a 'mirai', which will resolve to
+    the evaluated result once complete.
 }
 \details{
-This function will return immediately. To call the result, use
-    \code{\link{call_mirai}} on the returned 'mirai' object.
+This function will return a 'mirai' object immediately.
+
+    The value of a 'mirai' may be accessed at any time at \code{$value}, and
+    if yet to resolve, an 'unresolved' logical NA will be returned instead.
+
+    \code{\link{unresolved}} may also be used on a 'mirai', which returns TRUE
+    only if a 'mirai' has yet to resolve and FALSE otherwise. This is suitable
+    for use in control flow statements such as \code{while} or \code{if}.
+
+    Alternatively, to call (and wait for) the result, use
+    \code{\link{call_mirai}} on the returned 'mirai' object. This will block
+    until the result is returned.
 
     The expression '.expr' will be evaluated in a new R process in a clean
     environment consisting of the named objects passed as '...' only.
+
+    \code{\link{mirai}} is an alias for \code{\link{eval_mirai}}.
 }
 \examples{
 if (interactive()) {
 # Only run examples in interactive R sessions
 
-mirai <- eval_mirai(x + y + 1, x = 2, y = 3)
-mirai
-call_mirai(mirai)
-mirai
-mirai$value
+m <- mirai(x + y + 1, x = 2, y = 3)
+m
+m$value
+Sys.sleep(0.2)
+m$value
 
-mirai <- eval_mirai(as.matrix(df), df = data.frame())
-call_mirai(mirai)$value
+m <- mirai(as.matrix(df), df = data.frame())
+call_mirai(m)$value
 
-mirai <- eval_mirai(rnorm(n), n = 1e6)
-call_mirai(mirai)
-str(mirai$value)
+m <- mirai({
+  res <- rnorm(n)
+  res / rev(res)
+}, n = 1e6)
+while (unresolved(m)) {
+  cat("unresolved\n")
+  Sys.sleep(0.1)
+}
+m$value
+
 }
 
 }

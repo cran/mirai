@@ -2,7 +2,7 @@
 % Please edit documentation in R/mirai.R
 \name{call_mirai}
 \alias{call_mirai}
-\title{Call mirai (Retrieve Value)}
+\title{mirai (Call Value)}
 \usage{
 call_mirai(mirai)
 }
@@ -10,40 +10,58 @@ call_mirai(mirai)
 \item{mirai}{a 'mirai' object.}
 }
 \value{
-The passed mirai (invisibly). The retrieved value is stored in
-    \code{$value}.
+The passed 'mirai' (invisibly). The retrieved value is stored in
+    \code{$data}.
 }
 \description{
-Retrieve the value of a mirai (waiting for the the asynchronous operation to
-    resolve if it is still in progress).
+Call the value of a 'mirai', waiting for the the asynchronous operation to
+    resolve if it is still in progress.
 }
 \details{
-This function will wait for the async operation to complete if it is
-    still in progress.
+This function will wait for the async operation to complete if still
+    in progress (blocking).
 
     If an error occured in evaluation, a nul byte \code{00} (or serialized
-    nul byte) will be returned.
+    nul byte) will be returned. \code{\link{is_nul_byte}} can be used to test
+    for a nul byte.
 
-    The mirai updates itself in place, so do not assign the output of this
-    function to avoid duplicates. To access the value of a mirai \code{x}
-    directly, use \code{call_mirai(x)$value}.
+    The 'mirai' updates itself in place, so to access the value of a 'mirai'
+    \code{x} directly, use \code{call_mirai(x)$value}.
 }
+\section{Alternatively}{
+
+
+    The value of a 'mirai' may be accessed at any time at \code{$value}, and
+    if yet to resolve, an 'unresolved' logical NA will be returned instead.
+
+    \code{\link{unresolved}} may also be used on a 'mirai', and returns TRUE
+    only if a 'mirai' has yet to resolve and FALSE otherwise. This is suitable
+    for use in control flow statements such as \code{while} or \code{if}.
+}
+
 \examples{
 if (interactive()) {
 # Only run examples in interactive R sessions
 
-mirai <- eval_mirai(x + y + 1, x = 2, y = 3)
-mirai
-call_mirai(mirai)
-mirai
-mirai$value
+m <- mirai(x + y + 1, x = 2, y = 3)
+m
+m$value
+Sys.sleep(0.2)
+m$value
 
-mirai <- eval_mirai(as.matrix(df), df = data.frame())
-call_mirai(mirai)$value
+m <- mirai(as.matrix(df), df = data.frame())
+call_mirai(m)$value
 
-mirai <- eval_mirai(rnorm(n), n = 1e6)
-call_mirai(mirai)
-str(mirai$value)
+m <- mirai({
+  res <- rnorm(n)
+  res / rev(res)
+}, n = 1e6)
+while (unresolved(m)) {
+  cat("unresolved\n")
+  Sys.sleep(0.1)
+}
+m$value
+
 }
 
 }
