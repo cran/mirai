@@ -45,7 +45,7 @@
 #'
 #' @details This function will return a 'mirai' object immediately.
 #'
-#'     The value of a 'mirai' may be accessed at any time at \code{$value}, and
+#'     The value of a 'mirai' may be accessed at any time at \code{$data}, and
 #'     if yet to resolve, an 'unresolved' logical NA will be returned instead.
 #'
 #'     \code{\link{unresolved}} may also be used on a 'mirai', which returns TRUE
@@ -67,12 +67,12 @@
 #'
 #' m <- mirai(x + y + 1, x = 2, y = 3)
 #' m
-#' m$value
+#' m$data
 #' Sys.sleep(0.2)
-#' m$value
+#' m$data
 #'
 #' m <- mirai(as.matrix(df), df = data.frame())
-#' call_mirai(m)$value
+#' call_mirai(m)$data
 #'
 #' m <- mirai({
 #'   res <- rnorm(n)
@@ -82,7 +82,7 @@
 #'   cat("unresolved\n")
 #'   Sys.sleep(0.1)
 #' }
-#' m$value
+#' m$data
 #'
 #' }
 #'
@@ -97,48 +97,25 @@ eval_mirai <- function(.expr, ...) {
     envir <- list2env(arglist)
     ctx <- context(daemons())
     aio <- request(ctx, data = envir, send_mode = "serial", recv_mode = "serial", keep.raw = FALSE)
-    unresolv <- TRUE
-    cache <- NULL
-    makeActiveBinding(sym = "value", fun = function(x) {
-      if (unresolv) {
-        unresolved(res <- .subset2(aio, "data")) && return(res)
-        cache <<- res
-        unresolv <<- FALSE
-        rm("data", "con", "keep.raw", "aio", envir = aio)
-      }
-      cache
-    }, env = aio)
-    aio[["con"]] <- ctx
-    `class<-`(aio, c("mirai", class(aio)))
+    .Call(mirai_create, aio, ctx)
 
   } else {
 
     arglist <- list(.expr = substitute(.expr), ...)
     envir <- list2env(arglist)
-    platform <- .subset2(.Platform, "OS.type")
-    cmd <- switch(platform,
-                  unix = file.path(R.home("bin"), "Rscript"),
-                  windows = file.path(R.home("bin"), "Rscript.exe"))
-    url <- sprintf("ipc:///tmp/n%.15f", runif(1L))
+    url <- switch(.miraisysname,
+                  Linux = sprintf("abstract://n%.15f", runif(1L)),
+                  sprintf("ipc:///tmp/n%.15f", runif(1L)))
     arg <- c("--vanilla", "-e", shQuote(sprintf("mirai::.(%s)", deparse(url))))
+    cmd <- switch(.miraisysname,
+                  Windows = file.path(R.home("bin"), "Rscript.exe"),
+                  file.path(R.home("bin"), "Rscript"))
     system2(command = cmd, args = arg, stdout = NULL, stderr = NULL, wait = FALSE)
     sock <- socket(protocol = "req", listen = url, autostart = TRUE)
     ctx <- context(sock)
     aio <- request(ctx, data = envir, send_mode = "serial", recv_mode = "serial", keep.raw = FALSE)
-    unresolv <- TRUE
-    cache <- NULL
-    makeActiveBinding(sym = "value", fun = function(x) {
-      if (unresolv) {
-        unresolved(res <- .subset2(aio, "data")) && return(res)
-        cache <<- res
-        unresolv <<- FALSE
-        rm("data", "con", "keep.raw", "aio", envir = aio)
-      }
-      cache
-    }, env = aio)
     attr(sock, "context") <- ctx
-    aio[["con"]] <- sock
-    `class<-`(aio, c("mirai", class(aio)))
+    .Call(mirai_create, aio, sock)
 
   }
 
@@ -167,11 +144,11 @@ mirai <- eval_mirai
 #'     for a nul byte.
 #'
 #'     The 'mirai' updates itself in place, so to access the value of a 'mirai'
-#'     \code{x} directly, use \code{call_mirai(x)$value}.
+#'     \code{x} directly, use \code{call_mirai(x)$data}.
 #'
 #' @section Alternatively:
 #'
-#'     The value of a 'mirai' may be accessed at any time at \code{$value}, and
+#'     The value of a 'mirai' may be accessed at any time at \code{$data}, and
 #'     if yet to resolve, an 'unresolved' logical NA will be returned instead.
 #'
 #'     \code{\link{unresolved}} may also be used on a 'mirai', and returns TRUE
@@ -184,12 +161,12 @@ mirai <- eval_mirai
 #'
 #' m <- mirai(x + y + 1, x = 2, y = 3)
 #' m
-#' m$value
+#' m$data
 #' Sys.sleep(0.2)
-#' m$value
+#' m$data
 #'
 #' m <- mirai(as.matrix(df), df = data.frame())
-#' call_mirai(m)$value
+#' call_mirai(m)$data
 #'
 #' m <- mirai({
 #'   res <- rnorm(n)
@@ -199,7 +176,7 @@ mirai <- eval_mirai
 #'   cat("unresolved\n")
 #'   Sys.sleep(0.1)
 #' }
-#' m$value
+#' m$data
 #'
 #' }
 #'
@@ -207,11 +184,7 @@ mirai <- eval_mirai
 #'
 call_mirai <- function(mirai) {
 
-  if (!is.null(.subset2(mirai, "con"))) {
-    call_aio(mirai)
-    .subset2(mirai, "value")
-  }
-  invisible(mirai)
+  call_aio(mirai)
 
 }
 
@@ -262,7 +235,7 @@ call_mirai <- function(mirai) {
 #'
 #' @details Stops the asynchronous operation associated with 'mirai' by aborting,
 #'     and then waits for it to complete or to be completely aborted. The 'mirai'
-#'     is then deallocated and attempting to access the value at \code{$value}
+#'     is then deallocated and attempting to access the value at \code{$data}
 #'     will result in an error.
 #'
 #' @examples
@@ -278,11 +251,7 @@ call_mirai <- function(mirai) {
 #'
 stop_mirai <- function(mirai) {
 
-  if (!is.null(.subset2(mirai, "con"))) {
-    stop_aio(mirai)
-    rm("con", "keep.raw", envir = mirai)
-  }
-  invisible()
+  stop_aio(mirai)
 
 }
 
@@ -354,12 +323,14 @@ daemons <- function(...) {
       delta == 0L && return(0L)
 
       if (is.null(url)) {
-        url <<- sprintf("ipc:///tmp/n%.15f", runif(1L))
+        url <<- switch(.miraisysname,
+                      Linux = sprintf("abstract://n%.15f", runif(1L)),
+                      sprintf("ipc:///tmp/n%.15f", runif(1L)))
         sock <<- socket(protocol = "req", listen = url, autostart = TRUE)
-        cmd <<- switch(.subset2(.Platform, "OS.type"),
-                       unix = file.path(R.home("bin"), "Rscript"),
-                       windows = file.path(R.home("bin"), "Rscript.exe"))
         arg <<- c("--vanilla", "-e", shQuote(sprintf("mirai::..(%s)", deparse(url))))
+        cmd <<- switch(.miraisysname,
+                       Windows = file.path(R.home("bin"), "Rscript.exe"),
+                       file.path(R.home("bin"), "Rscript"))
       }
 
       if (delta > 0L) {
@@ -375,7 +346,7 @@ daemons <- function(...) {
         res <- 0L
         for (i in seq_len(-delta)) {
           ctx <- context(sock)
-          aio <- request(ctx, data = .mirai_scm(), send_mode = "serial", recv_mode = "serial", keep.raw = FALSE)
+          aio <- request(ctx, data = .Call(mirai_scm), send_mode = "serial", recv_mode = "serial", keep.raw = FALSE)
           call_aio(aio)
           close(ctx)
           if (identical(.subset2(aio, "data"), as.raw(1L))) {
@@ -399,16 +370,8 @@ daemons <- function(...) {
 #'
 print.mirai <- function(x, ...) {
 
-  cat("< mirai >\n - $value for evaluated result\n", file = stdout())
+  cat("< mirai >\n - $data for evaluated result\n", file = stdout())
   invisible(x)
-
-}
-
-#' @export
-#'
-.DollarNames.mirai <- function(x, pattern = "") {
-
-  grep(pattern, "value", value = TRUE, fixed = TRUE)
 
 }
 

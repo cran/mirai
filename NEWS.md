@@ -1,3 +1,9 @@
+# mirai 0.2.0
+
+* The value of a mirai is now stored at `$data` to optimally align with the underlying implementation.
+* Package now contains C code (requires compilation), using weak references for simpler management of resources.
+* Switch to abstract sockets on Linux.
+
 # mirai 0.1.1
 
 * `mirai()` added as an alias for `eval_mirai()`; supports evaluating arbitrary length expressions wrapped in `{}`.
