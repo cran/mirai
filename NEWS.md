@@ -1,3 +1,9 @@
+# mirai 0.4.0
+
+* Back to a pure R implementation thanks to enhanced internal design at nanonext.
+* Adds auxiliary function `is_mirai()` to test if an object is a mirai.
+* Versioning system to synchronise with nanonext e.g. v0.4.x requires nanonext >= 0.4.0.
+
 # mirai 0.2.0
 
 * The value of a mirai is now stored at `$data` to optimally align with the underlying implementation.

@@ -11,21 +11,19 @@
 #' @return Integer exit code.
 #'
 #' @noRd
-#' @export
 #'
 . <- function(.) {
 
-  missing(.) && stop("this function is for package internal use only")
   sock <- socket(protocol = "rep", dial = ., autostart = TRUE)
   ctx <- context(sock)
   on.exit(expr = {
     send_aio(ctx, data = as.raw(0L), mode = "serial")
     close(sock)
   })
-  envir <- recv_ctx(ctx, mode = "serial", keep.raw = FALSE)
+  envir <- recv(ctx, mode = "serial", keep.raw = FALSE)
   msg <- eval(expr = .subset2(envir, ".expr"), envir = envir)
   on.exit()
-  send_ctx(ctx, data = msg, mode = "serial", echo = FALSE)
+  send(ctx, data = msg, mode = "serial", echo = FALSE)
   Sys.sleep(2L)
   close(sock)
 
@@ -97,7 +95,8 @@ eval_mirai <- function(.expr, ...) {
     envir <- list2env(arglist)
     ctx <- context(daemons())
     aio <- request(ctx, data = envir, send_mode = "serial", recv_mode = "serial", keep.raw = FALSE)
-    .Call(mirai_create, aio, ctx)
+    `attr<-`(.subset2(aio, "aio"), "ctx", ctx)
+    `class<-`(aio, c("mirai", "recvAio"))
 
   } else {
 
@@ -106,7 +105,7 @@ eval_mirai <- function(.expr, ...) {
     url <- switch(.miraisysname,
                   Linux = sprintf("abstract://n%.15f", runif(1L)),
                   sprintf("ipc:///tmp/n%.15f", runif(1L)))
-    arg <- c("--vanilla", "-e", shQuote(sprintf("mirai::.(%s)", deparse(url))))
+    arg <- c("--vanilla", "-e", shQuote(sprintf("mirai:::.(%s)", deparse(url))))
     cmd <- switch(.miraisysname,
                   Windows = file.path(R.home("bin"), "Rscript.exe"),
                   file.path(R.home("bin"), "Rscript"))
@@ -114,8 +113,9 @@ eval_mirai <- function(.expr, ...) {
     sock <- socket(protocol = "req", listen = url, autostart = TRUE)
     ctx <- context(sock)
     aio <- request(ctx, data = envir, send_mode = "serial", recv_mode = "serial", keep.raw = FALSE)
-    attr(sock, "context") <- ctx
-    .Call(mirai_create, aio, sock)
+    `attr<-`(.subset2(aio, "aio"), "ctx", ctx)
+    `attr<-`(.subset2(aio, "aio"), "sock", sock)
+    `class<-`(aio, c("mirai", "recvAio"))
 
   }
 
@@ -182,11 +182,7 @@ mirai <- eval_mirai
 #'
 #' @export
 #'
-call_mirai <- function(mirai) {
-
-  call_aio(mirai)
-
-}
+call_mirai <- function(mirai) call_aio(mirai)
 
 #' mirai Server (Async Execution Daemon)
 #'
@@ -199,28 +195,26 @@ call_mirai <- function(mirai) {
 #' @return Integer exit code.
 #'
 #' @noRd
-#' @export
 #'
 .. <- function(.) {
 
-  missing(.) && stop("this function is for package internal use only")
   sock <- socket(protocol = "rep", dial = ., autostart = TRUE)
   on.exit(expr = {
     send_aio(ctx, data = as.raw(0L), mode = "serial")
     close(sock)
     ..(.)
   })
-  while (TRUE) {
+  repeat {
     ctx <- context(sock)
-    envir <- recv_ctx(ctx, mode = "serial", keep.raw = FALSE)
+    envir <- recv(ctx, mode = "serial", keep.raw = FALSE)
     missing(envir) && break
     msg <- eval(expr = .subset2(envir, ".expr"), envir = envir)
-    send_ctx(ctx, data = msg, mode = "serial", echo = FALSE)
+    send(ctx, data = msg, mode = "serial", echo = FALSE)
     close(ctx)
   }
 
   on.exit()
-  send_aio(ctx, data = as.raw(1L), mode = "serial")
+  send_aio(ctx, data = as.raw(1L), mode = "raw")
   close(sock)
 
 }
@@ -249,11 +243,30 @@ call_mirai <- function(mirai) {
 #'
 #' @export
 #'
-stop_mirai <- function(mirai) {
+stop_mirai <- function(mirai) stop_aio(mirai)
 
-  stop_aio(mirai)
-
-}
+#' Is mirai
+#'
+#' Is the object a mirai.
+#'
+#' @param x an object.
+#'
+#' @return Logical value TRUE or FALSE.
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' df <- data.frame()
+#' m <- mirai(as.matrix(df), df = df)
+#' is_mirai(m)
+#' is_mirai(df)
+#'
+#' }
+#'
+#' @export
+#'
+is_mirai <- function(x) inherits(x, "mirai")
 
 #' daemons (Background Processes)
 #'
@@ -327,7 +340,7 @@ daemons <- function(...) {
                       Linux = sprintf("abstract://n%.15f", runif(1L)),
                       sprintf("ipc:///tmp/n%.15f", runif(1L)))
         sock <<- socket(protocol = "req", listen = url, autostart = TRUE)
-        arg <<- c("--vanilla", "-e", shQuote(sprintf("mirai::..(%s)", deparse(url))))
+        arg <<- c("--vanilla", "-e", shQuote(sprintf("mirai:::..(%s)", deparse(url))))
         cmd <<- switch(.miraisysname,
                        Windows = file.path(R.home("bin"), "Rscript.exe"),
                        file.path(R.home("bin"), "Rscript"))
@@ -346,7 +359,7 @@ daemons <- function(...) {
         res <- 0L
         for (i in seq_len(-delta)) {
           ctx <- context(sock)
-          aio <- request(ctx, data = .Call(mirai_scm), send_mode = "serial", recv_mode = "serial", keep.raw = FALSE)
+          aio <- request(ctx, data = .mirai_scm(), send_mode = "serial", recv_mode = "raw", keep.raw = FALSE)
           call_aio(aio)
           close(ctx)
           if (identical(.subset2(aio, "data"), as.raw(1L))) {
