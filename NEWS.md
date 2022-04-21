@@ -1,3 +1,8 @@
+# mirai 0.4.1
+
+* Exits cleanly when daemons have not been explicitly zeroed prior to ending an R session.
+* Fixes possible hang on Windows when shutting down daemons.
+
 # mirai 0.4.0
 
 * Back to a pure R implementation thanks to enhanced internal design at nanonext.

@@ -7,11 +7,11 @@
 daemons(...)
 }
 \arguments{
-\item{...}{an integer to set the number of daemons. 'view' to view the
-currently set number of daemons.}
+\item{...}{either an integer to set the number of daemons, or 'view' to view
+the number of currently active daemons.}
 }
 \value{
-Depending on the specified ... parameter:
+Depending on the specified \code{...} parameter:
     \itemize{
     \item{integer: integer change in number of daemons (created or destroyed).}
     \item{'view': integer number of currently set daemons.}
@@ -21,18 +21,13 @@ Depending on the specified ... parameter:
 }
 \description{
 Set or view the number of daemons (background processes). Create persistent
-    background processes to send \code{\link{mirai}} requests. Setting a
-    positive number of daemons provides a potentially more efficient solution
-    for async operations as new processes no longer need to be created on an
-    ad hoc basis.
+    background processes to receive \code{\link{mirai}} requests. This
+    provides a potentially more efficient solution for async operations as
+    new processes no longer need to be created on an ad hoc basis.
 }
 \details{
 \{mirai\} will revert to the default behaviour of creating a new
     background process for each request if the number of daemons is set to 0.
-
-    It is highly recommended to shut down daemons by setting \code{daemons(0)}
-    or explicitly unloading the package before exiting your R session. This
-    will ensure that all processes exit cleanly and resources are freed.
 
     The current implementation is low-level and ensures tasks are
     evenly-distributed amongst daemons without actively managing a task queue.
@@ -45,11 +40,11 @@ Set or view the number of daemons (background processes). Create persistent
 if (interactive()) {
 # Only run examples in interactive R sessions
 
-# To create 4 background processes
+# Create 4 daemons
 daemons(4)
-# To view the number of background processes
+# View the number of active daemons
 daemons("view")
-# To destroy them all
+# Reset to zero
 daemons(0)
 }
 

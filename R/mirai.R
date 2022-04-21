@@ -17,7 +17,7 @@
   sock <- socket(protocol = "rep", dial = ., autostart = TRUE)
   ctx <- context(sock)
   on.exit(expr = {
-    send_aio(ctx, data = as.raw(0L), mode = "serial")
+    send(ctx, data = as.raw(0L), mode = "serial", echo = FALSE)
     close(sock)
   })
   envir <- recv(ctx, mode = "serial", keep.raw = FALSE)
@@ -200,7 +200,7 @@ call_mirai <- function(mirai) call_aio(mirai)
 
   sock <- socket(protocol = "rep", dial = ., autostart = TRUE)
   on.exit(expr = {
-    send_aio(ctx, data = as.raw(0L), mode = "serial")
+    send(ctx, data = as.raw(0L), mode = "serial", echo = FALSE)
     close(sock)
     ..(.)
   })
@@ -214,7 +214,6 @@ call_mirai <- function(mirai) call_aio(mirai)
   }
 
   on.exit()
-  send_aio(ctx, data = as.raw(1L), mode = "raw")
   close(sock)
 
 }
@@ -271,15 +270,14 @@ is_mirai <- function(x) inherits(x, "mirai")
 #' daemons (Background Processes)
 #'
 #' Set or view the number of daemons (background processes). Create persistent
-#'     background processes to send \code{\link{mirai}} requests. Setting a
-#'     positive number of daemons provides a potentially more efficient solution
-#'     for async operations as new processes no longer need to be created on an
-#'     ad hoc basis.
+#'     background processes to receive \code{\link{mirai}} requests. This
+#'     provides a potentially more efficient solution for async operations as
+#'     new processes no longer need to be created on an ad hoc basis.
 #'
-#' @param ... an integer to set the number of daemons. 'view' to view the
-#'     currently set number of daemons.
+#' @param ... either an integer to set the number of daemons, or 'view' to view
+#'     the number of currently active daemons.
 #'
-#' @return Depending on the specified ... parameter:
+#' @return Depending on the specified \code{...} parameter:
 #'     \itemize{
 #'     \item{integer: integer change in number of daemons (created or destroyed).}
 #'     \item{'view': integer number of currently set daemons.}
@@ -289,10 +287,6 @@ is_mirai <- function(x) inherits(x, "mirai")
 #'
 #' @details \{mirai\} will revert to the default behaviour of creating a new
 #'     background process for each request if the number of daemons is set to 0.
-#'
-#'     It is highly recommended to shut down daemons by setting \code{daemons(0)}
-#'     or explicitly unloading the package before exiting your R session. This
-#'     will ensure that all processes exit cleanly and resources are freed.
 #'
 #'     The current implementation is low-level and ensures tasks are
 #'     evenly-distributed amongst daemons without actively managing a task queue.
@@ -305,11 +299,11 @@ is_mirai <- function(x) inherits(x, "mirai")
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' # To create 4 background processes
+#' # Create 4 daemons
 #' daemons(4)
-#' # To view the number of background processes
+#' # View the number of active daemons
 #' daemons("view")
-#' # To destroy them all
+#' # Reset to zero
 #' daemons(0)
 #' }
 #'
@@ -329,7 +323,7 @@ daemons <- function(...) {
     } else {
 
       identical(..1, "view") && return(if (is.null(d <- attr(sock, "daemons"))) 0L else d)
-
+      is.numeric(..1) || stop("provide an integer to set daemons or 'view' to view daemons")
       set <- as.integer(..1)
       set >= 0L || stop("number of daemons must be zero or greater")
       delta <- set - proc
@@ -344,6 +338,7 @@ daemons <- function(...) {
         cmd <<- switch(.miraisysname,
                        Windows = file.path(R.home("bin"), "Rscript.exe"),
                        file.path(R.home("bin"), "Rscript"))
+        reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
       }
 
       if (delta > 0L) {
@@ -356,21 +351,20 @@ daemons <- function(...) {
         proc - orig
 
       } else {
-        res <- 0L
+        halt <- 0L
         for (i in seq_len(-delta)) {
           ctx <- context(sock)
-          aio <- request(ctx, data = .mirai_scm(), send_mode = "serial", recv_mode = "raw", keep.raw = FALSE)
-          call_aio(aio)
-          close(ctx)
-          if (identical(.subset2(aio, "data"), as.raw(1L))) {
-            res <- res - 1L
-            proc <<- proc - 1L
+          res <- send_aio(ctx, data = .mirai_scm(), mode = "serial", timeout = 2000L)
+          if (.subset2(call_aio(res), "result")) {
+            warning(sprintf("daemon %d shutdown failed", i))
           } else {
-            message(sprintf("%s [ shutdown fail ] daemon: %d", format.POSIXct(Sys.time()), i))
+            halt <- halt - 1L
+            proc <<- proc - 1L
           }
+          close(ctx)
         }
         attr(sock, "daemons") <- proc
-        res
+        halt
 
       }
     }
