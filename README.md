@@ -92,7 +92,7 @@ result.
 
 ``` r
 m$data |> str()
-#>  num [1:100000000] 0.0934 0.4201 0.0961 3.6469 -0.5886 ...
+#>  num [1:100000000] 0.401 1.029 3.28 -0.369 -0.171 ...
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -100,7 +100,7 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data |> str()
-#>  num [1:100000000] 0.0934 0.4201 0.0961 3.6469 -0.5886 ...
+#>  num [1:100000000] 0.401 1.029 3.28 -0.369 -0.171 ...
 ```
 
 #### Example 2: I/O-bound Operations
@@ -175,6 +175,44 @@ daemons(0)
 Set the number of daemons to zero again to revert to the default
 behaviour of creating a new background process for each ‘mirai’ request.
 
+### Deferred Evaluation Pipe
+
+{mirai} implements a deferred evaluation pipe `%>>%` for working with
+potentially unresolved values.
+
+Pipe a mirai `$data` value forward into a function or series of
+functions and it initially returns an ‘unresolvedExpr’.
+
+The result may be queried at `$data`, which will return another
+‘unresolvedExpr’ whilst unresolved. However when the original value
+resolves, the ‘unresolvedExpr’ will simultaneously resolve into a
+‘resolvedExpr’, for which the evaluated result will be available at
+`$data`.
+
+It is possible to use `unresolved()` around a ‘unresolvedExpr’ or its
+`$data` element to test for resolution, as in the example below.
+
+The pipe operator semantics are similar to R’s base pipe `|>`:
+
+`x %>>% f` is equivalent to `f(x)` <br /> `x %>>% f()` is equivalent to
+`f(x)` <br /> `x %>>% f(y)` is equivalent to `f(x, y)`
+
+``` r
+m <- mirai({Sys.sleep(0.5); 1})
+b <- m$data %>>% c(2, 3) %>>% as.character()
+b
+#> < unresolvedExpr >
+#>  - $data to query resolution
+b$data
+#> < unresolvedExpr >
+#>  - $data to query resolution
+Sys.sleep(1)
+b$data
+#> [1] "1" "2" "3"
+b
+#> < resolvedExpr: $data >
+```
+
 ### Links
 
 {mirai} website: <https://shikokuchuo.net/mirai/><br /> {mirai} on CRAN:
@@ -184,3 +222,9 @@ behaviour of creating a new background process for each ‘mirai’ request.
 on CRAN: <https://cran.r-project.org/package=nanonext>
 
 NNG website: <https://nng.nanomsg.org/><br />
+
+–
+
+Please note that this project is released with a [Contributor Code of
+Conduct](https://shikokuchuo.net/mirai/CODE_OF_CONDUCT.html). By
+participating in this project you agree to abide by its terms.

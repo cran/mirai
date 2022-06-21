@@ -1,3 +1,8 @@
+# mirai 0.5.0
+
+* Implements the `%>>%` deferred evaluation pipe.
+* Adds '.timeout' argument to `mirai()` to ensure a mirai always resolves even if the child process crashes etc.
+
 # mirai 0.4.1
 
 * Exits cleanly when daemons have not been explicitly zeroed prior to ending an R session.

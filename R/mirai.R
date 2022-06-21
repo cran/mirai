@@ -1,3 +1,19 @@
+# Copyright (C) 2022 Hibiki AI Limited <info@hibiki-ai.com>
+#
+# This file is part of mirai.
+#
+# mirai is free software: you can redistribute it and/or modify it under the
+# terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# mirai is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# mirai. If not, see <https://www.gnu.org/licenses/>.
+
 # mirai ------------------------------------------------------------------------
 
 #' mirai Server (Async Executor)
@@ -38,6 +54,8 @@
 #' @param .expr an expression to evaluate in a new R process. This may be of
 #'     arbitrary length, wrapped in \{\} if necessary.
 #' @param ... named arguments specifying the variables contained in '.expr'.
+#' @param .timeout (optional) integer value in milliseconds. A 'mirai' will
+#'     resolve to an 'errorValue' 5 (timed out) if evaluation exceeds this limit.
 #'
 #' @return A 'mirai' object.
 #'
@@ -69,7 +87,7 @@
 #' Sys.sleep(0.2)
 #' m$data
 #'
-#' m <- mirai(as.matrix(df), df = data.frame())
+#' m <- mirai(as.matrix(df), df = data.frame(), .timeout = 1000)
 #' call_mirai(m)$data
 #'
 #' m <- mirai({
@@ -80,13 +98,13 @@
 #'   cat("unresolved\n")
 #'   Sys.sleep(0.1)
 #' }
-#' m$data
+#' str(m$data)
 #'
 #' }
 #'
 #' @export
 #'
-eval_mirai <- function(.expr, ...) {
+eval_mirai <- function(.expr, ..., .timeout) {
 
   missing(.expr) && stop("missing expression, perhaps wrap in {}?")
   if (!is.null(proc <- attr(daemons(), "daemons")) && proc) {
@@ -94,7 +112,8 @@ eval_mirai <- function(.expr, ...) {
     arglist <- list(.expr = substitute(.expr), ...)
     envir <- list2env(arglist)
     ctx <- context(daemons())
-    aio <- request(ctx, data = envir, send_mode = "serial", recv_mode = "serial", keep.raw = FALSE)
+    aio <- request(ctx, data = envir, send_mode = "serial", recv_mode = "serial",
+                   timeout = if (missing(.timeout)) -2L else .timeout, keep.raw = FALSE)
     `attr<-`(.subset2(aio, "aio"), "ctx", ctx)
     `class<-`(aio, c("mirai", "recvAio"))
 
@@ -102,17 +121,18 @@ eval_mirai <- function(.expr, ...) {
 
     arglist <- list(.expr = substitute(.expr), ...)
     envir <- list2env(arglist)
-    url <- switch(.miraisysname,
+    url <- switch(daemons(NULL),
                   Linux = sprintf("abstract://n%.15f", runif(1L)),
                   sprintf("ipc:///tmp/n%.15f", runif(1L)))
     arg <- c("--vanilla", "-e", shQuote(sprintf("mirai:::.(%s)", deparse(url))))
-    cmd <- switch(.miraisysname,
+    cmd <- switch(daemons(NULL),
                   Windows = file.path(R.home("bin"), "Rscript.exe"),
                   file.path(R.home("bin"), "Rscript"))
     system2(command = cmd, args = arg, stdout = NULL, stderr = NULL, wait = FALSE)
     sock <- socket(protocol = "req", listen = url, autostart = TRUE)
     ctx <- context(sock)
-    aio <- request(ctx, data = envir, send_mode = "serial", recv_mode = "serial", keep.raw = FALSE)
+    aio <- request(ctx, data = envir, send_mode = "serial", recv_mode = "serial",
+                   timeout = if (missing(.timeout)) -2L else .timeout, keep.raw = FALSE)
     `attr<-`(.subset2(aio, "aio"), "ctx", ctx)
     `attr<-`(.subset2(aio, "aio"), "sock", sock)
     `class<-`(aio, c("mirai", "recvAio"))
@@ -176,7 +196,7 @@ mirai <- eval_mirai
 #'   cat("unresolved\n")
 #'   Sys.sleep(0.1)
 #' }
-#' m$data
+#' str(m$data)
 #'
 #' }
 #'
@@ -235,8 +255,8 @@ call_mirai <- function(mirai) call_aio(mirai)
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' m <- mirai(Sys.sleep(n), n = 5)
-#' stop_mirai(m)
+#' s <- mirai(Sys.sleep(n), n = 5)
+#' stop_mirai(s)
 #'
 #' }
 #'
@@ -256,8 +276,7 @@ stop_mirai <- function(mirai) stop_aio(mirai)
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' df <- data.frame()
-#' m <- mirai(as.matrix(df), df = df)
+#' m <- mirai(as.matrix(df), df = data.frame())
 #' is_mirai(m)
 #' is_mirai(df)
 #'
@@ -305,6 +324,7 @@ is_mirai <- function(x) inherits(x, "mirai")
 #' daemons("view")
 #' # Reset to zero
 #' daemons(0)
+#'
 #' }
 #'
 #' @export
@@ -313,34 +333,33 @@ daemons <- function(...) {
 
   proc <- 0L
   url <- sock <- cmd <- arg <- NULL
+  sysname <- .subset2(Sys.info(), "sysname")
 
   function(...) {
 
     if (missing(...)) {
-
       sock
 
-    } else {
+    } else if (is.null(..1)) {
+      sysname
 
-      identical(..1, "view") && return(if (is.null(d <- attr(sock, "daemons"))) 0L else d)
-      is.numeric(..1) || stop("provide an integer to set daemons or 'view' to view daemons")
+    } else if (is.numeric(..1)) {
       set <- as.integer(..1)
       set >= 0L || stop("number of daemons must be zero or greater")
       delta <- set - proc
       delta == 0L && return(0L)
 
       if (is.null(url)) {
-        url <<- switch(.miraisysname,
-                      Linux = sprintf("abstract://n%.15f", runif(1L)),
-                      sprintf("ipc:///tmp/n%.15f", runif(1L)))
+        url <<- switch(sysname,
+                       Linux = sprintf("abstract://n%.15f", runif(1L)),
+                       sprintf("ipc:///tmp/n%.15f", runif(1L)))
         sock <<- socket(protocol = "req", listen = url, autostart = TRUE)
         arg <<- c("--vanilla", "-e", shQuote(sprintf("mirai:::..(%s)", deparse(url))))
-        cmd <<- switch(.miraisysname,
+        cmd <<- switch(sysname,
                        Windows = file.path(R.home("bin"), "Rscript.exe"),
                        file.path(R.home("bin"), "Rscript"))
         reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
       }
-
       if (delta > 0L) {
         orig <- proc
         for (i in seq_len(delta)) {
@@ -349,7 +368,6 @@ daemons <- function(...) {
         }
         attr(sock, "daemons") <- proc
         proc - orig
-
       } else {
         halt <- 0L
         for (i in seq_len(-delta)) {
@@ -365,12 +383,15 @@ daemons <- function(...) {
         }
         attr(sock, "daemons") <- proc
         halt
-
       }
+
+    } else if (..1 == "view") {
+      if (is.null(d <- attr(sock, "daemons"))) 0L else d
+
+    } else {
+      stop("specify an integer to set daemons or 'view' to view daemons")
     }
-
   }
-
 }
 
 #' @export
