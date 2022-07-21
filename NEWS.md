@@ -1,3 +1,7 @@
+# mirai 0.5.2
+
+* Internal optimisations requiring nanonext >= 0.5.2.
+
 # mirai 0.5.0
 
 * Implements the `%>>%` deferred evaluation pipe.
