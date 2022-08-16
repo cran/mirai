@@ -33,13 +33,13 @@
   sock <- socket(protocol = "rep", dial = ., autostart = TRUE)
   ctx <- context(sock)
   on.exit(expr = {
-    send(ctx, data = as.raw(0L), mode = "serial", echo = FALSE)
+    send(ctx, data = `class<-`(geterrmessage(), c("miraiError", "errorValue")), mode = 1L, echo = FALSE)
     close(sock)
   })
-  envir <- recv(ctx, mode = "serial", keep.raw = FALSE)
+  envir <- recv(ctx, mode = 1L, keep.raw = FALSE)
   msg <- eval(expr = .subset2(envir, ".expr"), envir = envir)
+  send(ctx, data = msg, mode = 1L, echo = FALSE)
   on.exit()
-  send(ctx, data = msg, mode = "serial", echo = FALSE)
   msleep(2000L)
   close(sock)
 
@@ -53,9 +53,12 @@
 #'
 #' @param .expr an expression to evaluate in a new R process. This may be of
 #'     arbitrary length, wrapped in \{\} if necessary.
-#' @param ... named arguments specifying the variables contained in '.expr'.
-#' @param .timeout (optional) integer value in milliseconds. A 'mirai' will
-#'     resolve to an 'errorValue' 5 (timed out) if evaluation exceeds this limit.
+#' @param ... (optional) named arguments specifying variables contained in '.expr'.
+#' @param .args (optional) list supplying arguments to '.expr' (used in addition
+#'     to or instead of named arguments specified as '...').
+#' @param .timeout (optional) integer value in milliseconds or NULL for no
+#'     timeout. A 'mirai' will resolve to an 'errorValue' 5 (timed out) if
+#'     evaluation exceeds this limit.
 #'
 #' @return A 'mirai' object.
 #'
@@ -73,7 +76,14 @@
 #'     until the result is returned.
 #'
 #'     The expression '.expr' will be evaluated in a new R process in a clean
-#'     environment consisting of the named objects passed as '...' only.
+#'     environment consisting of the named objects passed as '...' only (along
+#'     with objects in the list '.args', if supplied).
+#'
+#'     If an error occurs in evaluation, the error message is returned as a
+#'     character string of class 'miraiError' and 'errorValue'.
+#'     \code{\link{is_mirai_error}} may be used to test for this, otherwise
+#'     \code{\link{is_error_value}} will also include other errors such as
+#'     timeouts.
 #'
 #'     \code{\link{mirai}} is an alias for \code{\link{eval_mirai}}.
 #'
@@ -87,7 +97,9 @@
 #' Sys.sleep(0.2)
 #' m$data
 #'
-#' m <- mirai(as.matrix(df), df = data.frame(), .timeout = 1000)
+#' df1 <- data.frame(a = 1, b = 2)
+#' df2 <- data.frame(a = 3, b = 1)
+#' m <- mirai(as.matrix(rbind(df1, df2)), .args = list(df1, df2), .timeout = 1000)
 #' call_mirai(m)$data
 #'
 #' m <- mirai({
@@ -104,22 +116,25 @@
 #'
 #' @export
 #'
-eval_mirai <- function(.expr, ..., .timeout) {
+eval_mirai <- function(.expr, ..., .args = list(), .timeout = NULL) {
 
   missing(.expr) && stop("missing expression, perhaps wrap in {}?")
   if (!is.null(proc <- attr(daemons(), "daemons")) && proc) {
 
     arglist <- list(.expr = substitute(.expr), ...)
+    if (length(.args))
+      arglist <- c(arglist, `names<-`(.args, as.character.default(substitute(.args)[-1L])))
     envir <- list2env(arglist)
     ctx <- context(daemons())
-    aio <- request(ctx, data = envir, send_mode = "serial", recv_mode = "serial",
-                   timeout = if (missing(.timeout)) -2L else .timeout, keep.raw = FALSE)
+    aio <- request(ctx, data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout, keep.raw = FALSE)
     `attr<-`(.subset2(aio, "aio"), "ctx", ctx)
     `class<-`(aio, c("mirai", "recvAio"))
 
   } else {
 
     arglist <- list(.expr = substitute(.expr), ...)
+    if (length(.args))
+      arglist <- c(arglist, `names<-`(.args, as.character.default(substitute(.args)[-1L])))
     envir <- list2env(arglist)
     url <- switch(daemons(NULL),
                   Linux = sprintf("abstract://n%.f", random()),
@@ -131,8 +146,7 @@ eval_mirai <- function(.expr, ..., .timeout) {
     system2(command = cmd, args = arg, stdout = NULL, stderr = NULL, wait = FALSE)
     sock <- socket(protocol = "req", listen = url, autostart = TRUE)
     ctx <- context(sock)
-    aio <- request(ctx, data = envir, send_mode = "serial", recv_mode = "serial",
-                   timeout = if (missing(.timeout)) -2L else .timeout, keep.raw = FALSE)
+    aio <- request(ctx, data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout, keep.raw = FALSE)
     `attr<-`(.subset2(aio, "aio"), "ctx", ctx)
     `attr<-`(.subset2(aio, "aio"), "sock", sock)
     `class<-`(aio, c("mirai", "recvAio"))
@@ -151,17 +165,18 @@ mirai <- eval_mirai
 #' Call the value of a 'mirai', waiting for the the asynchronous operation to
 #'     resolve if it is still in progress.
 #'
-#' @param mirai a 'mirai' object.
+#' @param aio a 'mirai' (mirai are also aio objects).
 #'
-#' @return The passed 'mirai' (invisibly). The retrieved value is stored in
-#'     \code{$data}.
+#' @return The passed 'mirai' (invisibly). The retrieved value is stored at \code{$data}.
 #'
 #' @details This function will wait for the async operation to complete if still
 #'     in progress (blocking).
 #'
-#'     If an error occured in evaluation, a nul byte \code{00} (or serialized
-#'     nul byte) will be returned. \code{\link{is_nul_byte}} can be used to test
-#'     for a nul byte.
+#'     If an error occurs in evaluation, the error message is returned as a
+#'     character string of class 'miraiError' and 'errorValue'.
+#'     \code{\link{is_mirai_error}} may be used to test for this, otherwise
+#'     \code{\link{is_error_value}} will also include other errors such as
+#'     timeouts.
 #'
 #'     The 'mirai' updates itself in place, so to access the value of a 'mirai'
 #'     \code{x} directly, use \code{call_mirai(x)$data}.
@@ -185,7 +200,9 @@ mirai <- eval_mirai
 #' Sys.sleep(0.2)
 #' m$data
 #'
-#' m <- mirai(as.matrix(df), df = data.frame())
+#' df1 <- data.frame(a = 1, b = 2)
+#' df2 <- data.frame(a = 3, b = 1)
+#' m <- mirai(as.matrix(rbind(df1, df2)), .args = list(df1, df2), .timeout = 1000)
 #' call_mirai(m)$data
 #'
 #' m <- mirai({
@@ -202,7 +219,7 @@ mirai <- eval_mirai
 #'
 #' @export
 #'
-call_mirai <- function(mirai) call_aio(mirai)
+call_mirai <- call_aio
 
 #' mirai Server (Async Execution Daemon)
 #'
@@ -219,18 +236,21 @@ call_mirai <- function(mirai) call_aio(mirai)
 .. <- function(.) {
 
   sock <- socket(protocol = "rep", dial = ., autostart = TRUE)
+  ctx <- context(sock)
   on.exit(expr = {
-    send(ctx, data = as.raw(0L), mode = "serial", echo = FALSE)
+    send(ctx, data = `class<-`(geterrmessage(), c("miraiError", "errorValue")), mode = 1L, echo = FALSE)
     close(sock)
+    rm(list = ls())
     ..(.)
   })
+
   repeat {
-    ctx <- context(sock)
-    envir <- recv(ctx, mode = "serial", keep.raw = FALSE)
+    envir <- recv(ctx, mode = 1L, keep.raw = FALSE)
     missing(envir) && break
     msg <- eval(expr = .subset2(envir, ".expr"), envir = envir)
-    send(ctx, data = msg, mode = "serial", echo = FALSE)
+    send(ctx, data = msg, mode = 1L, echo = FALSE)
     close(ctx)
+    ctx <- context(sock)
   }
 
   on.exit()
@@ -242,7 +262,7 @@ call_mirai <- function(mirai) call_aio(mirai)
 #'
 #' Stop evaluation of a mirai that is in progress.
 #'
-#' @param mirai a 'mirai' object.
+#' @param aio a 'mirai' (mirai are also aio objects).
 #'
 #' @return Invisible NULL.
 #'
@@ -262,7 +282,7 @@ call_mirai <- function(mirai) call_aio(mirai)
 #'
 #' @export
 #'
-stop_mirai <- function(mirai) stop_aio(mirai)
+stop_mirai <- stop_aio
 
 #' Is mirai
 #'
@@ -344,7 +364,12 @@ daemons <- function(...) {
       sysname
 
     } else if (is.numeric(..1)) {
-      set <- as.integer(..1)
+      if (length(..1) > 1L) {
+        set <- as.integer(..1[1L])
+        warning("vector specified, only using first element")
+      } else {
+        set <- as.integer(..1)
+      }
       set >= 0L || stop("number of daemons must be zero or greater")
       delta <- set - proc
       delta == 0L && return(0L)
@@ -372,7 +397,7 @@ daemons <- function(...) {
         halt <- 0L
         for (i in seq_len(-delta)) {
           ctx <- context(sock)
-          res <- send_aio(ctx, data = .mirai_scm(), mode = "serial", timeout = 2000L)
+          res <- send_aio(ctx, data = .mirai_scm(), mode = 1L, timeout = 2000L)
           if (.subset2(call_aio(res), "result")) {
             warning(sprintf("daemon %d shutdown failed", i))
           } else {
@@ -385,11 +410,11 @@ daemons <- function(...) {
         halt
       }
 
-    } else if (..1 == "view") {
+    } else if (is.character(..1) && ..1 == "view") {
       if (is.null(d <- attr(sock, "daemons"))) 0L else d
 
     } else {
-      stop("specify an integer to set daemons or 'view' to view daemons")
+      stop("specify an integer value to set daemons or 'view' to view daemons")
     }
   }
 }
@@ -402,4 +427,86 @@ print.mirai <- function(x, ...) {
   invisible(x)
 
 }
+
+#' @export
+#'
+print.miraiError <- function(x, ...) {
+
+  cat(x, file = stderr())
+  invisible(x)
+
+}
+
+#' Is mirai Error
+#'
+#' Is the object a 'miraiError'. When execution in a mirai process fails, the
+#'     error message is returned as a character string of class 'miraiError' and
+#'     'errorValue'. To test for all errors, including timeouts etc.,
+#'     \code{\link{is_error_value}} should be used instead.
+#'
+#' @param x an object.
+#'
+#' @return Logical value TRUE if 'x' is of class 'miraiError', FALSE otherwise.
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' m <- mirai(stop())
+#' call_mirai(m)
+#' is_mirai_error(m$data)
+#'
+#' }
+#'
+#' @export
+#'
+is_mirai_error <- function(x) inherits(x, "miraiError")
+
+#' Query if a Mirai is Unresolved
+#'
+#' Query whether a mirai or mirai value remains unresolved. Unlike
+#'     \code{\link{call_mirai}}, this function does not wait for completion.
+#'
+#' @param aio A 'mirai' or mirai value stored in \code{$data} (mirai are also
+#'     aio objects).
+#'
+#' @return Logical TRUE or FALSE.
+#'
+#' @details Returns TRUE for unresolved mirai or mirai values, FALSE otherwise.
+#'
+#'     Suitable for use in control flow statements such as \code{while} or \code{if}.
+#'
+#'     Note: querying resolution may cause a previously unresolved mirai to resolve.
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' m <- mirai(Sys.sleep(0.1))
+#' unresolved(m)
+#' Sys.sleep(0.5)
+#' unresolved(m)
+#'
+#' }
+#'
+#' @export
+#'
+unresolved <- unresolved
+
+#' Is Error Value
+#'
+#' Is the object an error value generated by the system or a 'miraiError' from
+#'     failed execution within a mirai. Includes user-specified errors such as
+#'     mirai timeouts.
+#'
+#' @param x an object.
+#'
+#' @return Logical value TRUE if 'x' is of class 'errorValue', FALSE otherwise.
+#'
+#' @examples
+#' is_error_value(1L)
+#'
+#' @export
+#'
+is_error_value <- is_error_value
 

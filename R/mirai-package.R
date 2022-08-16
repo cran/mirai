@@ -34,8 +34,8 @@
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
-#' @importFrom nanonext call_aio context is_nul_byte msleep random recv request
-#'     send send_aio socket stop_aio unresolved .mirai_scm
+#' @importFrom nanonext call_aio context is_error_value msleep random recv
+#'     request send send_aio socket stop_aio unresolved .mirai_scm
 #'
 #' @docType package
 #' @name mirai-package
@@ -52,10 +52,4 @@ NULL
   daemons(0L)
   invisible()
 }
-
-#' @export
-nanonext::is_nul_byte
-
-#' @export
-nanonext::unresolved
 
