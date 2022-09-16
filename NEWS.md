@@ -1,3 +1,8 @@
+# mirai 0.6.0
+
+* Notice: older package versions will no longer be supported by 'nanonext' >= 0.6.0. Please ensure you are using the latest version of 'mirai' or else refrain from uprading 'nanonext'.
+* Internal enhancements to `daemons()` and `%>>%` deferred evaluation pipe.
+
 # mirai 0.5.3
 
 * `mirai()` gains a '.args' argument for passing a list of objects already in the calling environment, allowing for example `mirai(func(x, y, z), .args = list(x, y, z))` rather than having to specify `mirai(func(x, y, z), x = x, y = y, z = z)`.

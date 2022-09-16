@@ -7,7 +7,7 @@
 call_mirai(aio)
 }
 \arguments{
-\item{aio}{a 'mirai' (mirai are also aio objects).}
+\item{aio}{a 'mirai' (also an 'aio' object).}
 }
 \value{
 The passed 'mirai' (invisibly). The retrieved value is stored at \code{$data}.
@@ -64,6 +64,13 @@ while (unresolved(m)) {
   Sys.sleep(0.1)
 }
 str(m$data)
+
+file <- tempfile()
+cat("r <- rnorm(n)", file = file)
+n <- 10L
+m <- mirai({source(file, local = TRUE); r}, .args = list(file, n))
+call_mirai(m)[["data"]]
+unlink(file)
 
 }
 

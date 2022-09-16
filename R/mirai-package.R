@@ -35,7 +35,7 @@
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
 #' @importFrom nanonext call_aio context is_error_value msleep random recv
-#'     request send send_aio socket stop_aio unresolved .mirai_scm
+#'     request send send_aio socket stop_aio unresolved
 #'
 #' @docType package
 #' @name mirai-package
@@ -45,11 +45,15 @@ NULL
 .onLoad <- function(libname, pkgname) {
   daemons <- daemons()
   daemons <<- daemons
-  invisible()
 }
 
 .onUnload <- function(libpath) {
-  daemons(0L)
-  invisible()
+  invisible(daemons(0L))
 }
+
+.sysname <- .subset2(Sys.info(), "sysname")
+
+.__scm__. <- as.raw(c(0x58, 0x0a, 0x00, 0x00, 0x00, 0x03, 0x00, 0x04, 0x02,
+                      0x01, 0x00, 0x03, 0x05, 0x00, 0x00, 0x00, 0x00, 0x05,
+                      0x55, 0x54, 0x46, 0x2d, 0x38, 0x00, 0x00, 0x00, 0xfc))
 

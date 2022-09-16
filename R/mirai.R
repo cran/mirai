@@ -30,7 +30,7 @@
 #'
 . <- function(.) {
 
-  sock <- socket(protocol = "rep", dial = ., autostart = TRUE)
+  sock <- socket(protocol = "rep", dial = .)
   ctx <- context(sock)
   on.exit(expr = {
     send(ctx, data = `class<-`(geterrmessage(), c("miraiError", "errorValue")), mode = 1L, echo = FALSE)
@@ -112,6 +112,13 @@
 #' }
 #' str(m$data)
 #'
+#' file <- tempfile()
+#' cat("r <- rnorm(n)", file = file)
+#' n <- 10L
+#' m <- mirai({source(file, local = TRUE); r}, .args = list(file, n))
+#' call_mirai(m)[["data"]]
+#' unlink(file)
+#'
 #' }
 #'
 #' @export
@@ -119,7 +126,7 @@
 eval_mirai <- function(.expr, ..., .args = list(), .timeout = NULL) {
 
   missing(.expr) && stop("missing expression, perhaps wrap in {}?")
-  if (!is.null(proc <- attr(daemons(), "daemons")) && proc) {
+  if (length(proc <- attr(daemons(), "daemons")) && proc) {
 
     arglist <- list(.expr = substitute(.expr), ...)
     if (length(.args))
@@ -136,15 +143,15 @@ eval_mirai <- function(.expr, ..., .args = list(), .timeout = NULL) {
     if (length(.args))
       arglist <- c(arglist, `names<-`(.args, as.character.default(substitute(.args)[-1L])))
     envir <- list2env(arglist)
-    url <- switch(daemons(NULL),
+    url <- switch(.sysname,
                   Linux = sprintf("abstract://n%.f", random()),
                   sprintf("ipc:///tmp/n%.f", random()))
     arg <- c("--vanilla", "-e", shQuote(sprintf("mirai:::.(%s)", deparse(url))))
-    cmd <- switch(daemons(NULL),
+    cmd <- switch(.sysname,
                   Windows = file.path(R.home("bin"), "Rscript.exe"),
                   file.path(R.home("bin"), "Rscript"))
     system2(command = cmd, args = arg, stdout = NULL, stderr = NULL, wait = FALSE)
-    sock <- socket(protocol = "req", listen = url, autostart = TRUE)
+    sock <- socket(protocol = "req", listen = url)
     ctx <- context(sock)
     aio <- request(ctx, data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout, keep.raw = FALSE)
     `attr<-`(.subset2(aio, "aio"), "ctx", ctx)
@@ -165,7 +172,7 @@ mirai <- eval_mirai
 #' Call the value of a 'mirai', waiting for the the asynchronous operation to
 #'     resolve if it is still in progress.
 #'
-#' @param aio a 'mirai' (mirai are also aio objects).
+#' @param aio a 'mirai' (also an 'aio' object).
 #'
 #' @return The passed 'mirai' (invisibly). The retrieved value is stored at \code{$data}.
 #'
@@ -215,6 +222,13 @@ mirai <- eval_mirai
 #' }
 #' str(m$data)
 #'
+#' file <- tempfile()
+#' cat("r <- rnorm(n)", file = file)
+#' n <- 10L
+#' m <- mirai({source(file, local = TRUE); r}, .args = list(file, n))
+#' call_mirai(m)[["data"]]
+#' unlink(file)
+#'
 #' }
 #'
 #' @export
@@ -235,22 +249,21 @@ call_mirai <- call_aio
 #'
 .. <- function(.) {
 
-  sock <- socket(protocol = "rep", dial = ., autostart = TRUE)
-  ctx <- context(sock)
-  on.exit(expr = {
-    send(ctx, data = `class<-`(geterrmessage(), c("miraiError", "errorValue")), mode = 1L, echo = FALSE)
-    close(sock)
-    rm(list = ls())
-    ..(.)
-  })
+  sock <- socket(protocol = "rep", dial = .)
 
   repeat {
+    on.exit(expr = close(sock))
+    ctx <- context(sock)
     envir <- recv(ctx, mode = 1L, keep.raw = FALSE)
-    missing(envir) && break
+    on.exit(expr = {
+      send(ctx, data = `class<-`(geterrmessage(), c("miraiError", "errorValue")), mode = 1L, echo = FALSE)
+      close(sock)
+      rm(list = ls())
+      ..(.)
+    })
     msg <- eval(expr = .subset2(envir, ".expr"), envir = envir)
     send(ctx, data = msg, mode = 1L, echo = FALSE)
     close(ctx)
-    ctx <- context(sock)
   }
 
   on.exit()
@@ -262,7 +275,7 @@ call_mirai <- call_aio
 #'
 #' Stop evaluation of a mirai that is in progress.
 #'
-#' @param aio a 'mirai' (mirai are also aio objects).
+#' @param aio a 'mirai' (also an 'aio' object).
 #'
 #' @return Invisible NULL.
 #'
@@ -353,15 +366,12 @@ daemons <- function(...) {
 
   proc <- 0L
   url <- sock <- cmd <- arg <- NULL
-  sysname <- .subset2(Sys.info(), "sysname")
+  notsetup <- TRUE
 
   function(...) {
 
     if (missing(...)) {
       sock
-
-    } else if (is.null(..1)) {
-      sysname
 
     } else if (is.numeric(..1)) {
       if (length(..1) > 1L) {
@@ -374,16 +384,17 @@ daemons <- function(...) {
       delta <- set - proc
       delta == 0L && return(0L)
 
-      if (is.null(url)) {
-        url <<- switch(sysname,
+      if (notsetup) {
+        url <<- switch(.sysname,
                        Linux = sprintf("abstract://n%.f", random()),
                        sprintf("ipc:///tmp/n%.f", random()))
-        sock <<- socket(protocol = "req", listen = url, autostart = TRUE)
+        sock <<- socket(protocol = "req", listen = url)
+        reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
         arg <<- c("--vanilla", "-e", shQuote(sprintf("mirai:::..(%s)", deparse(url))))
-        cmd <<- switch(sysname,
+        cmd <<- switch(.sysname,
                        Windows = file.path(R.home("bin"), "Rscript.exe"),
                        file.path(R.home("bin"), "Rscript"))
-        reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
+        notsetup <<- FALSE
       }
       if (delta > 0L) {
         orig <- proc
@@ -397,7 +408,7 @@ daemons <- function(...) {
         halt <- 0L
         for (i in seq_len(-delta)) {
           ctx <- context(sock)
-          res <- send_aio(ctx, data = .mirai_scm(), mode = 1L, timeout = 2000L)
+          res <- send_aio(ctx, data = .__scm__., mode = 2L, timeout = 2000L)
           if (.subset2(call_aio(res), "result")) {
             warning(sprintf("daemon %d shutdown failed", i))
           } else {
@@ -411,7 +422,7 @@ daemons <- function(...) {
       }
 
     } else if (is.character(..1) && ..1 == "view") {
-      if (is.null(d <- attr(sock, "daemons"))) 0L else d
+      if (length(d <- attr(sock, "daemons"))) d else 0L
 
     } else {
       stop("specify an integer value to set daemons or 'view' to view daemons")
