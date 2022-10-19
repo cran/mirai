@@ -10,25 +10,27 @@ status](https://www.r-pkg.org/badges/version/mirai?color=112d4e)](https://CRAN.R
 [![mirai status
 badge](https://shikokuchuo.r-universe.dev/badges/mirai?color=ddcacc)](https://shikokuchuo.r-universe.dev)
 [![R-CMD-check](https://github.com/shikokuchuo/mirai/workflows/R-CMD-check/badge.svg)](https://github.com/shikokuchuo/mirai/actions)
+[![codecov](https://codecov.io/gh/shikokuchuo/mirai/branch/main/graph/badge.svg)](https://app.codecov.io/gh/shikokuchuo/mirai)
 <!-- badges: end -->
 
 Minimalist async evaluation framework for R.
 
 未来 みらい mirai is Japanese for ‘future’.
 
-Extremely simple and lightweight method for concurrent / parallel code
-execution, built on ‘nanonext’ and ‘NNG’ (Nanomsg Next Gen) technology.
-
-Whilst frameworks for parallelisation exist for R, {mirai} is designed
-for simplicity.
+Simple and lightweight parallelism and concurrent code execution, local
+or distributed across the network, built on ‘nanonext’ and ‘NNG’
+(Nanomsg Next Gen) technology.
 
 `mirai()` returns a ‘mirai’ object immediately.
 
 A ‘mirai’ evaluates an arbitrary expression asynchronously, resolving
-automatically upon completion.
+automatically upon completion. The asynchronous task runs in an
+ephemeral or persistent process, spawned locally or distributed across
+the network.
 
 {mirai} has a tiny pure R code base, relying solely on {nanonext}, a
-lightweight binding for the NNG C library with no package dependencies.
+high-performance binding for the ‘NNG’ C library with zero package
+dependencies.
 
 ### Table of Contents
 
@@ -37,9 +39,10 @@ lightweight binding for the NNG C library with no package dependencies.
     Operations](#example-1-compute-intensive-operations)
 3.  [Example 2: I/O-bound Operations](#example-2-io-bound-operations)
 4.  [Daemons](#daemons)
-5.  [Deferred Evaluation Pipe](#deferred-evaluation-pipe)
-6.  [Errors and Timeouts](#errors-and-timeouts)
-7.  [Links](#links)
+5.  [Distributed Computing](#distributed-computing)
+6.  [Deferred Evaluation Pipe](#deferred-evaluation-pipe)
+7.  [Errors and Timeouts](#errors-and-timeouts)
+8.  [Links](#links)
 
 ### Installation
 
@@ -98,7 +101,7 @@ result.
 
 ``` r
 m$data |> str()
-#>  num [1:100000000] 0.976 0.733 0.88 3.023 0.693 ...
+#>  num [1:100000000] 0.582 0.571 29.254 0.205 0.387 ...
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -106,7 +109,7 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data |> str()
-#>  num [1:100000000] 0.976 0.733 0.88 3.023 0.693 ...
+#>  num [1:100000000] 0.582 0.571 29.254 0.205 0.387 ...
 ```
 
 [« Back to ToC](#table-of-contents)
@@ -123,7 +126,7 @@ operations concurrently in a separate process.
 
 A ‘mirai’ object is returned immediately.
 
-Below, `.args` accepts a list of objects already present in the calling
+Below, ‘.args’ accepts a list of objects already present in the calling
 environment to be passed to the mirai.
 
 ``` r
@@ -197,6 +200,47 @@ behaviour of creating a new background process for each ‘mirai’ request.
 
 [« Back to ToC](#table-of-contents)
 
+### Distributed Computing
+
+Through the `daemons()` interface, tasks may also be sent for
+computation to server processes on the network.
+
+Specify the ‘.url’ argument as the client network address (or leave
+blank to listen on all interfaces on the host) and a port that is able
+to accept incoming connections, for example:
+
+``` r
+daemons(.url = "tcp://:5555")
+#> [1] 1
+```
+
+The network topology is such that the client listens at the above
+address, and distributes tasks to all server processes that are
+connected into it.
+
+On the server, the `server()` function may be called from a suitable
+shell (e.g. using Rscript as in the case below) to set up a remote
+daemon process (here ‘192.168.0.2’ is the network IP address of the
+client):
+
+    Rscript --vanilla -e 'mirai::server("tcp://192.168.0.2:5555")'
+
+Network resources can be added and removed as required. Tasks are
+automatically distributed to all available server processes.
+
+To reset all connections and revert to default behaviour:
+
+``` r
+daemons(0)
+#> Warning in daemons(0): 1 daemon shutdowns timed out (may require manual action)
+#> [1] -1
+```
+
+Note: the above warning occurs as no server processes were actually
+connected in creating this example.
+
+[« Back to ToC](#table-of-contents)
+
 ### Deferred Evaluation Pipe
 
 {mirai} implements a deferred evaluation pipe `%>>%` for working with
@@ -245,13 +289,12 @@ debugging.
 
 ``` r
 m1 <- mirai(stop("occurred with a custom message", call. = FALSE))
-cat(call_mirai(m1)$data)
-#> Error: occurred with a custom message
+call_mirai(m1)$data
+#> 'miraiError' chr  Error: occurred with a custom message
 
 m2 <- mirai(mirai())
-cat(call_mirai(m2)$data)
-#> Error in mirai() : missing expression, perhaps wrap in {}?
-#> Calls: <Anonymous> -> eval -> eval -> mirai
+call_mirai(m2)$data
+#> 'miraiError' chr  Error in mirai(): missing expression, perhaps wrap in {}?
 
 is_mirai_error(m2$data)
 #> [1] TRUE
@@ -259,14 +302,14 @@ is_error_value(m2$data)
 #> [1] TRUE
 ```
 
-If execution of a mirai surpasses the timeout set via the `.timeout`
-argument, the mirai will resolve to an `errorValue`. This can, amongst
+If execution of a mirai surpasses the timeout set via the ‘.timeout’
+argument, the mirai will resolve to an ‘errorValue’. This can, amongst
 other things, guard against mirai processes that hang and never return.
 
 ``` r
 m3 <- mirai(nanonext::msleep(1000), .timeout = 500)
 call_mirai(m3)$data
-#> Warning in (function (x) : 5 | Timed out
+#> Warning in (function (.) : 5 | Timed out
 #> 'errorValue' int 5
 
 is_mirai_error(m3$data)

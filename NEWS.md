@@ -1,6 +1,14 @@
+# mirai 0.7.0
+
+* `daemons()` now takes 'n' and '.url' arguments. '.url' is an optional client URL allowing mirai tasks to be distributed across the network. Compatibility with existing interface is retained.
+* The server function `server()` is exported for creating daemon / ephemeral processes on network resources.
+* Mirai errors are formatted better and now print to stdout rather than stderr.
+* Improvements to performance and stability requiring nanonext >= 0.6.0.
+* Internal enhancements to error handling in a mirai / daemon process.
+
 # mirai 0.6.0
 
-* Notice: older package versions will no longer be supported by 'nanonext' >= 0.6.0. Please ensure you are using the latest version of 'mirai' or else refrain from uprading 'nanonext'.
+* Notice: older package versions will no longer be supported by 'nanonext' >= 0.6.0. Please ensure you are using the latest version of 'mirai' or else refrain from upgrading 'nanonext'.
 * Internal enhancements to `daemons()` and `%>>%` deferred evaluation pipe.
 
 # mirai 0.5.3

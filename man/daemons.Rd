@@ -2,32 +2,55 @@
 % Please edit documentation in R/mirai.R
 \name{daemons}
 \alias{daemons}
-\title{daemons (Background Processes)}
+\title{daemons (Background and Remote Processes)}
 \usage{
-daemons(...)
+daemons(n, .url)
 }
 \arguments{
-\item{...}{either an integer to set the number of daemons, or 'view' to view
-the number of currently active daemons.}
+\item{n}{integer number of daemons to set | 'view' to view the current number
+of daemons.}
+
+\item{.url}{(optional) for distributing tasks across the network: character
+client URL and port accepting incoming connections e.g.
+'tcp://192.168.0.2:5555' at which server processes started using
+\code{\link{server}} should connect to. To listen to port 5555 (for example)
+on all interfaces on the host, specify one of 'tcp://:5555',
+'tcp://*:5555' or 'tcp://0.0.0.0:5555'.}
 }
 \value{
-Depending on the specified \code{...} parameter:
+Depending on 'n' specified:
     \itemize{
     \item{integer: integer change in number of daemons (created or destroyed).}
     \item{'view': integer number of currently set daemons.}
-    \item{missing: the 'nanoSocket' for connecting to the daemons, or NULL if
-    it is yet to be created.}
     }
 }
 \description{
-Set or view the number of daemons (background processes). Create persistent
-    background processes to receive \code{\link{mirai}} requests. This
-    provides a potentially more efficient solution for async operations as
-    new processes no longer need to be created on an ad hoc basis.
+Set or view the number of daemons (server processes). Create persistent
+    background processes to receive \code{\link{mirai}} requests, providing
+    an efficient solution for async operations on a local machine. Also
+    provides the interface for distributing requests across the network.
 }
 \details{
-\{mirai\} will revert to the default behaviour of creating a new
-    background process for each request if the number of daemons is set to 0.
+Set 'n' to 0 to reset all daemon connections. \{mirai\} will revert
+    to the default behaviour of creating a new background process for each
+    request.
+
+    Specifying a custom client URL without 'n' (or 'n' < 1) will default to a
+    value for 'n' of 1.
+
+    Calling \code{daemons()} without any arguments returns the 'nanoSocket'
+    for connecting to the daemons, or NULL if it is yet to be created.
+}
+\section{About}{
+
+
+    Daemons provide a potentially more efficient solution for async operations
+    as new processes no longer need to be created on an ad hoc basis.
+
+    Specifying '.url' also allows tasks to be distributed across the network.
+    The network topology is such that server daemons dial into the client
+    socket. In this way, network resources may be easily added or removed at
+    any time.
 
     The current implementation is low-level and ensures tasks are
     evenly-distributed amongst daemons without actively managing a task queue.
@@ -36,6 +59,7 @@ Set or view the number of daemons (background processes). Create persistent
     concurrent tasks typically does not exceed the number of available
     daemons.
 }
+
 \examples{
 if (interactive()) {
 # Only run examples in interactive R sessions

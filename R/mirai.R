@@ -16,32 +16,42 @@
 
 # mirai ------------------------------------------------------------------------
 
-#' mirai Server (Async Executor)
+#' mirai Server (Async Executor [Daemon])
 #'
-#' Implements an executor/server for the remote process. Awaits data, evaluates
-#'     an expression in an environment containing the supplied data, and returns
-#'     the result to the caller/client.
+#' Implements a [persistent] executor/server for the remote process. Awaits data,
+#'     evaluates an expression in an environment containing the supplied data,
+#'     and returns the result to the caller/client.
 #'
-#' @param . the internally assigned unique URL.
+#' @param .url the client URL and port to connect to as a character string e.g.
+#'     'tcp://192.168.0.2:5555'.
+#' @param daemon [default TRUE] launch as a persistent daemon or, if FALSE, an
+#'     ephemeral process.
 #'
-#' @return Integer exit code.
+#' @return Invisible NULL.
 #'
-#' @noRd
+#' @section About:
 #'
-. <- function(.) {
+#'     The network topology is such that server daemons dial into the client
+#'     socket. In this way, network resources may be easily added or removed at
+#'     any time.
+#'
+#' @export
+#'
+server <- function(.url, daemon = TRUE) {
 
-  sock <- socket(protocol = "rep", dial = .)
-  ctx <- context(sock)
-  on.exit(expr = {
-    send(ctx, data = `class<-`(geterrmessage(), c("miraiError", "errorValue")), mode = 1L, echo = FALSE)
-    close(sock)
-  })
-  envir <- recv(ctx, mode = 1L, keep.raw = FALSE)
-  msg <- eval(expr = .subset2(envir, ".expr"), envir = envir)
-  send(ctx, data = msg, mode = 1L, echo = FALSE)
-  on.exit()
+  sock <- socket(protocol = "rep", dial = .url)
+  on.exit(expr = close(sock))
+
+  repeat {
+    ctx <- context(sock)
+    envir <- recv(ctx, mode = 1L)
+    data <- tryCatch(eval(expr = .subset2(envir, ".expr"), envir = envir), error = mk_mirai_error)
+    send(ctx, data = data, mode = 1L)
+    close(ctx)
+    daemon || break
+  }
+
   msleep(2000L)
-  close(sock)
 
 }
 
@@ -126,39 +136,28 @@
 eval_mirai <- function(.expr, ..., .args = list(), .timeout = NULL) {
 
   missing(.expr) && stop("missing expression, perhaps wrap in {}?")
-  if (length(proc <- attr(daemons(), "daemons")) && proc) {
 
-    arglist <- list(.expr = substitute(.expr), ...)
-    if (length(.args))
-      arglist <- c(arglist, `names<-`(.args, as.character.default(substitute(.args)[-1L])))
-    envir <- list2env(arglist)
+  arglist <- list(.expr = substitute(.expr), ...)
+  if (length(.args))
+    arglist <- c(arglist, `names<-`(.args, as.character.default(substitute(.args)[-1L])))
+
+  if (length(daemons())) {
     ctx <- context(daemons())
-    aio <- request(ctx, data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout, keep.raw = FALSE)
+    aio <- request(ctx, data = list2env(arglist), send_mode = 1L, recv_mode = 1L, timeout = .timeout)
     `attr<-`(.subset2(aio, "aio"), "ctx", ctx)
-    `class<-`(aio, c("mirai", "recvAio"))
 
   } else {
-
-    arglist <- list(.expr = substitute(.expr), ...)
-    if (length(.args))
-      arglist <- c(arglist, `names<-`(.args, as.character.default(substitute(.args)[-1L])))
-    envir <- list2env(arglist)
-    url <- switch(.sysname,
-                  Linux = sprintf("abstract://n%.f", random()),
-                  sprintf("ipc:///tmp/n%.f", random()))
-    arg <- c("--vanilla", "-e", shQuote(sprintf("mirai:::.(%s)", deparse(url))))
-    cmd <- switch(.sysname,
-                  Windows = file.path(R.home("bin"), "Rscript.exe"),
-                  file.path(R.home("bin"), "Rscript"))
-    system2(command = cmd, args = arg, stdout = NULL, stderr = NULL, wait = FALSE)
+    url <- sprintf(.urlfmt, random())
+    system2(command = .command,
+            args = c("--vanilla", "-e", shQuote(sprintf("mirai::server(%s,0)", deparse(url)))),
+            stdout = NULL, stderr = NULL, wait = FALSE)
     sock <- socket(protocol = "req", listen = url)
     ctx <- context(sock)
-    aio <- request(ctx, data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout, keep.raw = FALSE)
-    `attr<-`(.subset2(aio, "aio"), "ctx", ctx)
-    `attr<-`(.subset2(aio, "aio"), "sock", sock)
-    `class<-`(aio, c("mirai", "recvAio"))
-
+    aio <- request(ctx, data = list2env(arglist), send_mode = 1L, recv_mode = 1L, timeout = .timeout)
+    `attr<-`(`attr<-`(.subset2(aio, "aio"), "ctx", ctx), "sock", sock)
   }
+
+  `class<-`(aio, .miraiclass)
 
 }
 
@@ -167,12 +166,144 @@ eval_mirai <- function(.expr, ..., .args = list(), .timeout = NULL) {
 #'
 mirai <- eval_mirai
 
+#' daemons (Background and Remote Processes)
+#'
+#' Set or view the number of daemons (server processes). Create persistent
+#'     background processes to receive \code{\link{mirai}} requests, providing
+#'     an efficient solution for async operations on a local machine. Also
+#'     provides the interface for distributing requests across the network.
+#'
+#' @param n integer number of daemons to set | 'view' to view the current number
+#'     of daemons.
+#' @param .url (optional) for distributing tasks across the network: character
+#'     client URL and port accepting incoming connections e.g.
+#'     'tcp://192.168.0.2:5555' at which server processes started using
+#'     \code{\link{server}} should connect to. To listen to port 5555 (for example)
+#'     on all interfaces on the host, specify one of 'tcp://:5555',
+#'     'tcp://*:5555' or 'tcp://0.0.0.0:5555'.
+#'
+#' @return Depending on 'n' specified:
+#'     \itemize{
+#'     \item{integer: integer change in number of daemons (created or destroyed).}
+#'     \item{'view': integer number of currently set daemons.}
+#'     }
+#'
+#' @details Set 'n' to 0 to reset all daemon connections. \{mirai\} will revert
+#'     to the default behaviour of creating a new background process for each
+#'     request.
+#'
+#'     Specifying a custom client URL without 'n' (or 'n' < 1) will default to a
+#'     value for 'n' of 1.
+#'
+#'     Calling \code{daemons()} without any arguments returns the 'nanoSocket'
+#'     for connecting to the daemons, or NULL if it is yet to be created.
+#'
+#' @section About:
+#'
+#'     Daemons provide a potentially more efficient solution for async operations
+#'     as new processes no longer need to be created on an ad hoc basis.
+#'
+#'     Specifying '.url' also allows tasks to be distributed across the network.
+#'     The network topology is such that server daemons dial into the client
+#'     socket. In this way, network resources may be easily added or removed at
+#'     any time.
+#'
+#'     The current implementation is low-level and ensures tasks are
+#'     evenly-distributed amongst daemons without actively managing a task queue.
+#'     This approach provides a robust and resource-light solution, particularly
+#'     well-suited to working with similar-length tasks, or where the number of
+#'     concurrent tasks typically does not exceed the number of available
+#'     daemons.
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' # Create 4 daemons
+#' daemons(4)
+#' # View the number of active daemons
+#' daemons("view")
+#' # Reset to zero
+#' daemons(0)
+#'
+#' }
+#'
+#' @export
+#'
+daemons <- function(n, .url) {
+
+  proc <- 0L
+  url <- sock <- arg <- NULL
+  local <- TRUE
+
+  function(n, .url) {
+
+    if (missing(.url)) {
+      missing(n) && return(sock)
+      is.character(n) && n == "view" && return(proc)
+
+    } else if (is.character(.url)) {
+      if (missing(n) || n < 1L)
+        n <- 1L
+      if (length(sock))
+        daemons(0L)
+      sock <<- socket(protocol = "req", listen = .url)
+      reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
+      local <<- FALSE
+
+    } else {
+      stop("invalid input - non-character value supplied for '.url'")
+    }
+
+    is.numeric(n) || stop("invalid input - non-numeric value supplied for 'n'")
+    n >= 0L || stop("'n' must be zero or greater")
+    delta <- as.integer(n) - proc
+    delta == 0L && return(delta)
+
+    if (is.null(sock)) {
+      url <<- sprintf(.urlfmt, random())
+      sock <<- socket(protocol = "req", listen = url)
+      reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
+      arg <<- c("--vanilla", "-e", shQuote(sprintf("mirai::server(%s)", deparse(url))))
+      local <<- TRUE
+    }
+    if (delta > 0L) {
+      if (local) {
+        for (i in seq_len(delta))
+          system2(command = .command, args = arg, stdout = NULL, stderr = NULL, wait = FALSE)
+      }
+      proc <<- proc + delta
+
+    } else {
+      out <- 0L
+      for (i in seq_len(-delta)) {
+        ctx <- context(sock)
+        res <- send_aio(ctx, data = .__scm__., mode = 2L, timeout = 2000L)
+        if (suppressWarnings(.subset2(call_aio(res), "result")))
+          out <- out + 1L
+        close(ctx)
+      }
+      proc <<- proc + delta
+      if (out)
+        warning(sprintf("%d daemon shutdowns timed out (may require manual action)", out))
+      if (proc == 0L) {
+        close(sock)
+        sock <<- NULL
+        gc(verbose = FALSE, full = TRUE)
+      }
+    }
+
+    delta
+
+  }
+}
+
 #' mirai (Call Value)
 #'
 #' Call the value of a 'mirai', waiting for the the asynchronous operation to
 #'     resolve if it is still in progress.
 #'
-#' @param aio a 'mirai' (also an 'aio' object).
+#' @param aio a 'mirai' (mirai are nanonext 'aio' objects).
 #'
 #' @return The passed 'mirai' (invisibly). The retrieved value is stored at \code{$data}.
 #'
@@ -235,47 +366,11 @@ mirai <- eval_mirai
 #'
 call_mirai <- call_aio
 
-#' mirai Server (Async Execution Daemon)
-#'
-#' Implements a persistent executor/server for the remote process. Awaits data,
-#'     evaluates an expression in an environment containing the supplied data,
-#'     and returns the result to the caller/client.
-#'
-#' @inheritParams .
-#'
-#' @return Integer exit code.
-#'
-#' @noRd
-#'
-.. <- function(.) {
-
-  sock <- socket(protocol = "rep", dial = .)
-
-  repeat {
-    on.exit(expr = close(sock))
-    ctx <- context(sock)
-    envir <- recv(ctx, mode = 1L, keep.raw = FALSE)
-    on.exit(expr = {
-      send(ctx, data = `class<-`(geterrmessage(), c("miraiError", "errorValue")), mode = 1L, echo = FALSE)
-      close(sock)
-      rm(list = ls())
-      ..(.)
-    })
-    msg <- eval(expr = .subset2(envir, ".expr"), envir = envir)
-    send(ctx, data = msg, mode = 1L, echo = FALSE)
-    close(ctx)
-  }
-
-  on.exit()
-  close(sock)
-
-}
-
 #' mirai (Stop Evaluation)
 #'
 #' Stop evaluation of a mirai that is in progress.
 #'
-#' @param aio a 'mirai' (also an 'aio' object).
+#' @param aio a 'mirai' (mirai are nanonext 'aio' objects).
 #'
 #' @return Invisible NULL.
 #'
@@ -297,189 +392,13 @@ call_mirai <- call_aio
 #'
 stop_mirai <- stop_aio
 
-#' Is mirai
-#'
-#' Is the object a mirai.
-#'
-#' @param x an object.
-#'
-#' @return Logical value TRUE or FALSE.
-#'
-#' @examples
-#' if (interactive()) {
-#' # Only run examples in interactive R sessions
-#'
-#' m <- mirai(as.matrix(df), df = data.frame())
-#' is_mirai(m)
-#' is_mirai(df)
-#'
-#' }
-#'
-#' @export
-#'
-is_mirai <- function(x) inherits(x, "mirai")
-
-#' daemons (Background Processes)
-#'
-#' Set or view the number of daemons (background processes). Create persistent
-#'     background processes to receive \code{\link{mirai}} requests. This
-#'     provides a potentially more efficient solution for async operations as
-#'     new processes no longer need to be created on an ad hoc basis.
-#'
-#' @param ... either an integer to set the number of daemons, or 'view' to view
-#'     the number of currently active daemons.
-#'
-#' @return Depending on the specified \code{...} parameter:
-#'     \itemize{
-#'     \item{integer: integer change in number of daemons (created or destroyed).}
-#'     \item{'view': integer number of currently set daemons.}
-#'     \item{missing: the 'nanoSocket' for connecting to the daemons, or NULL if
-#'     it is yet to be created.}
-#'     }
-#'
-#' @details \{mirai\} will revert to the default behaviour of creating a new
-#'     background process for each request if the number of daemons is set to 0.
-#'
-#'     The current implementation is low-level and ensures tasks are
-#'     evenly-distributed amongst daemons without actively managing a task queue.
-#'     This approach provides a robust and resource-light solution, particularly
-#'     well-suited to working with similar-length tasks, or where the number of
-#'     concurrent tasks typically does not exceed the number of available
-#'     daemons.
-#'
-#' @examples
-#' if (interactive()) {
-#' # Only run examples in interactive R sessions
-#'
-#' # Create 4 daemons
-#' daemons(4)
-#' # View the number of active daemons
-#' daemons("view")
-#' # Reset to zero
-#' daemons(0)
-#'
-#' }
-#'
-#' @export
-#'
-daemons <- function(...) {
-
-  proc <- 0L
-  url <- sock <- cmd <- arg <- NULL
-  notsetup <- TRUE
-
-  function(...) {
-
-    if (missing(...)) {
-      sock
-
-    } else if (is.numeric(..1)) {
-      if (length(..1) > 1L) {
-        set <- as.integer(..1[1L])
-        warning("vector specified, only using first element")
-      } else {
-        set <- as.integer(..1)
-      }
-      set >= 0L || stop("number of daemons must be zero or greater")
-      delta <- set - proc
-      delta == 0L && return(0L)
-
-      if (notsetup) {
-        url <<- switch(.sysname,
-                       Linux = sprintf("abstract://n%.f", random()),
-                       sprintf("ipc:///tmp/n%.f", random()))
-        sock <<- socket(protocol = "req", listen = url)
-        reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
-        arg <<- c("--vanilla", "-e", shQuote(sprintf("mirai:::..(%s)", deparse(url))))
-        cmd <<- switch(.sysname,
-                       Windows = file.path(R.home("bin"), "Rscript.exe"),
-                       file.path(R.home("bin"), "Rscript"))
-        notsetup <<- FALSE
-      }
-      if (delta > 0L) {
-        orig <- proc
-        for (i in seq_len(delta)) {
-          system2(command = cmd, args = arg, stdout = NULL, stderr = NULL, wait = FALSE)
-          proc <<- proc + 1L
-        }
-        attr(sock, "daemons") <- proc
-        proc - orig
-      } else {
-        halt <- 0L
-        for (i in seq_len(-delta)) {
-          ctx <- context(sock)
-          res <- send_aio(ctx, data = .__scm__., mode = 2L, timeout = 2000L)
-          if (.subset2(call_aio(res), "result")) {
-            warning(sprintf("daemon %d shutdown failed", i))
-          } else {
-            halt <- halt - 1L
-            proc <<- proc - 1L
-          }
-          close(ctx)
-        }
-        attr(sock, "daemons") <- proc
-        halt
-      }
-
-    } else if (is.character(..1) && ..1 == "view") {
-      if (length(d <- attr(sock, "daemons"))) d else 0L
-
-    } else {
-      stop("specify an integer value to set daemons or 'view' to view daemons")
-    }
-  }
-}
-
-#' @export
-#'
-print.mirai <- function(x, ...) {
-
-  cat("< mirai >\n - $data for evaluated result\n", file = stdout())
-  invisible(x)
-
-}
-
-#' @export
-#'
-print.miraiError <- function(x, ...) {
-
-  cat(x, file = stderr())
-  invisible(x)
-
-}
-
-#' Is mirai Error
-#'
-#' Is the object a 'miraiError'. When execution in a mirai process fails, the
-#'     error message is returned as a character string of class 'miraiError' and
-#'     'errorValue'. To test for all errors, including timeouts etc.,
-#'     \code{\link{is_error_value}} should be used instead.
-#'
-#' @param x an object.
-#'
-#' @return Logical value TRUE if 'x' is of class 'miraiError', FALSE otherwise.
-#'
-#' @examples
-#' if (interactive()) {
-#' # Only run examples in interactive R sessions
-#'
-#' m <- mirai(stop())
-#' call_mirai(m)
-#' is_mirai_error(m$data)
-#'
-#' }
-#'
-#' @export
-#'
-is_mirai_error <- function(x) inherits(x, "miraiError")
-
 #' Query if a Mirai is Unresolved
 #'
 #' Query whether a mirai or mirai value remains unresolved. Unlike
 #'     \code{\link{call_mirai}}, this function does not wait for completion.
 #'
-#' @param aio A 'mirai' or mirai value stored in \code{$data} (mirai are also
-#'     aio objects).
+#' @param aio A 'mirai' or mirai value stored in \code{$data} (mirai are nanonext
+#'     'aio' objects).
 #'
 #' @return Logical TRUE or FALSE.
 #'
@@ -520,4 +439,71 @@ unresolved <- unresolved
 #' @export
 #'
 is_error_value <- is_error_value
+
+#' Is mirai
+#'
+#' Is the object a mirai.
+#'
+#' @param x an object.
+#'
+#' @return Logical value TRUE or FALSE.
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' m <- mirai(as.matrix(df), df = data.frame())
+#' is_mirai(m)
+#' is_mirai(df)
+#'
+#' }
+#'
+#' @export
+#'
+is_mirai <- function(x) inherits(x, "mirai")
+
+#' Is mirai Error
+#'
+#' Is the object a 'miraiError'. When execution in a mirai process fails, the
+#'     error message is returned as a character string of class 'miraiError' and
+#'     'errorValue'. To test for all errors, including timeouts etc.,
+#'     \code{\link{is_error_value}} should be used instead.
+#'
+#' @param x an object.
+#'
+#' @return Logical value TRUE if 'x' is of class 'miraiError', FALSE otherwise.
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' m <- mirai(stop())
+#' call_mirai(m)
+#' is_mirai_error(m$data)
+#'
+#' }
+#'
+#' @export
+#'
+is_mirai_error <- function(x) inherits(x, "miraiError")
+
+#' @export
+#'
+print.mirai <- function(x, ...) {
+  cat("< mirai >\n - $data for evaluated result\n", file = stdout())
+  invisible(x)
+}
+
+#' @export
+#'
+print.miraiError <- function(x, ...) {
+  cat("'miraiError' chr ", x, "\n", file = stdout())
+  invisible(x)
+}
+
+# internals --------------------------------------------------------------------
+
+mk_mirai_error <- function(e) `class<-`(if (length(call <- .subset2(e, "call")))
+  sprintf("Error in %s: %s", deparse(call, nlines = 1L), .subset2(e, "message")) else
+    sprintf("Error: %s", .subset2(e, "message")), .errorclass)
 
