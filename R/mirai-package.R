@@ -16,9 +16,23 @@
 
 #' mirai: Minimalist Async Evaluation Framework for R
 #'
-#' Simple and lightweight parallelism and concurrent code execution, local or
-#'     distributed across the network, built on 'nanonext' and 'NNG' (Nanomsg
-#'     Next Gen) technology. mirai is Japanese for 'future'.
+#' Lightweight parallel code execution, local or distributed across the network.
+#'     Designed for simplicity, a 'mirai' evaluates an arbitrary expression
+#'     asynchronously, resolving automatically upon completion. Built on
+#'     'nanonext' and 'NNG' (Nanomsg Next Gen) scalability protocols, defaults
+#'     to the optimal choice of abstract sockets, Unix domain sockets or named
+#'     pipes in addition to TCP/IP.
+#'
+#' @section Notes:
+#'
+#'     For local mirai processes, the default transport for intra-process
+#'     communications is platform-dependent: abstract sockets on Linux, Unix
+#'     domain sockets on MacOS, Solaris and other POSIX platforms, and named
+#'     pipes on Windows.
+#'
+#'     This may be overriden if required by specifying a custom client URL in
+#'     the \code{\link{daemons}} interface, and starting server processes
+#'     manually with \code{\link{server}} on the same machine.
 #'
 #' @section Links:
 #'
@@ -42,16 +56,13 @@
 #'
 NULL
 
-.onLoad <- function(libname, pkgname) {
-  daemons <<- daemons()
-}
+.onLoad <- function(libname, pkgname) daemons <<- daemons()
 
-.onUnload <- function(libpath) {
-  invisible(daemons(0L))
-}
+.onUnload <- function(libpath) invisible(daemons(0L))
 
 .miraiclass <- c("mirai", "recvAio")
 .errorclass <- c("miraiError", "errorValue")
+.interrupt <- `class<-`("", c("miraiInterrupt", "errorValue"))
 .sysname <- .subset2(Sys.info(), "sysname")
 .command <- switch(.sysname,
                    Windows = file.path(R.home("bin"), "Rscript.exe"),

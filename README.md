@@ -15,22 +15,25 @@ badge](https://shikokuchuo.r-universe.dev/badges/mirai?color=ddcacc)](https://sh
 
 Minimalist async evaluation framework for R.
 
-未来 みらい mirai is Japanese for ‘future’.
+Lightweight parallel code execution, local or distributed across the
+network.
 
-Simple and lightweight parallelism and concurrent code execution, local
-or distributed across the network, built on ‘nanonext’ and ‘NNG’
-(Nanomsg Next Gen) technology.
+Designed for simplicity, a ‘mirai’ evaluates an arbitrary expression
+asynchronously, resolving automatically upon completion.
 
-`mirai()` returns a ‘mirai’ object immediately.
+Built on ‘nanonext’ and ‘NNG’ (Nanomsg Next Gen) scalability protocols,
+defaults to the optimal choice of abstract sockets, Unix domain sockets
+or named pipes in addition to TCP/IP.
 
-A ‘mirai’ evaluates an arbitrary expression asynchronously, resolving
-automatically upon completion. The asynchronous task runs in an
-ephemeral or persistent process, spawned locally or distributed across
-the network.
+`mirai()` returns a ‘mirai’ object immediately. ‘mirai’ (未来 みらい) is
+Japanese for ‘future’.
+
+The asynchronous ‘mirai’ task runs in an ephemeral or persistent
+process, spawned locally or distributed across the network.
 
 {mirai} has a tiny pure R code base, relying solely on {nanonext}, a
-high-performance binding for the ‘NNG’ C library with zero package
-dependencies.
+high-performance binding for the ‘NNG’ (Nanomsg Next Gen) C library with
+zero package dependencies.
 
 ### Table of Contents
 
@@ -41,7 +44,7 @@ dependencies.
 4.  [Daemons](#daemons)
 5.  [Distributed Computing](#distributed-computing)
 6.  [Deferred Evaluation Pipe](#deferred-evaluation-pipe)
-7.  [Errors and Timeouts](#errors-and-timeouts)
+7.  [Errors, Interrupts and Timeouts](#errors-interrupts-and-timeouts)
 8.  [Links](#links)
 
 ### Installation
@@ -101,7 +104,7 @@ result.
 
 ``` r
 m$data |> str()
-#>  num [1:100000000] 0.582 0.571 29.254 0.205 0.387 ...
+#>  num [1:100000000] -4.121 2.237 0.326 3.123 -4.802 ...
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -109,7 +112,7 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data |> str()
-#>  num [1:100000000] 0.582 0.571 29.254 0.205 0.387 ...
+#>  num [1:100000000] -4.121 2.237 0.326 3.123 -4.802 ...
 ```
 
 [« Back to ToC](#table-of-contents)
@@ -205,23 +208,23 @@ behaviour of creating a new background process for each ‘mirai’ request.
 Through the `daemons()` interface, tasks may also be sent for
 computation to server processes on the network.
 
-Specify the ‘.url’ argument as the client network address (or leave
-blank to listen on all interfaces on the host) and a port that is able
-to accept incoming connections, for example:
+Specify the ‘.url’ argument as the client network address
+e.g. ‘192.168.0.2’ and a port that is able to accept incoming
+connections, or use ‘0.0.0.0’ to listen on all interfaces on the host,
+for example:
 
 ``` r
-daemons(.url = "tcp://:5555")
+daemons(.url = "tcp://0.0.0.0:5555")
 #> [1] 1
 ```
 
 The network topology is such that the client listens at the above
-address, and distributes tasks to all server processes that are
-connected into it.
+address, and distributes tasks to all connected server processes.
 
-On the server, the `server()` function may be called from a suitable
-shell (e.g. using Rscript as in the case below) to set up a remote
-daemon process (here ‘192.168.0.2’ is the network IP address of the
-client):
+On the server side, the `server()` function may be called from an R
+session, or Rscript from a suitable shell, to set up a remote daemon
+process that connects to the client network IP address (‘192.168.0.2’ in
+the example below):
 
     Rscript --vanilla -e 'mirai::server("tcp://192.168.0.2:5555")'
 
@@ -281,25 +284,36 @@ b
 
 [« Back to ToC](#table-of-contents)
 
-### Errors and Timeouts
+### Errors, Interrupts and Timeouts
 
 If execution in a mirai fails, the error message is returned as a
 character string of class ‘miraiError’ and ‘errorValue’ to facilitate
-debugging.
+debugging. `is_mirai_error()` can be used to test for mirai execution
+errors.
 
 ``` r
 m1 <- mirai(stop("occurred with a custom message", call. = FALSE))
 call_mirai(m1)$data
-#> 'miraiError' chr  Error: occurred with a custom message
+#> 'miraiError' chr Error: occurred with a custom message
 
 m2 <- mirai(mirai())
 call_mirai(m2)$data
-#> 'miraiError' chr  Error in mirai(): missing expression, perhaps wrap in {}?
+#> 'miraiError' chr Error in mirai(): missing expression, perhaps wrap in {}?
 
 is_mirai_error(m2$data)
 #> [1] TRUE
 is_error_value(m2$data)
 #> [1] TRUE
+```
+
+If during a `call_mirai()` an interrupt e.g. ctrl+c is sent, the mirai
+will resolve to an empty character string of class ‘miraiInterrupt’ and
+‘errorValue’. `is_mirai_interrupt()` may be used to test for such
+interrupts.
+
+``` r
+is_mirai_interrupt(m2$data)
+#> [1] FALSE
 ```
 
 If execution of a mirai surpasses the timeout set via the ‘.timeout’
@@ -309,17 +323,18 @@ other things, guard against mirai processes that hang and never return.
 ``` r
 m3 <- mirai(nanonext::msleep(1000), .timeout = 500)
 call_mirai(m3)$data
-#> Warning in (function (.) : 5 | Timed out
-#> 'errorValue' int 5
+#> 'errorValue' int 5 | Timed out
 
 is_mirai_error(m3$data)
+#> [1] FALSE
+is_mirai_interrupt(m3$data)
 #> [1] FALSE
 is_error_value(m3$data)
 #> [1] TRUE
 ```
 
-`is_error_value()` tests for both mirai execution errors and timeouts.
-`is_mirai_error()` tests for just mirai execution errors.
+`is_error_value()` tests for all mirai execution errors, user interrupts
+and timeouts.
 
 [« Back to ToC](#table-of-contents)
 
@@ -327,6 +342,9 @@ is_error_value(m3$data)
 
 {mirai} website: <https://shikokuchuo.net/mirai/><br /> {mirai} on CRAN:
 <https://cran.r-project.org/package=mirai>
+
+Listed in CRAN Task View: <br /> - High Performance Computing:
+<https://cran.r-project.org/view=HighPerformanceComputing>
 
 {nanonext} website: <https://shikokuchuo.net/nanonext/><br /> {nanonext}
 on CRAN: <https://cran.r-project.org/package=nanonext>

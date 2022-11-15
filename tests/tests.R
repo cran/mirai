@@ -1,6 +1,9 @@
 library(mirai)
 nanotest <- function(x) invisible(x || stop())
-nanotesterr <- function(x) invisible(tryCatch(x, error = function(e) TRUE) || stop())
+nanotestw <- function(x) invisible(suppressWarnings(x) || stop())
+nanotestn <- function(x) invisible(is.null(x) || stop())
+nanotesterr <- function(x, e = "")
+  invisible(grepl(e, tryCatch(x, error = identity)[["message"]], fixed = TRUE) || stop())
 
 nanotest(daemons("view") == 0L)
 n <- 3L
@@ -20,23 +23,26 @@ nanotest(is.character(b$data))
 nanotest(daemons(1L) == 1L)
 me <- mirai(mirai())
 nanotest(is_mirai_error(call_mirai(me)$data))
+nanotest(!is_mirai_interrupt(me$data))
 nanotest(is_error_value(me[["data"]]))
 df <- data.frame(a = 1, b = 2)
 dm <- eval_mirai(as.matrix(df), .args = list(df), .timeout = 1000L)
 nanotest(is_mirai(call_mirai(dm)))
 nanotest(!unresolved(dm))
 nanotest(is.matrix(dm$data))
-nanotest(is.null(stop_mirai(dm)))
+nanotestn(stop_mirai(dm))
 nanotest(daemons("view") == 1L)
 nanotest(daemons(0L) == -1L)
 nanotest(daemons("view") == 0L)
-nanotest(daemons(n = 0L, .url = sprintf(mirai:::.urlfmt, 01010101)) == 1L)
-nanotest(daemons(0L) == -1L)
-nanotest(is.null(daemons()))
-nanotesterr(daemons("test"))
-nanotesterr(daemons(.url = 0L))
+nanotest(daemons(n = 0L, .url = sprintf(mirai:::.urlfmt, runif(1, 1000000, 9999999))) == 1L)
+nanotestw(daemons(0L) == -1L)
+nanotestn(daemons())
+nanotesterr(daemons("test"), "non-numeric")
+nanotesterr(daemons(.url = 0L), "non-character")
 Sys.sleep(1L)
 me$data
 m
 b
+nanotest(is_mirai_interrupt(r <- mirai:::mk_interrupt_error()))
+r
 

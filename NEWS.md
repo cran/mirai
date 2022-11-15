@@ -1,3 +1,10 @@
+# mirai 0.7.1
+
+* Allow user interrupts of `call_mirai()` again (regression in 0.7.0), now returning a 'miraiInterrupt'.
+* Adds auxiliary function `is_mirai_interrupt()` to test if an object is a 'miraiInterrupt'.
+* Requires nanonext >= 0.7.0: returned 'errorValues' e.g. mirai timeouts are no longer accompanied by warnings.
+* Internal performance enhancements.
+
 # mirai 0.7.0
 
 * `daemons()` now takes 'n' and '.url' arguments. '.url' is an optional client URL allowing mirai tasks to be distributed across the network. Compatibility with existing interface is retained.

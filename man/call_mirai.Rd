@@ -7,37 +7,43 @@
 call_mirai(aio)
 }
 \arguments{
-\item{aio}{a 'mirai' (mirai are nanonext 'aio' objects).}
+\item{aio}{a 'mirai' object.}
 }
 \value{
-The passed 'mirai' (invisibly). The retrieved value is stored at \code{$data}.
+The passed mirai (invisibly). The retrieved value is stored at \code{$data}.
 }
 \description{
-Call the value of a 'mirai', waiting for the the asynchronous operation to
+Call the value of a mirai, waiting for the the asynchronous operation to
     resolve if it is still in progress.
 }
 \details{
 This function will wait for the async operation to complete if still
     in progress (blocking).
 
+    A blocking call can be sent a user interrupt with e.g. ctrl+c. If the
+    ongoing execution in the mirai is interruptible, it will resolve into
+    an object of class 'miraiInterrupt' and 'errorValue'.
+    \code{\link{is_mirai_interrupt}} may be used to handle such cases.
+
     If an error occurs in evaluation, the error message is returned as a
     character string of class 'miraiError' and 'errorValue'.
-    \code{\link{is_mirai_error}} may be used to test for this, otherwise
-    \code{\link{is_error_value}} will also include other errors such as
-    timeouts.
+    \code{\link{is_mirai_error}} may be used to test for this.
 
-    The 'mirai' updates itself in place, so to access the value of a 'mirai'
+    \code{\link{is_error_value}} tests for all error conditions including
+    mirai errors, interrupts, and timeouts.
+
+    The mirai updates itself in place, so to access the value of a mirai
     \code{x} directly, use \code{call_mirai(x)$data}.
 }
 \section{Alternatively}{
 
 
-    The value of a 'mirai' may be accessed at any time at \code{$data}, and
+    The value of a mirai may be accessed at any time at \code{$data}, and
     if yet to resolve, an 'unresolved' logical NA will be returned instead.
 
-    \code{\link{unresolved}} may also be used on a 'mirai', and returns TRUE
-    only if a 'mirai' has yet to resolve and FALSE otherwise. This is suitable
-    for use in control flow statements such as \code{while} or \code{if}.
+    Using \code{\link{unresolved}} on a mirai returns TRUE only if a mirai
+    has yet to resolve and FALSE otherwise. This is suitable for use in
+    control flow statements such as \code{while} or \code{if}.
 }
 
 \examples{

@@ -31,9 +31,10 @@
 #'
 #' @section About:
 #'
-#'     The network topology is such that server daemons dial into the client
-#'     socket. In this way, network resources may be easily added or removed at
-#'     any time.
+#'     The network topology is such that server daemons dial into the client,
+#'     which listens at the '.url' address. In this way, network resources may
+#'     be added or removed at any time and the client automatically distributes
+#'     tasks to all available servers.
 #'
 #' @export
 #'
@@ -45,7 +46,8 @@ server <- function(.url, daemon = TRUE) {
   repeat {
     ctx <- context(sock)
     envir <- recv(ctx, mode = 1L)
-    data <- tryCatch(eval(expr = .subset2(envir, ".expr"), envir = envir), error = mk_mirai_error)
+    data <- tryCatch(eval(expr = .subset2(envir, ".expr"), envir = envir),
+                     error = mk_mirai_error, interrupt = mk_interrupt_error)
     send(ctx, data = data, mode = 1L)
     close(ctx)
     daemon || break
@@ -57,43 +59,45 @@ server <- function(.url, daemon = TRUE) {
 
 #' mirai (Evaluate Async)
 #'
-#' Evaluate an expression asynchronously in a new background R process. This
-#'     function will return immediately with a 'mirai', which will resolve to
-#'     the evaluated result once complete.
+#' Evaluate an expression asynchronously in a new background R process or
+#'     persistent daemon (local or remote). This function will return
+#'     immediately with a 'mirai', which will resolve to the evaluated result
+#'     once complete.
 #'
-#' @param .expr an expression to evaluate in a new R process. This may be of
+#' @param .expr an expression to evaluate asynchronously. This may be of
 #'     arbitrary length, wrapped in \{\} if necessary.
-#' @param ... (optional) named arguments specifying variables contained in '.expr'.
-#' @param .args (optional) list supplying arguments to '.expr' (used in addition
-#'     to or instead of named arguments specified as '...').
+#' @param ... (optional) named arguments specifying objects referenced in '.expr'.
+#' @param .args (optional) list supplying objects referenced in '.expr' (used in
+#'     addition to or instead of named arguments specified as '...').
 #' @param .timeout (optional) integer value in milliseconds or NULL for no
-#'     timeout. A 'mirai' will resolve to an 'errorValue' 5 (timed out) if
+#'     timeout. A mirai will resolve to an 'errorValue' 5 (timed out) if
 #'     evaluation exceeds this limit.
 #'
 #' @return A 'mirai' object.
 #'
 #' @details This function will return a 'mirai' object immediately.
 #'
-#'     The value of a 'mirai' may be accessed at any time at \code{$data}, and
+#'     The value of a mirai may be accessed at any time at \code{$data}, and
 #'     if yet to resolve, an 'unresolved' logical NA will be returned instead.
 #'
-#'     \code{\link{unresolved}} may also be used on a 'mirai', which returns TRUE
-#'     only if a 'mirai' has yet to resolve and FALSE otherwise. This is suitable
-#'     for use in control flow statements such as \code{while} or \code{if}.
+#'     \code{\link{unresolved}} may be used on a mirai, returning TRUE if a
+#'     'mirai' has yet to resolve and FALSE otherwise. This is suitable for use
+#'     in control flow statements such as \code{while} or \code{if}.
 #'
-#'     Alternatively, to call (and wait for) the result, use
-#'     \code{\link{call_mirai}} on the returned 'mirai' object. This will block
-#'     until the result is returned.
+#'     Alternatively, to call (and wait for) the result, use \code{\link{call_mirai}}
+#'     on the returned mirai. This will block until the result is returned
+#'     (although interruptible with e.g. ctrl+c).
 #'
-#'     The expression '.expr' will be evaluated in a new R process in a clean
-#'     environment consisting of the named objects passed as '...' only (along
-#'     with objects in the list '.args', if supplied).
+#'     The expression '.expr' will be evaluated in a separate R process in a
+#'     clean environment consisting only of the named objects passed as '...'
+#'     and/or the list supplied to '.args'.
 #'
 #'     If an error occurs in evaluation, the error message is returned as a
 #'     character string of class 'miraiError' and 'errorValue'.
-#'     \code{\link{is_mirai_error}} may be used to test for this, otherwise
-#'     \code{\link{is_error_value}} will also include other errors such as
-#'     timeouts.
+#'     \code{\link{is_mirai_error}} may be used to test for this.
+#'
+#'     \code{\link{is_error_value}} tests for all error conditions including
+#'     'mirai' errors, interrupts, and timeouts.
 #'
 #'     \code{\link{mirai}} is an alias for \code{\link{eval_mirai}}.
 #'
@@ -166,20 +170,21 @@ eval_mirai <- function(.expr, ..., .args = list(), .timeout = NULL) {
 #'
 mirai <- eval_mirai
 
-#' daemons (Background and Remote Processes)
+#' daemons (Persistent Server Processes)
 #'
-#' Set or view the number of daemons (server processes). Create persistent
-#'     background processes to receive \code{\link{mirai}} requests, providing
-#'     an efficient solution for async operations on a local machine. Also
-#'     provides the interface for distributing requests across the network.
+#' Set or view the number of 'daemons' or persistent server processes receiving
+#'     \code{\link{mirai}} requests. These are, by default, automatically
+#'     created on the local machine. Alternatively, a client URL may be set to
+#'     receive connections from remote servers started with \code{\link{server}},
+#'     for distributing tasks across the network.
 #'
 #' @param n integer number of daemons to set | 'view' to view the current number
 #'     of daemons.
 #' @param .url (optional) for distributing tasks across the network: character
 #'     client URL and port accepting incoming connections e.g.
 #'     'tcp://192.168.0.2:5555' at which server processes started using
-#'     \code{\link{server}} should connect to. To listen to port 5555 (for example)
-#'     on all interfaces on the host, specify one of 'tcp://:5555',
+#'     \code{\link{server}} should connect to. To listen to port 5555 (for
+#'     example) on all interfaces on the host, specify one of 'tcp://:5555',
 #'     'tcp://*:5555' or 'tcp://0.0.0.0:5555'.
 #'
 #' @return Depending on 'n' specified:
@@ -187,26 +192,34 @@ mirai <- eval_mirai
 #'     \item{integer: integer change in number of daemons (created or destroyed).}
 #'     \item{'view': integer number of currently set daemons.}
 #'     }
+#'     Calling \code{daemons()} without any arguments returns the 'nanoSocket'
+#'     for connecting to the daemons, or NULL if it is yet to be created.
 #'
 #' @details Set 'n' to 0 to reset all daemon connections. \{mirai\} will revert
 #'     to the default behaviour of creating a new background process for each
 #'     request.
 #'
-#'     Specifying a custom client URL without 'n' (or 'n' < 1) will default to a
-#'     value for 'n' of 1.
+#'     Specifying '.url' without 'n' assumes a value for 'n' of 1. After setting
+#'     '.url', further calls specifying 'n' can be used to update the number of
+#'     connected daemons (this is not strictly necessary as daemons are detected
+#'     automatically, but will ensure that the correct number of shutdown signals
+#'     are sent when the session is ended).
 #'
-#'     Calling \code{daemons()} without any arguments returns the 'nanoSocket'
-#'     for connecting to the daemons, or NULL if it is yet to be created.
+#'     Setting a new '.url' value will attempt to shutdown existing daemons
+#'     connected at the existing address before opening a connection at the new
+#'     address.
 #'
 #' @section About:
 #'
-#'     Daemons provide a potentially more efficient solution for async operations
-#'     as new processes no longer need to be created on an ad hoc basis.
+#'     Daemons provide a potentially more efficient solution for asynchronous
+#'     operations as new processes no longer need to be created on an ad hoc
+#'     basis.
 #'
-#'     Specifying '.url' also allows tasks to be distributed across the network.
-#'     The network topology is such that server daemons dial into the client
-#'     socket. In this way, network resources may be easily added or removed at
-#'     any time.
+#'     Specifying '.url' allows tasks to be distributed across the network. The
+#'     network topology is such that server daemons (started with
+#'     \code{\link{server}}) dial into the client, which listens at the '.url'
+#'     address. In this way, network resources may be added or removed at any
+#'     time. The client automatically distributes tasks to all available servers.
 #'
 #'     The current implementation is low-level and ensures tasks are
 #'     evenly-distributed amongst daemons without actively managing a task queue.
@@ -219,8 +232,8 @@ mirai <- eval_mirai
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' # Create 4 daemons
-#' daemons(4)
+#' # Create 2 daemons
+#' daemons(2)
 #' # View the number of active daemons
 #' daemons("view")
 #' # Reset to zero
@@ -242,7 +255,8 @@ daemons <- function(n, .url) {
       missing(n) && return(sock)
       is.character(n) && n == "view" && return(proc)
 
-    } else if (is.character(.url)) {
+    } else {
+      is.character(.url) || stop("non-character value supplied for '.url'")
       if (missing(n) || n < 1L)
         n <- 1L
       if (length(sock))
@@ -251,11 +265,9 @@ daemons <- function(n, .url) {
       reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
       local <<- FALSE
 
-    } else {
-      stop("invalid input - non-character value supplied for '.url'")
     }
 
-    is.numeric(n) || stop("invalid input - non-numeric value supplied for 'n'")
+    is.numeric(n) || stop("non-numeric value supplied for 'n'")
     n >= 0L || stop("'n' must be zero or greater")
     delta <- as.integer(n) - proc
     delta == 0L && return(delta)
@@ -268,10 +280,9 @@ daemons <- function(n, .url) {
       local <<- TRUE
     }
     if (delta > 0L) {
-      if (local) {
+      if (local)
         for (i in seq_len(delta))
           system2(command = .command, args = arg, stdout = NULL, stderr = NULL, wait = FALSE)
-      }
       proc <<- proc + delta
 
     } else {
@@ -279,7 +290,7 @@ daemons <- function(n, .url) {
       for (i in seq_len(-delta)) {
         ctx <- context(sock)
         res <- send_aio(ctx, data = .__scm__., mode = 2L, timeout = 2000L)
-        if (suppressWarnings(.subset2(call_aio(res), "result")))
+        if (.subset2(call_aio(res), "result"))
           out <- out + 1L
         close(ctx)
       }
@@ -300,33 +311,39 @@ daemons <- function(n, .url) {
 
 #' mirai (Call Value)
 #'
-#' Call the value of a 'mirai', waiting for the the asynchronous operation to
+#' Call the value of a mirai, waiting for the the asynchronous operation to
 #'     resolve if it is still in progress.
 #'
-#' @param aio a 'mirai' (mirai are nanonext 'aio' objects).
+#' @param aio a 'mirai' object.
 #'
-#' @return The passed 'mirai' (invisibly). The retrieved value is stored at \code{$data}.
+#' @return The passed mirai (invisibly). The retrieved value is stored at \code{$data}.
 #'
 #' @details This function will wait for the async operation to complete if still
 #'     in progress (blocking).
 #'
+#'     A blocking call can be sent a user interrupt with e.g. ctrl+c. If the
+#'     ongoing execution in the mirai is interruptible, it will resolve into
+#'     an object of class 'miraiInterrupt' and 'errorValue'.
+#'     \code{\link{is_mirai_interrupt}} may be used to handle such cases.
+#'
 #'     If an error occurs in evaluation, the error message is returned as a
 #'     character string of class 'miraiError' and 'errorValue'.
-#'     \code{\link{is_mirai_error}} may be used to test for this, otherwise
-#'     \code{\link{is_error_value}} will also include other errors such as
-#'     timeouts.
+#'     \code{\link{is_mirai_error}} may be used to test for this.
 #'
-#'     The 'mirai' updates itself in place, so to access the value of a 'mirai'
+#'     \code{\link{is_error_value}} tests for all error conditions including
+#'     mirai errors, interrupts, and timeouts.
+#'
+#'     The mirai updates itself in place, so to access the value of a mirai
 #'     \code{x} directly, use \code{call_mirai(x)$data}.
 #'
 #' @section Alternatively:
 #'
-#'     The value of a 'mirai' may be accessed at any time at \code{$data}, and
+#'     The value of a mirai may be accessed at any time at \code{$data}, and
 #'     if yet to resolve, an 'unresolved' logical NA will be returned instead.
 #'
-#'     \code{\link{unresolved}} may also be used on a 'mirai', and returns TRUE
-#'     only if a 'mirai' has yet to resolve and FALSE otherwise. This is suitable
-#'     for use in control flow statements such as \code{while} or \code{if}.
+#'     Using \code{\link{unresolved}} on a mirai returns TRUE only if a mirai
+#'     has yet to resolve and FALSE otherwise. This is suitable for use in
+#'     control flow statements such as \code{while} or \code{if}.
 #'
 #' @examples
 #' if (interactive()) {
@@ -370,14 +387,14 @@ call_mirai <- call_aio
 #'
 #' Stop evaluation of a mirai that is in progress.
 #'
-#' @param aio a 'mirai' (mirai are nanonext 'aio' objects).
+#' @param aio a 'mirai' object.
 #'
 #' @return Invisible NULL.
 #'
-#' @details Stops the asynchronous operation associated with 'mirai' by aborting,
-#'     and then waits for it to complete or to be completely aborted. The 'mirai'
-#'     is then deallocated and attempting to access the value at \code{$data}
-#'     will result in an error.
+#' @details Stops the asynchronous operation associated with the mirai by
+#'     aborting, and then waits for it to complete or to be completely aborted.
+#'     The mirai is then deallocated and attempting to access the value at
+#'     \code{$data} will result in an error.
 #'
 #' @examples
 #' if (interactive()) {
@@ -392,21 +409,21 @@ call_mirai <- call_aio
 #'
 stop_mirai <- stop_aio
 
-#' Query if a Mirai is Unresolved
+#' Query if a mirai is Unresolved
 #'
 #' Query whether a mirai or mirai value remains unresolved. Unlike
 #'     \code{\link{call_mirai}}, this function does not wait for completion.
 #'
-#' @param aio A 'mirai' or mirai value stored in \code{$data} (mirai are nanonext
-#'     'aio' objects).
+#' @param aio a 'mirai' object or 'mirai' value stored at \code{$data}.
 #'
-#' @return Logical TRUE or FALSE.
+#' @return Logical TRUE if 'aio' is an unresolved mirai or mirai value, or
+#'     FALSE otherwise.
 #'
-#' @details Returns TRUE for unresolved mirai or mirai values, FALSE otherwise.
+#' @details Suitable for use in control flow statements such as \code{while} or
+#'     \code{if}.
 #'
-#'     Suitable for use in control flow statements such as \code{while} or \code{if}.
-#'
-#'     Note: querying resolution may cause a previously unresolved mirai to resolve.
+#'     Note: querying resolution may cause a previously unresolved 'mirai' to
+#'     resolve.
 #'
 #' @examples
 #' if (interactive()) {
@@ -414,7 +431,7 @@ stop_mirai <- stop_aio
 #'
 #' m <- mirai(Sys.sleep(0.1))
 #' unresolved(m)
-#' Sys.sleep(0.5)
+#' Sys.sleep(0.3)
 #' unresolved(m)
 #'
 #' }
@@ -425,13 +442,13 @@ unresolved <- unresolved
 
 #' Is Error Value
 #'
-#' Is the object an error value generated by the system or a 'miraiError' from
-#'     failed execution within a mirai. Includes user-specified errors such as
-#'     mirai timeouts.
+#' Is the object an error value, such as a mirai timeout, a 'miraiError' from
+#'     failed execution within a mirai or a 'miraiInterrupt' resulting from
+#'     the user interrupt of an ongoing mirai evaluation.
 #'
 #' @param x an object.
 #'
-#' @return Logical value TRUE if 'x' is of class 'errorValue', FALSE otherwise.
+#' @return Logical TRUE if 'x' is of class 'errorValue', FALSE otherwise.
 #'
 #' @examples
 #' is_error_value(1L)
@@ -442,11 +459,11 @@ is_error_value <- is_error_value
 
 #' Is mirai
 #'
-#' Is the object a mirai.
+#' Is the object a 'mirai'.
 #'
 #' @param x an object.
 #'
-#' @return Logical value TRUE or FALSE.
+#' @return Logical TRUE if 'x' is of class 'mirai', FALSE otherwise.
 #'
 #' @examples
 #' if (interactive()) {
@@ -466,12 +483,12 @@ is_mirai <- function(x) inherits(x, "mirai")
 #'
 #' Is the object a 'miraiError'. When execution in a mirai process fails, the
 #'     error message is returned as a character string of class 'miraiError' and
-#'     'errorValue'. To test for all errors, including timeouts etc.,
+#'     'errorValue'. To test for all error conditions, including timeouts etc.,
 #'     \code{\link{is_error_value}} should be used instead.
 #'
 #' @param x an object.
 #'
-#' @return Logical value TRUE if 'x' is of class 'miraiError', FALSE otherwise.
+#' @return Logical TRUE if 'x' is of class 'miraiError', FALSE otherwise.
 #'
 #' @examples
 #' if (interactive()) {
@@ -487,18 +504,57 @@ is_mirai <- function(x) inherits(x, "mirai")
 #'
 is_mirai_error <- function(x) inherits(x, "miraiError")
 
+#' Is mirai Interrupt
+#'
+#' Is the object a 'miraiInterrupt'. When a mirai is sent a user interrupt,
+#'     e.g. by ctrl+c during an ongoing \code{\link{call_mirai}}, the mirai
+#'     will resolve to an empty character string classed as 'miraiInterrupt' and
+#'     'errorValue'. To test for all error conditions, including timeouts etc.,
+#'     \code{\link{is_error_value}} should be used instead.
+#'
+#' @param x an object.
+#'
+#' @return Logical TRUE if 'x' is of class 'miraiInterrupt', FALSE otherwise.
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' m <- mirai(stop())
+#' call_mirai(m)
+#' is_mirai_interrupt(m$data)
+#'
+#' }
+#'
+#' @export
+#'
+is_mirai_interrupt <- function(x) inherits(x, "miraiInterrupt")
+
 #' @export
 #'
 print.mirai <- function(x, ...) {
+
   cat("< mirai >\n - $data for evaluated result\n", file = stdout())
   invisible(x)
+
 }
 
 #' @export
 #'
 print.miraiError <- function(x, ...) {
-  cat("'miraiError' chr ", x, "\n", file = stdout())
+
+  cat(sprintf("'miraiError' chr %s\n", x), file = stdout())
   invisible(x)
+
+}
+
+#' @export
+#'
+print.miraiInterrupt <- function(x, ...) {
+
+  cat("'miraiInterrupt' chr", file = stdout())
+  invisible(x)
+
 }
 
 # internals --------------------------------------------------------------------
@@ -506,4 +562,6 @@ print.miraiError <- function(x, ...) {
 mk_mirai_error <- function(e) `class<-`(if (length(call <- .subset2(e, "call")))
   sprintf("Error in %s: %s", deparse(call, nlines = 1L), .subset2(e, "message")) else
     sprintf("Error: %s", .subset2(e, "message")), .errorclass)
+
+mk_interrupt_error <- function(e) .interrupt
 
