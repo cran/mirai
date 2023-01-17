@@ -21,9 +21,9 @@ network.
 Designed for simplicity, a ‘mirai’ evaluates an arbitrary expression
 asynchronously, resolving automatically upon completion.
 
-Built on ‘nanonext’ and ‘NNG’ (Nanomsg Next Gen) scalability protocols,
-defaults to the optimal choice of abstract sockets, Unix domain sockets
-or named pipes in addition to TCP/IP.
+Built on ‘nanonext’ and ‘NNG’ (Nanomsg Next Gen), uses scalability
+protocols not subject to R connection limits and transports faster than
+TCP/IP where applicable.
 
 `mirai()` returns a ‘mirai’ object immediately. ‘mirai’ (未来 みらい) is
 Japanese for ‘future’.
@@ -104,7 +104,7 @@ result.
 
 ``` r
 m$data |> str()
-#>  num [1:100000000] -4.121 2.237 0.326 3.123 -4.802 ...
+#>  num [1:100000000] 8.479 -0.754 -0.528 1.056 -13.149 ...
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -112,7 +112,7 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data |> str()
-#>  num [1:100000000] -4.121 2.237 0.326 3.123 -4.802 ...
+#>  num [1:100000000] 8.479 -0.754 -0.528 1.056 -13.149 ...
 ```
 
 [« Back to ToC](#table-of-contents)

@@ -1,3 +1,7 @@
+# mirai 0.7.2
+
+* Internal performance enhancements.
+
 # mirai 0.7.1
 
 * Allow user interrupts of `call_mirai()` again (regression in 0.7.0), now returning a 'miraiInterrupt'.

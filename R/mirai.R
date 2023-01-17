@@ -1,4 +1,4 @@
-# Copyright (C) 2022 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2022-2023 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -46,7 +46,7 @@ server <- function(.url, daemon = TRUE) {
   repeat {
     ctx <- context(sock)
     envir <- recv(ctx, mode = 1L)
-    data <- tryCatch(eval(expr = .subset2(envir, ".expr"), envir = envir),
+    data <- tryCatch(eval(expr = .subset2(envir, ".expr"), envir = envir, enclos = NULL),
                      error = mk_mirai_error, interrupt = mk_interrupt_error)
     send(ctx, data = data, mode = 1L)
     close(ctx)
@@ -152,10 +152,10 @@ eval_mirai <- function(.expr, ..., .args = list(), .timeout = NULL) {
 
   } else {
     url <- sprintf(.urlfmt, random())
+    sock <- socket(protocol = "req", listen = url)
     system2(command = .command,
             args = c("--vanilla", "-e", shQuote(sprintf("mirai::server(%s,0)", deparse(url)))),
             stdout = NULL, stderr = NULL, wait = FALSE)
-    sock <- socket(protocol = "req", listen = url)
     ctx <- context(sock)
     aio <- request(ctx, data = list2env(arglist), send_mode = 1L, recv_mode = 1L, timeout = .timeout)
     `attr<-`(`attr<-`(.subset2(aio, "aio"), "ctx", ctx), "sock", sock)
@@ -300,7 +300,7 @@ daemons <- function(n, .url) {
       if (proc == 0L) {
         close(sock)
         sock <<- NULL
-        gc(verbose = FALSE, full = TRUE)
+        gc(verbose = FALSE)
       }
     }
 
@@ -552,7 +552,7 @@ print.miraiError <- function(x, ...) {
 #'
 print.miraiInterrupt <- function(x, ...) {
 
-  cat("'miraiInterrupt' chr", file = stdout())
+  cat("'miraiInterrupt' chr ''", file = stdout())
   invisible(x)
 
 }

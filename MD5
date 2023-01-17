@@ -1,11 +1,11 @@
-3e802bdd5e7aeee42a77646c117625a3 *DESCRIPTION
+0170d8674761cfe0f6f2c29d4def2ff9 *DESCRIPTION
 f0bd921dd8207c2689ad2c09ad62eef5 *NAMESPACE
-a985bdfb4d69cccf34f93ef34dcbc70d *NEWS.md
-2fc835da337c4eb6bb193b4fe9ef5ebb *R/mirai-package.R
-afb7247903865e75359fa504f9c89f03 *R/mirai.R
-32512f09417bdf08e6fc87ea81e95025 *R/pipe.R
-945ab6db35508a4053627431eba9e537 *README.md
-6e11e1ebb1a1cf752b64e782767dac22 *inst/CITATION
+4d45ab8a9d0e453d9c01b0cfa59d96c7 *NEWS.md
+36229fea04ed947dcef94393ac048f7d *R/mirai-package.R
+8e5f099f72b8fa5038e98bdbe3617371 *R/mirai.R
+a0438dd69d042e675ac22401d90a1956 *R/pipe.R
+0ba039c3b46c36c357e10dd89065113b *README.md
+4afdc98f6ea29dad7597ec2b29a33973 *inst/CITATION
 053266459a52cced59c90888868378c6 *man/call_mirai.Rd
 2c05c458a1f3503fbd0cace033227ced *man/daemons.Rd
 7991f5295119e2e34d2aafe49d05a593 *man/eval_mirai.Rd
@@ -15,7 +15,7 @@ fd04333bcc9948dd252c0d6938842a1e *man/is_error_value.Rd
 97fffe2bffd7dc15951f368b4bb1b29a *man/is_mirai.Rd
 37bdcbcf5f049a7164c24bd692046ca0 *man/is_mirai_error.Rd
 77b885606202d5f546f8ad7ff50d1eb3 *man/is_mirai_interrupt.Rd
-ac346d9107f2274f0d4ee19a1bbc93cd *man/mirai-package.Rd
+dc3b86bc71051d45d1d5fe18ec24e95c *man/mirai-package.Rd
 6213c422de74cb961efb69f3db333234 *man/server.Rd
 5a00f73658e9985d5408088ed982c8de *man/stop_mirai.Rd
 ec0a0cf7c60f89b4b7e46b789d7f9536 *man/unresolved.Rd

@@ -1,4 +1,4 @@
-# Copyright (C) 2022 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2022-2023 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -19,9 +19,9 @@
 #' Lightweight parallel code execution, local or distributed across the network.
 #'     Designed for simplicity, a 'mirai' evaluates an arbitrary expression
 #'     asynchronously, resolving automatically upon completion. Built on
-#'     'nanonext' and 'NNG' (Nanomsg Next Gen) scalability protocols, defaults
-#'     to the optimal choice of abstract sockets, Unix domain sockets or named
-#'     pipes in addition to TCP/IP.
+#'     'nanonext' and 'NNG' (Nanomsg Next Gen), uses scalability protocols not
+#'     subject to R connection limits and transports faster than TCP/IP where
+#'     applicable.
 #'
 #' @section Notes:
 #'
@@ -63,11 +63,10 @@ NULL
 .miraiclass <- c("mirai", "recvAio")
 .errorclass <- c("miraiError", "errorValue")
 .interrupt <- `class<-`("", c("miraiInterrupt", "errorValue"))
-.sysname <- .subset2(Sys.info(), "sysname")
-.command <- switch(.sysname,
+.command <- switch(.subset2(Sys.info(), "sysname"),
                    Windows = file.path(R.home("bin"), "Rscript.exe"),
                    file.path(R.home("bin"), "Rscript"))
-.urlfmt <- switch(.sysname,
+.urlfmt <- switch(.subset2(Sys.info(), "sysname"),
                   Linux = "abstract://n%.f",
                   Windows = "ipc://n%.f",
                   "ipc:///tmp/n%.f")
