@@ -2,31 +2,69 @@
 % Please edit documentation in R/mirai.R
 \name{server}
 \alias{server}
-\title{mirai Server (Async Executor [Daemon])}
+\title{mirai Server (Async Executor Daemon)}
 \usage{
-server(.url, daemon = TRUE)
+server(
+  url,
+  asyncdial = TRUE,
+  maxtasks = Inf,
+  idletime = Inf,
+  walltime = Inf,
+  timerstart = 0L,
+  exitlinger = 100L,
+  ...,
+  cleanup = TRUE
+)
 }
 \arguments{
-\item{.url}{the client URL and port to connect to as a character string e.g.
-'tcp://192.168.0.2:5555'.}
+\item{url}{the client or dispatcher URL to dial into as a character string,
+including the port to connect to and (optionally) a path for websocket
+URLs e.g. 'tcp://192.168.0.2:5555' or 'ws://192.168.0.2:5555/path'.}
 
-\item{daemon}{[default TRUE] launch as a persistent daemon or, if FALSE, an
-ephemeral process.}
+\item{asyncdial}{[default TRUE] whether to perform dials asynchronously. An
+asynchronous dial is more resilient and will continue retrying if not
+immediately successful. However this can mask potential connection issues
+and specifying FALSE will error if a connection is not immediately
+possible (e.g. \code{\link{daemons}} has yet to be called on the client,
+or the specified port is not open etc.).}
+
+\item{maxtasks}{[default Inf] the maximum number of tasks to execute (task
+limit) before exiting.}
+
+\item{idletime}{[default Inf] maximum idle time, since completion of the last
+task (in milliseconds) before exiting.}
+
+\item{walltime}{[default Inf] soft walltime, or the minimum amount of real
+time taken (in milliseconds) before exiting.}
+
+\item{timerstart}{[default 0L] number of completed tasks after which to start
+the timer for 'idletime' and 'walltime'. 0L implies timers are started
+upon launch.}
+
+\item{exitlinger}{[default 100L] time in milliseconds to linger after an exit
+signal is received or a timer / task limit is reached, to allow sockets
+to flush sends currently in progress. The default permits normal
+operations, but should be set wider if computations are expected to
+return very large objects.}
+
+\item{...}{reserved but not currently used.}
+
+\item{cleanup}{[default TRUE] logical value whether to perform cleanup of the
+global environment, options values and loaded packages after each task
+evaluation. This option should not be modified. Do not set to FALSE
+unless you are certain you want such persistence across evaluations.}
 }
 \value{
 Invisible NULL.
 }
 \description{
-Implements a [persistent] executor/server for the remote process. Awaits data,
+Implements a persistent executor/server for the remote process. Awaits data,
     evaluates an expression in an environment containing the supplied data,
     and returns the result to the caller/client.
 }
-\section{About}{
-
-
-    The network topology is such that server daemons dial into the client,
-    which listens at the '.url' address. In this way, network resources may
-    be added or removed at any time and the client automatically distributes
-    tasks to all available servers.
+\details{
+The network topology is such that server daemons dial into the
+    client or dispatcher, which listens at the 'url' address. In this way,
+    network resources may be added or removed dynamically and the client or
+    dispatcher automatically distributes tasks to all available servers.
 }
-

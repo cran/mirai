@@ -1,3 +1,25 @@
+# mirai 0.8.0
+
+* mirai 0.8.0 is a major feature release. Special thanks to @wlandau for suggestions, discussion and testing for many of the new capabilities.
+* Compute profiles have been introduced through a new `.compute` argument in `daemons()` and `mirai()` for sending tasks with heterogeneous compute requirements.
+  + `daemons()` can create new profiles to connect to different resources e.g. servers with GPU, accelerators etc.
+  + `mirai()` tasks can be sent using a specific compute profile.
+* `daemons()` interface has a new `url` argument along with `dispatcher` for using a background dispatcher process to ensure optimal FIFO task scheduling (now the default).
+  + Supplying a client URL with a zero port number `:0` will automatically assign a free ephemeral port, with the actual port number subsequently reported by `daemons()`.
+  + Calling with no arguments now provides an improved view of the current number of connections / daemons (URL, online and busy status, tasks assigned and completed, instance), replacing the previous `daemons("view")` functionality.
+* `dispatcher()` is implemented as a new function for the dispatcher.
+* `server()` gains the following arguments:
+  + `asyncdial` to specify how the server dials into the client.
+  + `maxtasks` for specifying a maximum number of tasks before exiting.
+  + `idletime` for specifying an idle time, since completion of the last task before exiting.
+  + `walltime` for specifying a soft walltime before exiting.
+  + `timerstart` for specifying a minimum number of task completions before starting timers.
+* Invalid URLs provided to `daemons()` and `server()` now error and return immediately instead of potentially causing a hang.
+* `eval_mirai()` is removed as an alias for `mirai()`.
+* 'mirai' processes are no longer launched in Rscript sessions with the `--vanilla` argument to enable site / user profile and environment files to be read.
+* Requires nanonext >= 0.8.0.
+* Internal performance enhancements.
+
 # mirai 0.7.2
 
 * Internal performance enhancements.

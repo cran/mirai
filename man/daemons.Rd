@@ -4,79 +4,226 @@
 \alias{daemons}
 \title{daemons (Persistent Server Processes)}
 \usage{
-daemons(n, .url)
+daemons(n, url = NULL, dispatcher = TRUE, ..., .compute = "default")
 }
 \arguments{
-\item{n}{integer number of daemons to set | 'view' to view the current number
-of daemons.}
+\item{n}{integer number of daemons (server processes) to set.}
 
-\item{.url}{(optional) for distributing tasks across the network: character
-client URL and port accepting incoming connections e.g.
-'tcp://192.168.0.2:5555' at which server processes started using
-\code{\link{server}} should connect to. To listen to port 5555 (for
-example) on all interfaces on the host, specify one of 'tcp://:5555',
-'tcp://*:5555' or 'tcp://0.0.0.0:5555'.}
+\item{url}{(optional) the client URL as a character vector, including a
+port accepting incoming connections and (optionally) a path for websocket
+URLs e.g. 'tcp://192.168.0.2:5555' or 'ws://192.168.0.2:5555/path'.}
+
+\item{dispatcher}{[default TRUE] logical value whether to use a background
+dispatcher process. A dispatcher connects to servers on behalf of the
+client and queues tasks until a server is able to begin immediate
+execution of that task, ensuring FIFO scheduling (futher details below).}
+
+\item{...}{additional arguments passed through to \code{\link{dispatcher}} if
+using active dispatch or \code{\link{server}} if launching local daemons.}
+
+\item{.compute}{(optional) character compute profile to use for creating the
+daemons (each compute profile can have its own set of daemons for
+connecting to different resources).}
 }
 \value{
-Depending on 'n' specified:
-    \itemize{
-    \item{integer: integer change in number of daemons (created or destroyed).}
-    \item{'view': integer number of currently set daemons.}
+Setting daemons: integer number of daemons set, or the character
+    client URL.
+
+    Viewing current status: a named list comprising: \itemize{
+    \item{\code{connections}} {- number of active connections at the client.
+    Will always be 1L when using active dispatch as there is only one
+    connection to the dispatcher, which then connects to the servers in turn.}
+    \item{\code{daemons}} {- if using dispatcher: a matrix of statistics
+    for each server: URL, online and busy status, cumulative tasks assigned
+    and completed (reset if a server re-connects), and instance # (increments
+    by 1 every time a server connects to the URL). If not using dispatcher:
+    the number of daemons set, or else the client URL.}
     }
-    Calling \code{daemons()} without any arguments returns the 'nanoSocket'
-    for connecting to the daemons, or NULL if it is yet to be created.
 }
 \description{
-Set or view the number of 'daemons' or persistent server processes receiving
+Set 'daemons' or background persistent server processes receiving
     \code{\link{mirai}} requests. These are, by default, automatically
-    created on the local machine. Alternatively, a client URL may be set to
-    receive connections from remote servers started with \code{\link{server}},
-    for distributing tasks across the network.
+    created on the local machine. Alternatively, a client URL may be
+    specified to receive connections from remote servers started with
+    \code{\link{server}} for distributing tasks across the network. Daemons
+    may take advantage of active dispatch, which ensures that tasks are
+    assigned to servers efficiently on a FIFO basis, or else the low-level
+    approach of distributing tasks to servers immediately in an even fashion.
 }
 \details{
-Set 'n' to 0 to reset all daemon connections. \{mirai\} will revert
-    to the default behaviour of creating a new background process for each
-    request.
+For viewing the currrent status, specify \code{daemons()} with no
+    arguments.
 
-    Specifying '.url' without 'n' assumes a value for 'n' of 1. After setting
-    '.url', further calls specifying 'n' can be used to update the number of
-    connected daemons (this is not strictly necessary as daemons are detected
-    automatically, but will ensure that the correct number of shutdown signals
-    are sent when the session is ended).
+    Use \code{daemons(0)} to reset all daemon connections at any time. This
+    will send an exit signal to all connected daemons or dispatchers (and be
+    propagated onwards where applicable) such that their processes exit. A
+    reset is required before specifying revised daemons settings, otherwise
+    these will not be registered.
 
-    Setting a new '.url' value will attempt to shutdown existing daemons
-    connected at the existing address before opening a connection at the new
-    address.
+    After a reset, \{mirai\} will revert to the default behaviour of creating
+    a new background process for each request.
+
+    When specifying a client URL, all daemons dialing into the client are
+    detected automatically and resources may be added or removed at any time.
 }
-\section{About}{
+\section{Dispatcher}{
+
+
+    By default \code{dispatcher = TRUE}. This launches a background process
+    running \code{\link{dispatcher}}.  A dispatcher connects to servers on
+    behalf of the client and queues tasks until a server is able to begin
+    immediate execution of that task, ensuring FIFO scheduling.
+
+    By specifying \code{active = FALSE}, servers connect to the client
+    directly rather than through a dispatcher. The client sends tasks to
+    connected servers immediately in an evenly-distributed fashion. However,
+    optimal scheduling is not guaranteed as the duration of tasks cannot be
+    known \emph{a priori}, such that tasks can be queued at a server behind
+    a long-running task while other servers remain idle. Nevertheless, this
+    provides a resource-light approach suited to working with similar-length
+    tasks, or where concurrent tasks typically do not exceed available daemons.
+}
+
+\section{Local Daemons}{
 
 
     Daemons provide a potentially more efficient solution for asynchronous
-    operations as new processes no longer need to be created on an ad hoc
-    basis.
+    operations as new processes no longer need to be created on an \emph{ad
+    hoc} basis.
 
-    Specifying '.url' allows tasks to be distributed across the network. The
-    network topology is such that server daemons (started with
-    \code{\link{server}}) dial into the client, which listens at the '.url'
-    address. In this way, network resources may be added or removed at any
-    time. The client automatically distributes tasks to all available servers.
+    Supply the argument 'n' to set the number of daemons. New background
+    \code{\link{server}} processes are automatically created on the local
+    machine connecting back to the client process, either directly or via a
+    dispatcher.
 
-    The current implementation is low-level and ensures tasks are
-    evenly-distributed amongst daemons without actively managing a task queue.
-    This approach provides a robust and resource-light solution, particularly
-    well-suited to working with similar-length tasks, or where the number of
-    concurrent tasks typically does not exceed the number of available
-    daemons.
+    Running local daemons with a dispatcher is self-repairing: in the case
+    that daemons crash or are terminated, replacement daemons are launched
+    upon the next task.
+}
+
+\section{Distributed Computing}{
+
+
+    Specifying 'url' allows tasks to be distributed across the network.
+
+    The client URL should be in the form of a character string such as:
+    'tcp://192.168.0.2:5555' at which server processes started using
+    \code{\link{server}} should connect to.
+
+    Alternatively, to listen to port 5555 on all interfaces on the local host,
+    specify either 'tcp://:5555', 'tcp://*:5555' or 'tcp://0.0.0.0:5555'.
+
+    Specifying the wildcard value zero for the port number e.g. 'tcp://:0' or
+    'ws://:0' will automatically assign a free ephemeral port. Use
+    \code{daemons()} to query the actual assigned port at any time.
+
+    \strong{With Dispatcher}
+
+    When using a dispatcher, it is recommended to use a websocket URL rather
+    than TCP, as this requires only one port to connect to all servers: a
+    websocket URL supports a path after the port number, which can be made
+    unique for each server.
+
+    Specifying a single client URL such as 'ws://192.168.0.2:5555' with
+    \code{n = 6} will automatically append a sequence to the path, listening
+    to the URLs 'ws://192.168.0.2:5555/1' through 'ws://192.168.0.2:5555/6'.
+
+    Alternatively, specify a vector of URLs to listen to arbitrary port
+    numbers / paths. In this case it is optional to supply 'n' as this can
+    be inferred by the length of vector supplied.
+
+    Individual \code{\link{server}} instances should then be started on the
+    remote resource, which dial in to each of these client URLs.
+
+    Server instances may be scaled up or down dynamically, subject to the
+    maximum number initially specified, with the dispatcher adjusting
+    automatically.
+
+    Alternatively, supplying a single TCP URL will listen on a block of URLs
+    with ports starting from the supplied port number and incrementing by one
+    for 'n' specified e.g. the client URL 'tcp://192.168.0.2:5555' with
+    \code{n = 6} listens to the contiguous block of ports 5555 through 5560.
+
+    \strong{Without Dispatcher}
+
+    A TCP URL may be used in this case as the client listens at only one
+    address, utilising a single port.
+
+    The network topology is such that server daemons (started with
+    \code{\link{server}}) or indeed dispatchers (started with
+    \code{\link{dispatcher}}) dial into the client, which listens at the
+    client URL.
+
+    'n' does not need to be supplied in this case, and is disregarded if it
+    is, as network resources may be added or removed at any time. The client
+    automatically distributes tasks to all connected servers and dispatchers.
+}
+
+\section{Compute Profiles}{
+
+
+    By default, the 'default' compute profile is used. Provide a character
+    value for '.compute' to create a new compute profile with the name
+    specified. Each compute profile retains its own daemons settings, and may
+    be operated independently of each other. Some usage examples follow:
+
+    \strong{local / remote} new daemons may be set via a client URL and
+    specifying '.compute' as 'remote'. This creates a new compute profile
+    called 'remote'. Subsequent mirai calls may then be sent for local
+    computation by not specifying its '.compute' argument, or for remote
+    computation by specifying its '.compute' argument as 'remote'.
+
+    \strong{cpu / gpu} some tasks may require access to different classes of
+    server, such as those with GPUs. In this case, \code{daemons()} may be
+    called twice to set up client URLs for CPU-only and GPU servers to dial
+    into respectively, specifying the '.compute' argument as 'cpu' and 'gpu'
+    each time. By supplying the '.compute' argument to subsequent mirai calls,
+    tasks may be sent to either 'cpu' or 'gpu' servers for computation.
+
+    Note: further actions such as viewing the status of daemons or resetting
+    via \code{daemons(0)} should be carried out with the desired '.compute'
+    argument specified.
+}
+
+\section{Timeouts}{
+
+
+    Note: specifying the \code{.timeout} argument in \code{\link{mirai}} will
+    ensure that the 'mirai' always resolves, however the process may not have
+    completed and still be ongoing in the daemon. In such situations, using
+    active dispatch ensures that queued tasks are not assigned to the busy
+    process, however performance may still be degraded if they remain in use.
 }
 
 \examples{
 if (interactive()) {
 # Only run examples in interactive R sessions
 
-# Create 2 daemons
+# Create 2 local daemons (active dispatch)
 daemons(2)
-# View the number of active daemons
-daemons("view")
+# View status
+daemons()
+# Reset to zero
+daemons(0)
+
+# Create 2 local daemons (direct connection)
+daemons(2, dispatcher = FALSE)
+# View status
+daemons()
+# Reset to zero
+daemons(0)
+
+# 2 remote servers via dispatcher (using zero wildcard)
+daemons(2, url = "ws://:0")
+# View status
+daemons()
+# Reset to zero
+daemons(0)
+
+# Set client URL for remote servers to dial into (using zero wildcard)
+daemons(url = "tcp://:0", dispatcher = FALSE)
+# View status
+daemons()
 # Reset to zero
 daemons(0)
 

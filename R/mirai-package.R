@@ -25,14 +25,15 @@
 #'
 #' @section Notes:
 #'
-#'     For local mirai processes, the default transport for intra-process
-#'     communications is platform-dependent: abstract sockets on Linux, Unix
-#'     domain sockets on MacOS, Solaris and other POSIX platforms, and named
-#'     pipes on Windows.
+#'     For local mirai processes, the default transport for inter-process
+#'     communications is platform-dependent: abstract Unix domain sockets on
+#'     Linux, Unix domain sockets on MacOS, Solaris and other POSIX platforms,
+#'     and named pipes on Windows.
 #'
-#'     This may be overriden if required by specifying a custom client URL in
-#'     the \code{\link{daemons}} interface, and starting server processes
-#'     manually with \code{\link{server}} on the same machine.
+#'     This may be overriden if required by specifying 'url' in the
+#'     \code{\link{daemons}} interface, and starting server and/or dispatcher
+#'     processes manually using \code{\link{server}} and \code{\link{dispatcher}}
+#'     respectively, on the same machine.
 #'
 #' @section Links:
 #'
@@ -48,29 +49,29 @@
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
-#' @importFrom nanonext call_aio context is_error_value msleep random recv
-#'     request send send_aio socket stop_aio unresolved
+#' @importFrom nanonext base64dec call_aio context is_error_value mclock msleep
+#'     opt parse_url random recv recv_aio request send socket stat stop_aio
+#'     unresolved
 #'
 #' @docType package
 #' @name mirai-package
 #'
 NULL
 
-.onLoad <- function(libname, pkgname) daemons <<- daemons()
+.onUnload <- function(libpath) for (i in names(..)) daemons(0L, .compute = i)
 
-.onUnload <- function(libpath) invisible(daemons(0L))
+.command <- file.path(R.home("bin"), switch(.subset2(.Platform, "OS.type"),
+                                            windows = "Rscript.exe",
+                                            "Rscript"))
 
-.miraiclass <- c("mirai", "recvAio")
-.errorclass <- c("miraiError", "errorValue")
-.interrupt <- `class<-`("", c("miraiInterrupt", "errorValue"))
-.command <- switch(.subset2(Sys.info(), "sysname"),
-                   Windows = file.path(R.home("bin"), "Rscript.exe"),
-                   file.path(R.home("bin"), "Rscript"))
 .urlfmt <- switch(.subset2(Sys.info(), "sysname"),
                   Linux = "abstract://n%.f",
                   Windows = "ipc://n%.f",
                   "ipc:///tmp/n%.f")
-.__scm__. <- as.raw(c(0x58, 0x0a, 0x00, 0x00, 0x00, 0x03, 0x00, 0x04, 0x02,
-                      0x01, 0x00, 0x03, 0x05, 0x00, 0x00, 0x00, 0x00, 0x05,
-                      0x55, 0x54, 0x46, 0x2d, 0x38, 0x00, 0x00, 0x00, 0xfc))
+
+.statnames <- c("status_online", "status_busy", "tasks_assigned", "tasks_complete", "instance #")
+
+.. <- `[[<-`(new.env(hash = FALSE), "default", new.env(hash = FALSE))
+
+.__scm__. <- base64dec("WAoAAAADAAQCAQADBQAAAAAFVVRGLTgAAAD8", convert = FALSE)
 
