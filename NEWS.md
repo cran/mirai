@@ -1,3 +1,7 @@
+# mirai 0.8.1
+
+* Fixes issue where daemon processes may not launch for certain setups (only affecting binary package builds).
+
 # mirai 0.8.0
 
 * mirai 0.8.0 is a major feature release. Special thanks to @wlandau for suggestions, discussion and testing for many of the new capabilities.

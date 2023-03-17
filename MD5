@@ -1,15 +1,15 @@
-217016f6e0dad676986ffd345234343b *DESCRIPTION
+c4cf4f22af74f60d019f5d97989cb457 *DESCRIPTION
 d75465328105a2874692209f9d1749f7 *NAMESPACE
-9b11a1e323d70eba97a81bccda99753f *NEWS.md
-c20ac0d2a743d79909749e7921257240 *R/mirai-package.R
-61add0ec1fb3dbcbbe284e4bb834bbc7 *R/mirai.R
+4da241315ed215d9f3bf1fe88608a245 *NEWS.md
+e111f71aeaf53ecfb7733e079ec76848 *R/mirai-package.R
+fff8597d315a1ea3e25945b6d2b34143 *R/mirai.R
 a0438dd69d042e675ac22401d90a1956 *R/pipe.R
 f484546dbbb8c71560a501cb13b953d3 *README.md
 4afdc98f6ea29dad7597ec2b29a33973 *inst/CITATION
 053266459a52cced59c90888868378c6 *man/call_mirai.Rd
 151f3b0cc2634a98a39671f907775d5f *man/daemons.Rd
 365e88bd1a4a87bf621bfe8db8f0e2a3 *man/dispatcher.Rd
-be1e8d9d23c2edcd5f27ed79e77adf21 *man/dot-.Rd
+cdebd121af07e8e833f74e827c380dcb *man/dot-.Rd
 ed3b623a539f5908f77dbf61cb61c728 *man/figures/logo.png
 c573a696863ba04e3d2c13d2fde4f855 *man/grapes-greater-than-greater-than-grapes.Rd
 feb980816d0632a2bd42e6488a52f68b *man/is_mirai.Rd
@@ -19,4 +19,4 @@ fbd0eac8d08b19c8df80211134693933 *man/mirai.Rd
 e4f7be294bf569f77932efaa344ea0e1 *man/server.Rd
 5a00f73658e9985d5408088ed982c8de *man/stop_mirai.Rd
 ec0a0cf7c60f89b4b7e46b789d7f9536 *man/unresolved.Rd
-6d622b503a8dbe19d84e2cbaef56f8f2 *tests/tests.R
+b45c886d8720a577350cee39fff1f1bd *tests/tests.R
