@@ -18,10 +18,10 @@
 #'
 #' Lightweight parallel code execution, local or distributed across the network.
 #'     Designed for simplicity, a 'mirai' evaluates an arbitrary expression
-#'     asynchronously, resolving automatically upon completion. Built on
-#'     'nanonext' and 'NNG' (Nanomsg Next Gen), uses scalability protocols not
-#'     subject to R connection limits and transports faster than TCP/IP where
-#'     applicable.
+#'     asynchronously, resolving automatically upon completion. Leverages
+#'     'nanonext' and 'NNG' (Nanomsg Next Gen) to provide efficient task
+#'     scheduling, scalability beyond R connection limits, and transports faster
+#'     than TCP/IP for inter-process communications.
 #'
 #' @section Notes:
 #'
@@ -49,30 +49,34 @@
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
-#' @importFrom nanonext base64dec call_aio context is_error_value mclock msleep
-#'     opt parse_url random recv recv_aio request send socket stat stop_aio
-#'     unresolved
+#' @importFrom nanonext call_aio context cv cv_value is_error_value listen
+#'     mclock msleep opt parse_url pipe_notify random recv recv_aio_signal
+#'     request request_signal send socket stat stop_aio unresolved wait
+#'     weakref<-
 #'
 #' @docType package
 #' @name mirai-package
 #'
 NULL
 
-.onLoad <- function(libname, pkgname) {
-  .command <<- switch(.Platform[["OS.type"]],
-                      windows = file.path(R.home("bin"), "Rscript.exe"),
-                      file.path(R.home("bin"), "Rscript"))
-  .urlfmt <<- switch(Sys.info()[["sysname"]],
-                     Linux = "abstract://n%.f",
-                     Windows = "ipc://n%.f",
-                     "ipc:///tmp/n%.f")
-}
+.onLoad <- function(libname, pkgname)
+  switch(Sys.info()[["sysname"]],
+         Linux = {
+           .command <<- file.path(R.home("bin"), "Rscript")
+           .urlfmt <<- "abstract://n%.f"
+         },
+         Windows = {
+           .command <<- file.path(R.home("bin"), "Rscript.exe")
+           .urlfmt <<- "ipc://n%.f"
+         },
+         {
+           .command <<- file.path(R.home("bin"), "Rscript")
+           .urlfmt <<- "ipc:///tmp/n%.f"
+         })
 
 .onUnload <- function(libpath) for (i in names(..)) daemons(0L, .compute = i)
 
 .command <- NULL
 .urlfmt <- NULL
-.statnames <- c("status_online", "status_busy", "tasks_assigned", "tasks_complete", "instance #")
 .. <- `[[<-`(new.env(hash = FALSE), "default", new.env(hash = FALSE))
-.__scm__. <- base64dec("WAoAAAADAAQCAQADBQAAAAAFVVRGLTgAAAD8", convert = FALSE)
 

@@ -21,9 +21,9 @@ network.
 Designed for simplicity, a ‘mirai’ evaluates an arbitrary expression
 asynchronously, resolving automatically upon completion.
 
-Built on ‘nanonext’ and ‘NNG’ (Nanomsg Next Gen), uses scalability
-protocols not subject to R connection limits and transports faster than
-TCP/IP where applicable.
+Leverages ‘nanonext’ and ‘NNG’ (Nanomsg Next Gen) to provide efficient
+task scheduling, scalability beyond R connection limits, and transports
+faster than TCP/IP for inter-process communications.
 
 `mirai()` returns a ‘mirai’ object immediately. ‘mirai’ (未来 みらい) is
 Japanese for ‘future’.
@@ -108,7 +108,7 @@ result.
 
 ``` r
 m$data |> str()
-#>  num [1:100000000] 0.875 -0.454 1.126 -1.1 4.368 ...
+#>  num [1:100000000] -10.974 -0.142 1.335 2.598 0.91 ...
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -116,7 +116,7 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data |> str()
-#>  num [1:100000000] 0.875 -0.454 1.126 -1.1 4.368 ...
+#>  num [1:100000000] -10.974 -0.142 1.335 2.598 0.91 ...
 ```
 
 [« Back to ToC](#table-of-contents)
@@ -204,7 +204,6 @@ for (i in 1:10) {
   
 }
 #> iteration 1 successful 
-#> Error: random error 
 #> iteration 2 successful 
 #> iteration 3 successful 
 #> iteration 4 successful 
@@ -212,6 +211,7 @@ for (i in 1:10) {
 #> iteration 6 successful 
 #> iteration 7 successful 
 #> iteration 8 successful 
+#> Error: random error 
 #> iteration 9 successful 
 #> iteration 10 successful
 ```
@@ -255,12 +255,12 @@ daemons()
 #> 
 #> $daemons
 #>                        status_online status_busy tasks_assigned tasks_complete instance #
-#> abstract://n403353905              1           0              0              0          1
-#> abstract://n708022954              1           0              0              0          1
-#> abstract://n240080471              1           0              0              0          1
-#> abstract://n186944970              1           0              0              0          1
-#> abstract://n241938993              1           0              0              0          1
-#> abstract://n218619953              1           0              0              0          1
+#> abstract://n2049946055             1           0              0              0          1
+#> abstract://n1227422372             1           0              0              0          1
+#> abstract://n7652447120             1           0              0              0          1
+#> abstract://n3038177524             1           0              0              0          1
+#> abstract://n1873925846             1           0              0              0          1
+#> abstract://n6017584969             1           0              0              0          1
 ```
 
 The default `dispatcher = TRUE` launches a `dispatcher()` background
@@ -269,10 +269,6 @@ the local machine. This ensures that tasks are dispatched efficiently on
 a first-in first-out (FIFO) basis to servers for processing. Tasks are
 queued at the dispatcher and sent to a server as soon as it can accept
 the task for immediate execution.
-
-A dispatcher running local daemons is self-repairing if one of the
-daemons crashes or is terminated - a replacement daemon is launched upon
-the next task.
 
 ``` r
 daemons(0)
@@ -434,8 +430,9 @@ daemons(0)
 #> [1] 0
 ```
 
-This also sends an exit signal to the dispatcher and all connected
-servers so that they exit automatically.
+Closing the connection causes the dispatcher to exit automatically, and
+in turn all connected servers when their respective connections with the
+dispatcher are terminated.
 
 #### Connecting to Remote Servers Directly
 
@@ -444,7 +441,7 @@ the client. The client listens at the below address, and distributes
 tasks to all connected server processes.
 
 ``` r
-daemons(url = "tcp://10.111.5.13:0", dispatcher = FALSE)
+daemons(url = "tcp://10.111.5.13:45073", dispatcher = FALSE)
 ```
 
 Alternatively, simply supply a colon followed by the port number to
@@ -452,7 +449,7 @@ listen on all interfaces on the local host, for example:
 
 ``` r
 daemons(url = "tcp://:0", dispatcher = FALSE)
-#> [1] "tcp://:37137"
+#> [1] "tcp://:45073"
 ```
 
 Note that above, the port number is specified as zero. This is a
@@ -467,7 +464,7 @@ On the server, `server()` may be called from an R session, or an Rscript
 invocation from a shell. This sets up a remote daemon process that
 connects to the client URL and receives tasks:
 
-    Rscript -e 'mirai::server("tcp://10.111.5.13:37137")'
+    Rscript -e 'mirai::server("tcp://10.111.5.13:0")'
 
 –
 
@@ -485,7 +482,7 @@ daemons()
 #> [1] 0
 #> 
 #> $daemons
-#> [1] "tcp://:37137"
+#> [1] "tcp://:45073"
 ```
 
 To reset all connections and revert to default behaviour:
@@ -495,8 +492,7 @@ daemons(0)
 #> [1] 0
 ```
 
-This also sends an exit signal to connected server instances so that
-they exit automatically.
+This causes all connected server instances to exit automatically.
 
 [« Back to ToC](#table-of-contents)
 
@@ -627,6 +623,10 @@ Listed in CRAN Task View: <br /> - High Performance Computing:
 on CRAN: <https://cran.r-project.org/package=nanonext>
 
 NNG website: <https://nng.nanomsg.org/><br />
+
+The {crew} package <https://wlandau.github.io/crew/> (available on CRAN)
+by William Landau further extends {mirai} to different computing
+platforms for distributed workers.
 
 [« Back to ToC](#table-of-contents)
 

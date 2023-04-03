@@ -40,11 +40,10 @@
 #' @param timerstart [default 0L] number of completed tasks after which to start
 #'     the timer for 'idletime' and 'walltime'. 0L implies timers are started
 #'     upon launch.
-#' @param exitlinger [default 100L] time in milliseconds to linger after an exit
-#'     signal is received or a timer / task limit is reached, to allow sockets
-#'     to flush sends currently in progress. The default permits normal
-#'     operations, but should be set wider if computations are expected to
-#'     return very large objects.
+#' @param exitlinger [default 1000L] time in milliseconds to linger before
+#'     exiting due to a timer / task limit, to allow sockets to complete sends
+#'     currently in progress. The default can be set wider if computations are
+#'     expected to return very large objects (> GBs).
 #' @param ... reserved but not currently used.
 #' @param cleanup [default TRUE] logical value whether to perform cleanup of the
 #'     global environment, options values and loaded packages after each task
@@ -61,35 +60,40 @@
 #' @export
 #'
 server <- function(url, asyncdial = TRUE, maxtasks = Inf, idletime = Inf,
-                   walltime = Inf, timerstart = 0L, exitlinger = 100L, ...,
+                   walltime = Inf, timerstart = 0L, exitlinger = 1000L, ...,
                    cleanup = TRUE) {
 
-  sock <- socket(protocol = "rep", dial = url, autostart = if (asyncdial) TRUE else NA)
+  sock <- socket(protocol = "rep", dial = url, autostart = asyncdial || NA)
+
   devnull <- file(nullfile(), open = "w", blocking = FALSE)
   sink(file = devnull)
   sink(file = devnull, type = "message")
-  on.exit(expr = {
-    msleep(exitlinger)
+  on.exit({
     close(sock)
     sink()
     sink(type = "message")
     close(devnull)
   })
+  cv <- cv()
+  pipe_notify(sock, cv = cv, add = FALSE, remove = TRUE, flag = TRUE) && stop()
   count <- 0L
   if (idletime > walltime) idletime <- walltime else if (idletime == Inf) idletime <- NULL
   op <- options()
   se <- search()
   start <- mclock()
 
-  while (count < maxtasks && mclock() - start < walltime) {
+  while ((live <- count < maxtasks) && (live <- mclock() - start < walltime)) {
 
     ctx <- context(sock)
-    envir <- recv(ctx, mode = 1L, block = idletime)
+    aio <- recv_aio_signal(ctx, mode = 1L, timeout = idletime, cv = cv)
+    wait(cv) || break
+    envir <- .subset2(call_aio(aio), "data")
     is.integer(envir) && {
       count < timerstart && {
         start <- mclock()
         next
       }
+      live <- FALSE
       break
     }
     data <- tryCatch(eval(expr = envir[[".expr"]], envir = envir, enclos = NULL),
@@ -104,6 +108,8 @@ server <- function(url, asyncdial = TRUE, maxtasks = Inf, idletime = Inf,
     count <- count + 1L
 
   }
+
+  if (!live) msleep(exitlinger)
 
 }
 
@@ -121,7 +127,7 @@ server <- function(url, asyncdial = TRUE, maxtasks = Inf, idletime = Inf,
 . <- function(url) {
 
   sock <- socket(protocol = "rep", dial = url)
-  on.exit(expr = close(sock))
+  on.exit(close(sock))
   ctx <- context(sock)
   envir <- recv(ctx, mode = 1L)
   data <- tryCatch(eval(expr = envir[[".expr"]], envir = envir, enclos = NULL),
@@ -150,18 +156,6 @@ server <- function(url, asyncdial = TRUE, maxtasks = Inf, idletime = Inf,
 #'     Otherwise 'n' will be inferred from the number of URLs supplied as '...'.
 #'     Where a single URL is supplied and 'n' > 1, 'n' unique URLs will be
 #'     automatically assigned for servers to dial into.
-#' @param exitlinger [default 100L] time in milliseconds to linger after an exit
-#'     signal is received, to allow sockets to flush sends currently in progress.
-#'     The default permits normal operations, but should be set wider if
-#'     computations are expected to return very large objects.
-#' @param pollfreqh [default 10L] the high polling frequency for the dispatcher
-#'     in milliseconds (used when there are active tasks). Setting a lower value
-#'     will be more responsive but at the cost of consuming more resources on
-#'     the dispatcher thread.
-#' @param pollfreql [default 100L] the low polling frequency for the dispatcher
-#'     in milliseconds (used when there are no active tasks). Setting a lower
-#'     value will be more responsive but at the cost of consuming more resources
-#'     on the dispatcher thread.
 #' @param ... additional arguments passed through to \code{\link{server}} if
 #'     launching local daemons i.e. 'url' is not specified.
 #' @param monitor (for package internal use, not applicable if called
@@ -178,32 +172,35 @@ server <- function(url, asyncdial = TRUE, maxtasks = Inf, idletime = Inf,
 #'
 #' @export
 #'
-dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
-                       exitlinger = 100L, pollfreqh = 5L, pollfreql = 50L, ...,
-                       monitor = NULL) {
+dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE, ..., monitor = NULL) {
 
-  sock <- socket(protocol = "rep", dial = client, autostart = if (asyncdial) TRUE else NA)
-  on.exit(expr = {
-    msleep(exitlinger)
-    close(sock)
-  })
-
-  auto <- is.null(url)
   n <- if (is.numeric(n)) as.integer(n) else length(url)
   n > 0L || stop("at least one URL must be supplied for 'url' or 'n' must be at least 1")
+
+  sock <- socket(protocol = "rep", dial = client, autostart = asyncdial || NA)
+  on.exit(close(sock))
+  cv <- cv()
+  pipe_notify(sock, cv = cv, add = FALSE, remove = TRUE, flag = TRUE) && stop()
+
+  auto <- is.null(url)
   vectorised <- length(url) == n
   seq_n <- seq_len(n)
   servernames <- character(n)
-  instances <- activestore <- complete <- assigned <- integer(n)
+  instance <- istore <- complete <- assigned <- integer(n)
   serverfree <- !integer(n)
-  servers <- queue <- vector(mode = "list", length = n)
+  active <- servers <- queue <- vector(mode = "list", length = n)
 
   ctrchannel <- is.character(monitor)
   if (ctrchannel) {
-    sockc <- socket(protocol = "bus", dial = monitor, autostart = if (asyncdial) TRUE else NA)
-    on.exit(expr = close(sockc), add = TRUE, after = FALSE)
-    cmessage <- recv_aio(sockc, mode = 5L)
+    ctx <- context(sock)
+    recv(ctx, mode = 5L, block = 2000L) && stop()
+    send(ctx, 0L, mode = 2L, block = 2000L) && stop()
+    close(ctx)
+    statnames <- c("status_online", "status_busy", "tasks_assigned", "tasks_complete", "instance #")
     attr(servernames, "dispatcher_pid") <- Sys.getpid()
+    sockc <- socket(protocol = "bus", dial = monitor, autostart = asyncdial || NA)
+    on.exit(close(sockc), add = TRUE, after = FALSE)
+    cmessage <- recv_aio_signal(sockc, mode = 5L, cv = cv)
   }
 
   if (!auto && !vectorised) {
@@ -217,67 +214,57 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
       if (vectorised) url[i] else
         if (is.null(ports)) sprintf("%s/%d", url, i) else
           sub(ports[1L], ports[i], url, fixed = TRUE)
-    nsock <- socket(protocol = "req", listen = nurl)
+    nsock <- socket(protocol = "req")
+    ncv <- cv()
+    pipe_notify(nsock, cv = ncv, cv2 = cv, flag = FALSE) && stop()
+    listen(nsock, url = nurl, error = TRUE)
     if (i == 1L && !auto && parse_url(opt(attr(nsock, "listener")[[1L]], "url"))[["port"]] == "0") {
       realport <- opt(attr(nsock, "listener")[[1L]], "tcp-bound-port")
       nurl <- sub("(?<=:)0(?![^/])", realport, nurl, perl = TRUE)
       if (!vectorised) url <- sub("(?<=:)0(?![^/])", realport, url, perl = TRUE)
-      close(nsock)
-      nsock <- socket(protocol = "req", listen = nurl)
+      servernames[i] <- nurl
+    } else {
+      servernames[i] <- opt(attr(nsock, "listener")[[1L]], "url")
     }
 
     dotstring <- if (missing(...)) "" else
-      sprintf(",%s", paste(names(dots <- substitute(alist(...))[-1L]), dots, sep = "=", collapse = ","))
+      sprintf(",%s", paste(names(dots <- as.expression(list(...))), dots, sep = "=", collapse = ","))
 
     if (auto)
-      launch_daemon(sprintf("mirai::server(\"%s\"%s)", nurl, dotstring))
+      launch(sprintf("mirai::server(\"%s\"%s)", nurl, dotstring))
 
-    servernames[i] <- opt(attr(nsock, "listener")[[1L]], "url")
     servers[[i]] <- nsock
+    active[[i]] <- ncv
     ctx <- context(sock)
-    req <- recv_aio(ctx, mode = 1L)
+    req <- recv_aio_signal(ctx, mode = 1L, cv = cv)
     queue[[i]] <- list(ctx = ctx, req = req)
   }
-  on.exit(expr = lapply(servers, send, data = .__scm__., mode = 2L), add = TRUE, after = FALSE)
 
-  devnull <- file(nullfile(), open = "w", blocking = FALSE)
-  sink(file = devnull)
-  sink(file = devnull, type = "message")
-  on.exit(expr = {
-    lapply(servers, close)
-    sink()
-    sink(type = "message")
-    close(devnull)
-  }, add = TRUE, after = TRUE)
+  on.exit(lapply(servers, close), add = TRUE, after = TRUE)
+  msleep(500L)
 
   suspendInterrupts(
     repeat {
 
-      activevec <- as.integer(unlist(lapply(servers, stat, "pipes")))
-      changes <- (activevec - activestore) > 0L
-      activestore <- activevec
+      wait(cv) || break
+
+      cv_values <- as.integer(lapply(active, cv_value))
+      activevec <- cv_values %% 2L
+      instance <- (cv_values + activevec) / 2L
+      changes <- (instance - istore) > 0L
+      istore <- instance
       if (any(changes)) {
         assigned[changes] <- 0L
         complete[changes] <- 0L
-        instances[changes] <- instances[changes] + 1L
       }
 
-      active <- sum(activevec)
       free <- which(serverfree & activevec)
 
-      msleep(if (length(free) == active) pollfreql else pollfreqh)
-
       ctrchannel && !unresolved(cmessage) && {
-        data <- `attributes<-`(c(activevec, assigned - complete, assigned, complete, instances),
-                               list(dim = c(n, 5L), dimnames = list(servernames, .statnames)))
+        data <- `attributes<-`(c(activevec, assigned - complete, assigned, complete, instance),
+                               list(dim = c(n, 5L), dimnames = list(servernames, statnames)))
         send(sockc, data = data, mode = 1L)
-        cmessage <- recv_aio(sockc, mode = 5L)
-        next
-      }
-
-      active || {
-        for (i in seq_n)
-          r <- .subset2(queue[[i]][["req"]], "data")
+        cmessage <- recv_aio_signal(sockc, mode = 5L, cv = cv)
         next
       }
 
@@ -285,11 +272,10 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
         for (q in free)
           for (i in seq_n) {
             if (length(queue[[i]]) == 2L && !unresolved(queue[[i]][["req"]])) {
-              if (auto && active < n)
-                for (j in which(!activevec)) launch_daemon(sprintf("mirai::server(\"%s\")", servernames[j]))
               ctx <- context(servers[[q]])
               queue[[i]][["rctx"]] <- ctx
-              queue[[i]][["res"]] <- request(ctx, data = .subset2(queue[[i]][["req"]], "data"), send_mode = 1L, recv_mode = 1L)
+              queue[[i]][["res"]] <- request_signal(ctx, data = .subset2(queue[[i]][["req"]], "data"),
+                                                    send_mode = 1L, recv_mode = 1L, cv = cv)
               queue[[i]][["daemon"]] <- q
               serverfree[q] <- FALSE
               assigned[q] <- assigned[q] + 1L
@@ -305,7 +291,7 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
           serverfree[q] <- TRUE
           complete[q] <- complete[q] + 1L
           ctx <- context(sock)
-          req <- recv_aio(ctx, mode = 1L)
+          req <- recv_aio_signal(ctx, mode = 1L, cv = cv)
           queue[[i]] <- list(ctx = ctx, req = req)
         }
 
@@ -404,7 +390,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 
   arglist <- list(.expr = substitute(.expr), ...)
   if (length(.args))
-    arglist <- c(arglist, `names<-`(.args, as.character.default(substitute(.args)[-1L])))
+    arglist <- c(arglist, `names<-`(.args, `storage.mode<-`(substitute(.args)[-1L], "character")))
   envir <- list2env(arglist, envir = NULL, parent = .GlobalEnv)
 
   if (length(..[[.compute]][["sock"]])) {
@@ -414,9 +400,9 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
   } else {
     url <- sprintf(.urlfmt, random())
     sock <- socket(protocol = "req", listen = url)
-    launch_daemon(sprintf("mirai::.(\"%s\")", url))
+    launch(sprintf("mirai::.(\"%s\")", url))
     aio <- request(context(sock), data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
-    `attr<-`(.subset2(aio, "aio"), "sock", sock)
+    `weakref<-`(aio, sock)
 
   }
 
@@ -431,20 +417,20 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'     created on the local machine. Alternatively, a client URL may be
 #'     specified to receive connections from remote servers started with
 #'     \code{\link{server}} for distributing tasks across the network. Daemons
-#'     may take advantage of active dispatch, which ensures that tasks are
+#'     may take advantage of the dispatcher, which ensures that tasks are
 #'     assigned to servers efficiently on a FIFO basis, or else the low-level
-#'     approach of distributing tasks to servers immediately in an even fashion.
+#'     approach of distributing tasks to servers in an even fashion.
 #'
 #' @param n integer number of daemons (server processes) to set.
 #' @param url (optional) the client URL as a character vector, including a
-#'     port accepting incoming connections and (optionally) a path for websocket
-#'     URLs e.g. 'tcp://192.168.0.2:5555' or 'ws://192.168.0.2:5555/path'.
-#' @param dispatcher [default TRUE] logical value whether to use a background
-#'     dispatcher process. A dispatcher connects to servers on behalf of the
-#'     client and queues tasks until a server is able to begin immediate
-#'     execution of that task, ensuring FIFO scheduling (futher details below).
+#'     port accepting incoming connections and (optionally for websockets) a
+#'     path e.g. 'tcp://192.168.0.2:5555' or 'ws://192.168.0.2:5555/path'.
+#' @param dispatcher [default TRUE] logical value whether to use dispatcher.
+#'     Dispatcher is a background process that connects to servers on behalf of
+#'     the client and ensures FIFO scheduling, queueing tasks if necessary
+#'     (futher details below).
 #' @param ... additional arguments passed through to \code{\link{dispatcher}} if
-#'     using active dispatch or \code{\link{server}} if launching local daemons.
+#'     using active dispatch and/or \code{\link{server}} if launching local daemons.
 #' @param .compute (optional) character compute profile to use for creating the
 #'     daemons (each compute profile can have its own set of daemons for
 #'     connecting to different resources).
@@ -454,29 +440,34 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 #'     Viewing current status: a named list comprising: \itemize{
 #'     \item{\code{connections}} {- number of active connections at the client.
-#'     Will always be 1L when using active dispatch as there is only one
+#'     Will always be 1L when using dispatcher as there is only a single
 #'     connection to the dispatcher, which then connects to the servers in turn.}
 #'     \item{\code{daemons}} {- if using dispatcher: a matrix of statistics
 #'     for each server: URL, online and busy status, cumulative tasks assigned
 #'     and completed (reset if a server re-connects), and instance # (increments
-#'     by 1 every time a server connects to the URL). If not using dispatcher:
-#'     the number of daemons set, or else the client URL.}
+#'     every time a server connects to the URL). If not using dispatcher: the
+#'     number of daemons set, or else the client URL.}
 #'     }
 #'
 #' @details For viewing the currrent status, specify \code{daemons()} with no
 #'     arguments.
 #'
-#'     Use \code{daemons(0)} to reset all daemon connections at any time. This
-#'     will send an exit signal to all connected daemons or dispatchers (and be
-#'     propagated onwards where applicable) such that their processes exit. A
-#'     reset is required before specifying revised daemons settings, otherwise
-#'     these will not be registered.
-#'
-#'     After a reset, \{mirai\} will revert to the default behaviour of creating
-#'     a new background process for each request.
+#'     Use \code{daemons(0)} to reset daemon connections:
+#'     \itemize{
+#'     \item{A reset is required before revising settings for the same compute
+#'     profile, otherwise changes are not registered.}
+#'     \item{All connected daemons and/or dispatchers exit automatically.}
+#'     \item{\{mirai\} reverts to the default behaviour of creating a new
+#'     background process for each request.}
+#'     }
 #'
 #'     When specifying a client URL, all daemons dialing into the client are
 #'     detected automatically and resources may be added or removed at any time.
+#'
+#'     If the client session ends, for whatever reason, all connected dispatcher
+#'     and daemon processes automatically exit as soon as their connections are
+#'     dropped. If a daemon is processing a task, it will exit as soon as the
+#'     task is complete.
 #'
 #' @section Dispatcher:
 #'
@@ -485,7 +476,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'     behalf of the client and queues tasks until a server is able to begin
 #'     immediate execution of that task, ensuring FIFO scheduling.
 #'
-#'     By specifying \code{active = FALSE}, servers connect to the client
+#'     By specifying \code{dispatcher = FALSE}, servers connect to the client
 #'     directly rather than through a dispatcher. The client sends tasks to
 #'     connected servers immediately in an evenly-distributed fashion. However,
 #'     optimal scheduling is not guaranteed as the duration of tasks cannot be
@@ -505,10 +496,6 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'     machine connecting back to the client process, either directly or via a
 #'     dispatcher.
 #'
-#'     Running local daemons with a dispatcher is self-repairing: in the case
-#'     that daemons crash or are terminated, replacement daemons are launched
-#'     upon the next task.
-#'
 #' @section Distributed Computing:
 #'
 #'     Specifying 'url' allows tasks to be distributed across the network.
@@ -522,7 +509,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 #'     Specifying the wildcard value zero for the port number e.g. 'tcp://:0' or
 #'     'ws://:0' will automatically assign a free ephemeral port. Use
-#'     \code{daemons()} to query the actual assigned port at any time.
+#'     \code{daemons()} to inspect the actual assigned port at any time.
 #'
 #'     \strong{With Dispatcher}
 #'
@@ -558,32 +545,31 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 #'     The network topology is such that server daemons (started with
 #'     \code{\link{server}}) or indeed dispatchers (started with
-#'     \code{\link{dispatcher}}) dial into the client, which listens at the
-#'     client URL.
+#'     \code{\link{dispatcher}}) dial into the same client URL.
 #'
-#'     'n' does not need to be supplied in this case, and is disregarded if it
-#'     is, as network resources may be added or removed at any time. The client
-#'     automatically distributes tasks to all connected servers and dispatchers.
+#'     'n' is not required in this case, and disregarded if supplied, as network
+#'     resources may be added or removed at any time. The client automatically
+#'     distributes tasks to all connected servers and dispatchers.
 #'
 #' @section Compute Profiles:
 #'
-#'     By default, the 'default' compute profile is used. Provide a character
-#'     value for '.compute' to create a new compute profile with the name
+#'     By default, the 'default' compute profile is used. Providing a character
+#'     value for '.compute' creates a new compute profile with the name
 #'     specified. Each compute profile retains its own daemons settings, and may
 #'     be operated independently of each other. Some usage examples follow:
 #'
-#'     \strong{local / remote} new daemons may be set via a client URL and
-#'     specifying '.compute' as 'remote'. This creates a new compute profile
-#'     called 'remote'. Subsequent mirai calls may then be sent for local
-#'     computation by not specifying its '.compute' argument, or for remote
-#'     computation by specifying its '.compute' argument as 'remote'.
+#'     \strong{local / remote} daemons may be set via a client URL and creating
+#'     a new compute profile by specifying '.compute' as 'remote'. Subsequent
+#'     mirai calls may then be sent for local computation by not specifying its
+#'     '.compute' argument, or for remote computation to connected daemons by
+#'     specifying its '.compute' argument as 'remote'.
 #'
 #'     \strong{cpu / gpu} some tasks may require access to different classes of
 #'     server, such as those with GPUs. In this case, \code{daemons()} may be
 #'     called twice to set up client URLs for CPU-only and GPU servers to dial
-#'     into respectively, specifying the '.compute' argument as 'cpu' and 'gpu'
-#'     each time. By supplying the '.compute' argument to subsequent mirai calls,
-#'     tasks may be sent to either 'cpu' or 'gpu' servers for computation.
+#'     into, specifying the '.compute' argument as 'cpu' and 'gpu' respectively.
+#'     By supplying the '.compute' argument to subsequent mirai calls, tasks may
+#'     be sent to either 'cpu' or 'gpu' servers as appropriate.
 #'
 #'     Note: further actions such as viewing the status of daemons or resetting
 #'     via \code{daemons(0)} should be carried out with the desired '.compute'
@@ -591,10 +577,10 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 #' @section Timeouts:
 #'
-#'     Note: specifying the \code{.timeout} argument in \code{\link{mirai}} will
-#'     ensure that the 'mirai' always resolves, however the process may not have
-#'     completed and still be ongoing in the daemon. In such situations, using
-#'     active dispatch ensures that queued tasks are not assigned to the busy
+#'     Specifying the \code{.timeout} argument in \code{\link{mirai}} will ensure
+#'     that the 'mirai' always resolves. However, the task may not have
+#'     completed and still be ongoing in the daemon process. In such situations,
+#'     using a dispatcher ensures that queued tasks are not assigned to the busy
 #'     process, however performance may still be degraded if they remain in use.
 #'
 #' @examples
@@ -637,7 +623,7 @@ daemons <- function(n, url = NULL, dispatcher = TRUE, ..., .compute = "default")
 
   missing(n) && missing(url) &&
     return(list(connections = if (length(..[[.compute]][["sock"]])) stat(..[[.compute]][["sock"]], "pipes") else 0,
-                daemons = if (length(..[[.compute]][["sockc"]])) query_nodes(.compute) else
+                daemons = if (length(..[[.compute]][["sockc"]])) query_nodes(..[[.compute]][["sockc"]]) else
                   if (length(..[[.compute]][["proc"]])) ..[[.compute]][["proc"]] else 0L))
 
   if (is.null(..[[.compute]])) `[[<-`(.., .compute, new.env(hash = FALSE, parent = environment(daemons)))
@@ -655,10 +641,11 @@ daemons <- function(n, url = NULL, dispatcher = TRUE, ..., .compute = "default")
         reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
         sockc <- socket(protocol = "bus", listen = urlc)
         dotstring <- if (missing(...)) "" else
-          sprintf(",%s", paste(names(dots <- substitute(alist(...))[-1L]), dots, sep = "=", collapse = ","))
+          sprintf(",%s", paste(names(dots <- as.expression(list(...))), dots, sep = "=", collapse = ","))
         args <- sprintf("mirai::dispatcher(\"%s\",c(%s),n=%d,monitor=\"%s\"%s)",
                         urld, paste(sprintf("\"%s\"", url), collapse = ","), n, urlc, dotstring)
-        launch_daemon(args)
+        launch(args)
+        request_ack(sock)
         `[[<-`(..[[.compute]], "sockc", sockc)
         proc <- n
       } else {
@@ -668,7 +655,7 @@ daemons <- function(n, url = NULL, dispatcher = TRUE, ..., .compute = "default")
           proc <- sub("(?<=:)0(?![^/])", opt(attr(sock, "listener")[[1L]], "tcp-bound-port"), proc, perl = TRUE)
         reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
       }
-      `[[<-`(`[[<-`(`[[<-`(..[[.compute]], "sock", sock), "proc", proc), "timestamp", mclock())
+      `[[<-`(`[[<-`(..[[.compute]], "sock", sock), "proc", proc)
     }
 
   } else {
@@ -679,11 +666,6 @@ daemons <- function(n, url = NULL, dispatcher = TRUE, ..., .compute = "default")
     if (n == 0L) {
       length(..[[.compute]][["proc"]]) || return(0L)
 
-      elapsed <- mclock() - ..[[.compute]][["timestamp"]]
-      if (elapsed < 1000) msleep(1000 - elapsed)
-      proc <- as.integer(stat(..[[.compute]][["sock"]], "pipes"))
-      for (i in seq_len(proc))
-        send(context(..[[.compute]][["sock"]]), data = .__scm__., mode = 2L, block = 1000L)
       close(..[[.compute]][["sock"]])
       `[[<-`(`[[<-`(`[[<-`(..[[.compute]], "sock", NULL), "sockc", NULL), "proc", NULL)
       gc(verbose = FALSE)
@@ -695,19 +677,20 @@ daemons <- function(n, url = NULL, dispatcher = TRUE, ..., .compute = "default")
       sock <- socket(protocol = "req", listen = urld)
       reg.finalizer(sock, function(x) daemons(0L), onexit = TRUE)
       dotstring <- if (missing(...)) "" else
-        sprintf(",%s", paste(names(dots <- substitute(alist(...))[-1L]), dots, sep = "=", collapse = ","))
+        sprintf(",%s", paste(names(dots <- as.expression(list(...))), dots, sep = "=", collapse = ","))
       if (dispatcher) {
         urlc <- sprintf("%s%s", urld, "c")
         sockc <- socket(protocol = "bus", listen = urlc)
         args <- sprintf("mirai::dispatcher(\"%s\",n=%d,monitor=\"%s\"%s)", urld, n, urlc, dotstring)
-        launch_daemon(args)
+        launch(args)
+        request_ack(sock)
         `[[<-`(..[[.compute]], "sockc", sockc)
       } else {
         args <- sprintf("mirai::server(\"%s\"%s)", urld, dotstring)
         for (i in seq_len(n))
-          launch_daemon(args)
+          launch(args)
       }
-      `[[<-`(`[[<-`(`[[<-`(..[[.compute]], "sock", sock), "proc", n), "timestamp", mclock())
+      `[[<-`(`[[<-`(..[[.compute]], "sock", sock), "proc", n)
     }
 
   }
@@ -950,15 +933,41 @@ print.miraiInterrupt <- function(x, ...) {
 
 }
 
+#' Launch Background Process
+#'
+#' Utility function which calls \code{Rscript} in a background process, with
+#'     'args' passed as command line argument to \code{Rscript -e 'args'}. May
+#'     be used to re-launch local daemons that have timed out, for instance.
+#'
+#' @param args character string, which will be shell quoted by \code{\link{shQuote}}
+#'     before being passed as argument.
+#'
+#' @return Invisibly, an exit code (zero upon success).
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' launch('mirai::server("abstract://mirai", idletime = 60000L)')
+#'
+#' }
+#'
+#' @export
+#'
+launch <- function(args)
+  system2(command = .command, args = c("-e", shQuote(args)), stdout = NULL, stderr = NULL, wait = FALSE)
+
 # internals --------------------------------------------------------------------
 
-query_nodes <- function(.compute) {
-  send(..[[.compute]][["sockc"]], data = 0L, mode = 2L)
-  recv(..[[.compute]][["sockc"]], mode = 1L, block = 1000L)
+query_nodes <- function(sock) {
+  send(sock, data = 0L, mode = 2L)
+  recv(sock, mode = 1L, block = 1000L)
 }
 
-launch_daemon <- function(args)
-  system2(command = .command, args = c("-e", shQuote(args)), stdout = NULL, stderr = NULL, wait = FALSE)
+request_ack <- function(sock) {
+  r <- request(context(sock), data = 0L, send_mode = 2L, recv_mode = 5L, timeout = 2000L)
+  .subset2(call_aio(r), "data") && stop("dispatcher process launch - timed out after 2s")
+}
 
 mk_mirai_error <- function(e) `class<-`(if (length(call <- .subset2(e, "call")))
   sprintf("Error in %s: %s", deparse(call, nlines = 1L), .subset2(e, "message")) else
