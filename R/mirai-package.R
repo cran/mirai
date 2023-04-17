@@ -16,12 +16,12 @@
 
 #' mirai: Minimalist Async Evaluation Framework for R
 #'
-#' Lightweight parallel code execution, local or distributed across the network.
-#'     Designed for simplicity, a 'mirai' evaluates an arbitrary expression
-#'     asynchronously, resolving automatically upon completion. Leverages
-#'     'nanonext' and 'NNG' (Nanomsg Next Gen) to provide efficient task
-#'     scheduling, scalability beyond R connection limits, and transports faster
-#'     than TCP/IP for inter-process communications.
+#' Lightweight parallel code execution and distributed computing. Designed for
+#'     simplicity, a 'mirai' evaluates an R expression asynchronously, on local
+#'     or network resources, resolving automatically upon completion. Features
+#'     efficient task scheduling, scalability beyond R connection limits, and
+#'     transports faster than TCP/IP for inter-process communications, courtesy
+#'     of 'nanonext' and 'NNG' (Nanomsg Next Gen).
 #'
 #' @section Notes:
 #'
@@ -49,10 +49,10 @@
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
-#' @importFrom nanonext call_aio context cv cv_value is_error_value listen
-#'     mclock msleep opt parse_url pipe_notify random recv recv_aio_signal
-#'     request request_signal send socket stat stop_aio unresolved wait
-#'     weakref<-
+#' @importFrom nanonext call_aio context cv cv_reset cv_value is_error_value
+#'     listen lock mclock msleep opt opt<- parse_url pipe_notify random recv
+#'     recv_aio_signal request request_signal send sha1 socket stat stop_aio
+#'     unresolved until wait
 #'
 #' @docType package
 #' @name mirai-package
@@ -63,20 +63,23 @@ NULL
   switch(Sys.info()[["sysname"]],
          Linux = {
            .command <<- file.path(R.home("bin"), "Rscript")
-           .urlfmt <<- "abstract://n%.f"
+           .urlfmt <<- "abstract://%s"
+           .intmax <<- .Machine[["integer.max"]]
          },
          Windows = {
            .command <<- file.path(R.home("bin"), "Rscript.exe")
-           .urlfmt <<- "ipc://n%.f"
+           .urlfmt <<- "ipc://%s"
+           .intmax <<- .Machine[["integer.max"]]
          },
          {
            .command <<- file.path(R.home("bin"), "Rscript")
-           .urlfmt <<- "ipc:///tmp/n%.f"
+           .urlfmt <<- "ipc:///tmp/%s"
+           .intmax <<- .Machine[["integer.max"]]
          })
-
-.onUnload <- function(libpath) for (i in names(..)) daemons(0L, .compute = i)
 
 .command <- NULL
 .urlfmt <- NULL
+.intmax <- NULL
+
 .. <- `[[<-`(new.env(hash = FALSE), "default", new.env(hash = FALSE))
 

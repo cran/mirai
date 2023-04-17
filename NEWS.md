@@ -1,3 +1,20 @@
+# mirai 0.8.3
+
+* `mirai()` gains the following enhancements (thanks @HenrikBengtsson):
+  + accepts a language or expression object being passed to '.expr' for evaluation.
+  + accepts a list of 'name = value' pairs being passed to '.args' as well as the existing '...'.
+  + objects specified via '...' now take precedence over '.args' if the same named object appears.
+* `dispatcher()` gains the following arguments:
+  + `token` for appending a unique token to each URL the dispatcher listens at.
+  + `lock` for locking sockets to prevent more than one server connecting at a unique URL.
+* `saisei()` implemented to regenerate the token used by a given dispatcher socket.
+* `launch_server()` replaces `launch()` for launching local instances, with a simpler interface directly mapping to `server()`.
+* Automatically-launched local daemons revised to use unique tokens in their URLs.
+* Daemons status matrix headers updated to 'online', 'instance', 'assigned', and 'complete'.
+* Fixes potential issue when attempting to use `mirai()` with timeouts and no connection to a server.
+* Requires nanonext >= 0.8.2.
+* Internal performance enhancements.
+
 # mirai 0.8.2
 
 * `dispatcher()` re-implemented using an innovative non-polling design. Efficient process consumes zero processor usage when idle and features significantly higher throughput and lower latency.

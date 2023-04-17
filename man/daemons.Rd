@@ -19,11 +19,11 @@ the client and ensures FIFO scheduling, queueing tasks if necessary
 (futher details below).}
 
 \item{...}{additional arguments passed through to \code{\link{dispatcher}} if
-using active dispatch and/or \code{\link{server}} if launching local daemons.}
+using dispatcher and/or \code{\link{server}} if launching local daemons.}
 
 \item{.compute}{(optional) character compute profile to use for creating the
-daemons (each compute profile can have its own set of daemons for
-connecting to different resources).}
+daemons (each compute profile has its own set of daemons for connecting
+to different resources).}
 }
 \value{
 Setting daemons: integer number of daemons set, or the character
@@ -34,9 +34,9 @@ Setting daemons: integer number of daemons set, or the character
     Will always be 1L when using dispatcher as there is only a single
     connection to the dispatcher, which then connects to the servers in turn.}
     \item{\code{daemons}} {- if using dispatcher: a matrix of statistics
-    for each server: URL, online and busy status, cumulative tasks assigned
-    and completed (reset if a server re-connects), and instance # (increments
-    every time a server connects to the URL). If not using dispatcher: the
+    for each server: URL, online status, instance number (increments each
+    time a server connects to the URL), cumulative tasks assigned and
+    completed (reset if a server re-connects). If not using dispatcher: the
     number of daemons set, or else the client URL.}
     }
 }
@@ -189,24 +189,29 @@ For viewing the currrent status, specify \code{daemons()} with no
 
 
     Specifying the \code{.timeout} argument in \code{\link{mirai}} will ensure
-    that the 'mirai' always resolves. However, the task may not have
-    completed and still be ongoing in the daemon process. In such situations,
-    using a dispatcher ensures that queued tasks are not assigned to the busy
-    process, however performance may still be degraded if they remain in use.
+    that the 'mirai' always resolves.
+
+    However, the task may not have completed and still be ongoing in the
+    daemon process. In such situations, dispatcher ensures that queued tasks
+    are not assigned to the busy process, however performance may still be
+    degraded if they remain in use. If a process hangs, they may be restarted
+    manually, or else \code{\link{saisei}} specifying \code{force = TRUE} may
+    be used to regenerate any particular URL for a new \code{\link{server}}
+    to connect to.
 }
 
 \examples{
 if (interactive()) {
 # Only run examples in interactive R sessions
 
-# Create 2 local daemons (active dispatch)
+# Create 2 local daemons (using dispatcher)
 daemons(2)
 # View status
 daemons()
 # Reset to zero
 daemons(0)
 
-# Create 2 local daemons (direct connection)
+# Create 2 local daemons (not using dispatcher)
 daemons(2, dispatcher = FALSE)
 # View status
 daemons()
