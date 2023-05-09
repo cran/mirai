@@ -9,35 +9,35 @@ daemons(n, url = NULL, dispatcher = TRUE, ..., .compute = "default")
 \arguments{
 \item{n}{integer number of daemons (server processes) to set.}
 
-\item{url}{(optional) the client URL as a character vector, including a
-port accepting incoming connections and (optionally for websockets) a
-path e.g. 'tcp://192.168.0.2:5555' or 'ws://192.168.0.2:5555/path'.}
+\item{url}{[default NULL] if specified (for connecting to remote servers),
+the client URL as a character vector, including a port accepting incoming
+connections (and optionally for websockets a path) e.g.
+'tcp://192.168.0.2:5555' or 'ws://192.168.0.2:5555/path'.}
 
 \item{dispatcher}{[default TRUE] logical value whether to use dispatcher.
 Dispatcher is a background process that connects to servers on behalf of
 the client and ensures FIFO scheduling, queueing tasks if necessary
-(futher details below).}
+(see Dispatcher section below).}
 
 \item{...}{additional arguments passed through to \code{\link{dispatcher}} if
 using dispatcher and/or \code{\link{server}} if launching local daemons.}
 
-\item{.compute}{(optional) character compute profile to use for creating the
-daemons (each compute profile has its own set of daemons for connecting
-to different resources).}
+\item{.compute}{[default 'default'] character compute profile to use for
+creating the daemons (each compute profile has its own set of daemons for
+connecting to different resources).}
 }
 \value{
 Setting daemons: integer number of daemons set, or the character
     client URL.
 
     Viewing current status: a named list comprising: \itemize{
-    \item{\code{connections}} {- number of active connections at the client.
-    Will always be 1L when using dispatcher as there is only a single
-    connection to the dispatcher, which then connects to the servers in turn.}
-    \item{\code{daemons}} {- if using dispatcher: a matrix of statistics
-    for each server: URL, online status, instance number (increments each
-    time a server connects to the URL), cumulative tasks assigned and
-    completed (reset if a server re-connects). If not using dispatcher: the
-    number of daemons set, or else the client URL.}
+    \item{\strong{connections}} {- number of active connections at the client.
+    Always 1L when using dispatcher as there is only a single connection to
+    the dispatcher, which then in turn connects to the servers.}
+    \item{\strong{daemons}} {- if using dispatcher: a status matrix (see
+    Status Matrix section below), or else an integer 'errorValue' if
+    communication with the dispatcher was unsuccessful. If not using
+    dispatcher: the number of daemons set, or else the client URL.}
     }
 }
 \description{
@@ -77,7 +77,11 @@ For viewing the currrent status, specify \code{daemons()} with no
     By default \code{dispatcher = TRUE}. This launches a background process
     running \code{\link{dispatcher}}.  A dispatcher connects to servers on
     behalf of the client and queues tasks until a server is able to begin
-    immediate execution of that task, ensuring FIFO scheduling.
+    immediate execution of that task, ensuring FIFO scheduling. Dispatcher
+    uses synchronisation primitives from \code{nanonext}, waiting rather than
+    polling for tasks, which is efficient both in terms of consuming no
+    resources while waiting, and also being fully synchronised with events
+    (having no latency).
 
     By specifying \code{dispatcher = FALSE}, servers connect to the client
     directly rather than through a dispatcher. The client sends tasks to
@@ -120,7 +124,7 @@ For viewing the currrent status, specify \code{daemons()} with no
 
     \strong{With Dispatcher}
 
-    When using a dispatcher, it is recommended to use a websocket URL rather
+    When using dispatcher, it is recommended to use a websocket URL rather
     than TCP, as this requires only one port to connect to all servers: a
     websocket URL supports a path after the port number, which can be made
     unique for each server.
@@ -134,11 +138,13 @@ For viewing the currrent status, specify \code{daemons()} with no
     be inferred by the length of vector supplied.
 
     Individual \code{\link{server}} instances should then be started on the
-    remote resource, which dial in to each of these client URLs.
+    remote resource, which dial in to each of these client URLs. At most one
+    server should be dialled into each URL at any given time.
 
-    Server instances may be scaled up or down dynamically, subject to the
-    maximum number initially specified, with the dispatcher adjusting
-    automatically.
+    The dispatcher automatically adjusts to the number of servers actually
+    connected. Hence it is possible to dynamically scale up or down the
+    number of servers as required, subject to the maximum number initially
+    specified.
 
     Alternatively, supplying a single TCP URL will listen on a block of URLs
     with ports starting from the supplied port number and incrementing by one
@@ -185,6 +191,30 @@ For viewing the currrent status, specify \code{daemons()} with no
     argument specified.
 }
 
+\section{Status Matrix}{
+
+
+    When using dispatcher, calling \code{daemons()} returns a matrix with the
+    following columns:
+
+    'online' shows as 1 when there is an active connection, or else 0 if a
+    server has yet to connect or has disconnected.
+
+    'instance' increments by 1 every time there is a new connection at a URL.
+    When this happens, the 'assigned' and 'complete' statistics reset to zero.
+    This counter is designed to track new server instances connecting after
+    previous ones have ended (due to time-outs etc.). 'instance' itself
+    resets to zero if the URL is regenerated by \code{\link{saisei}}.
+
+    'assigned' shows the cumulative number of tasks assigned to the server
+    instance by the dispatcher.
+
+    'complete' shows the cumulative number of tasks completed by the server
+    instance.
+
+    The URLs are stored as row names to the matrix.
+}
+
 \section{Timeouts}{
 
 
@@ -193,10 +223,10 @@ For viewing the currrent status, specify \code{daemons()} with no
 
     However, the task may not have completed and still be ongoing in the
     daemon process. In such situations, dispatcher ensures that queued tasks
-    are not assigned to the busy process, however performance may still be
-    degraded if they remain in use. If a process hangs, they may be restarted
-    manually, or else \code{\link{saisei}} specifying \code{force = TRUE} may
-    be used to regenerate any particular URL for a new \code{\link{server}}
+    are not assigned to the busy process, however overall performance may
+    still be degraded if they remain in use. If a process hangs and cannot be
+    restarted manually, \code{\link{saisei}} specifying \code{force = TRUE}
+    may be used to regenerate any particular URL for a new \code{\link{server}}
     to connect to.
 }
 
@@ -218,7 +248,7 @@ daemons()
 # Reset to zero
 daemons(0)
 
-# 2 remote servers via dispatcher (using zero wildcard)
+# 2 remote daemons via dispatcher (using zero wildcard)
 daemons(2, url = "ws://:0")
 # View status
 daemons()

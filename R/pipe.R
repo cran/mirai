@@ -18,13 +18,20 @@
 
 #' Deferred Evaluation Pipe
 #'
-#' Pipe a possibly unresolved value forward into a function.
+#' Pipe a possibly unresolved value forward into a function. The piped expression
+#'     should be wrapped in \code{.()}.
 #'
-#' @param x a value that is possibly an 'unresolvedValue'.
+#' @param x a 'mirai' or mirai value at \code{$data} that is possibly an
+#'     'unresolvedValue'.
 #' @param f a function that accepts 'x' as its first argument.
+#' @param expr a piped expression.
 #'
-#' @return The evaluated result, or if x is an 'unresolvedValue', an
-#'     'unresolvedExpr'.
+#' @return The evaluated result, or if the mirai value of x is an
+#'     'unresolvedValue', an 'unresolvedExpr'.
+#'
+#'     It is advisable to wrap \code{resolve()} around a piped expression to
+#'     ensure stability of return types, as this is guaranteed to return either
+#'     an 'unresolvedExpr' or 'resolvedExpr'.
 #'
 #' @details An 'unresolvedExpr' encapsulates the eventual evaluation result.
 #'     Query its \code{$data} element for resolution. Once resolved, the object
@@ -34,8 +41,13 @@
 #'     Supports stringing together a series of piped expressions (as per
 #'     the below example).
 #'
-#'     \code{\link{unresolved}} may be used on an 'unresolvedExpr' or its
-#'     \code{$data} element to test for resolution.
+#'     Wrap a piped expression in \code{.()} to ensure that the return value is
+#'     always an 'unresolvedExpr' or 'resolvedExpr' as the case may be,
+#'     otherwise if 'x' is already resolved, the evaluated result would be
+#'     returned directly.
+#'
+#'     \code{\link{unresolved}} may be used on an expression or its \code{$data}
+#'     element to test for resolution.
 #'
 #' @section Usage:
 #'
@@ -55,42 +67,53 @@
 #' # Only run examples in interactive R sessions
 #'
 #' m <- mirai({Sys.sleep(0.5); 1})
-#' b <- m$data %>>% c(2, 3) %>>% as.character()
+#' b <- .(m %>>% c(2, 3) %>>% as.character)
+#' unresolved(b)
 #' b
 #' b$data
+#'
 #' call_mirai(m)
-#' b$data
+#' unresolved(b)
 #' b
+#' b$data
 #'
 #' }
 #'
+#' @rdname deferred-execution-pipe
 #' @export
 #'
 `%>>%` <- function(x, f) {
   if (unresolved(x)) {
-    mc <- match.call()
+    syscall <- sys.call()
     data <- NULL
-    env <- `class<-`(new.env(hash = FALSE), c("unresolvedExpr", "unresolvedValue"))
+    env <- `class<-`(new.env(hash = FALSE, parent = parent.frame()), c("unresolvedExpr", "unresolvedValue", "recvAio"))
     makeActiveBinding(sym = "data", fun = function(x) {
       if (is.null(data)) {
-        data <- eval(mc, envir = parent.frame(), enclos = NULL)
+        data <- eval(syscall, envir = env, enclos = NULL)
         if (!inherits(data, "unresolvedExpr")) `class<-`(env, "resolvedExpr")
       }
       data
     }, env = env)
     env
   } else {
-    x <- substitute(x)
+    x <- if (inherits(x, "mirai")) `[[<-`(quote(.subset2(x, "data")), 2L, substitute(x)) else substitute(x)
     y <- substitute(f)
     if (is.symbol(y)) {
-      eval(as.call(c(y, x)), envir = parent.frame(2L), enclos = NULL)
+      eval.parent(as.call(c(y, x)))
     } else {
       f <- y[[1L]]
       y[[1L]] <- NULL
-      eval(as.call(c(f, x, y)), envir = parent.frame(2L), enclos = NULL)
+      eval.parent(as.call(c(f, x, y)))
     }
   }
 }
+
+#' @rdname deferred-execution-pipe
+#' @export
+#'
+. <- function(expr)
+  if (inherits(expr, c("unresolvedExpr", "resolvedExpr"))) expr else
+    `class<-`(`[[<-`(new.env(hash = FALSE), "data", expr), "resolvedExpr")
 
 #' @export
 #'
@@ -109,4 +132,3 @@ print.resolvedExpr <- function(x, ...) {
   invisible(x)
 
 }
-

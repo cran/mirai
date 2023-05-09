@@ -11,19 +11,19 @@ mirai(.expr, ..., .args = list(), .timeout = NULL, .compute = "default")
 wrapped in \{\} if necessary), or a language object passed by \link{name}.}
 
 \item{...}{(optional) named arguments (name = value pairs) specifying
-objects referenced in '.expr'. Used in addition to or instead of, and
-taking precedence over, named arguments specified via '.args'.}
+objects referenced in '.expr'. Used in addition to and taking precedence
+over, any arguments specified via '.args'.}
 
 \item{.args}{(optional) either (i) a list of objects to be passed by
 \link{name}, i.e. also found in the current scope with the same name, or
 else (ii) a list of name = value pairs, as in '...'.}
 
-\item{.timeout}{(optional) integer value in milliseconds or NULL for no
-timeout. A mirai will resolve to an 'errorValue' 5 (timed out) if
+\item{.timeout}{[default NULL] for no timeout, or an integer value in
+milliseconds. A mirai will resolve to an 'errorValue' 5 (timed out) if
 evaluation exceeds this limit.}
 
-\item{.compute}{(optional) character value for the compute profile to use
-when sending the mirai.}
+\item{.compute}{[default 'default'] character value for the compute profile
+to use when sending the mirai.}
 }
 \value{
 A 'mirai' object.
@@ -49,8 +49,8 @@ This function will return a 'mirai' object immediately.
     (although interruptible with e.g. ctrl+c).
 
     The expression '.expr' will be evaluated in a separate R process in a
-    clean environment consisting only of the named objects passed as '...'
-    and/or the list supplied to '.args'.
+    clean environment, which is not the global environment, consisting only
+    of the named objects passed as '...' and/or the list supplied to '.args'.
 
     If an error occurs in evaluation, the error message is returned as a
     character string of class 'miraiError' and 'errorValue'.
@@ -66,34 +66,59 @@ This function will return a 'mirai' object immediately.
 if (interactive()) {
 # Only run examples in interactive R sessions
 
-m <- mirai(x + y + 1, x = 2, y = 3)
+# specifying objects via '...'
+n <- 3
+m <- mirai(x + y + 2, x = 2, y = n)
 m
 m$data
 Sys.sleep(0.2)
 m$data
 
+# passing existing objects by name via '.args'
 df1 <- data.frame(a = 1, b = 2)
 df2 <- data.frame(a = 3, b = 1)
 m <- mirai(as.matrix(rbind(df1, df2)), .args = list(df1, df2), .timeout = 1000)
 call_mirai(m)$data
 
-m <- mirai({
-  res <- rnorm(n)
-  res / rev(res)
-}, n = 1e6)
+# using unresolved()
+m <- mirai(
+  {
+    res <- rnorm(n)
+    res / rev(res)
+  },
+  n = 1e6
+)
 while (unresolved(m)) {
   cat("unresolved\n")
   Sys.sleep(0.1)
 }
 str(m$data)
 
+# evaluating scripts using source(local = TRUE) in '.expr'
+n <- 10L
 file <- tempfile()
 cat("r <- rnorm(n)", file = file)
-n <- 10L
 m <- mirai({source(file, local = TRUE); r}, .args = list(file, n))
 call_mirai(m)[["data"]]
 unlink(file)
 
+# specifying global variables using list2env(envir = .GlobalEnv) in '.expr'
+n <- 10L
+file <- tempfile()
+cat("r <- rnorm(n)", file = file)
+globals <- list(file = file, n = n)
+m <- mirai(
+  {
+    list2env(globals, envir = .GlobalEnv)
+    source(file)
+    r
+  },
+  globals = globals
+)
+call_mirai(m)[["data"]]
+unlink(file)
+
+# passing a language object to '.expr' and a named list to '.args'
 expr <- quote(a + b + 2)
 args <- list(a = 2, b = 3)
 m <- mirai(.expr = expr, .args = args)

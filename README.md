@@ -8,7 +8,7 @@
 [![CRAN
 status](https://www.r-pkg.org/badges/version/mirai?color=112d4e)](https://CRAN.R-project.org/package=mirai)
 [![mirai status
-badge](https://shikokuchuo.r-universe.dev/badges/mirai?color=ddcacc)](https://shikokuchuo.r-universe.dev)
+badge](https://shikokuchuo.r-universe.dev/badges/mirai?color=24a60e)](https://shikokuchuo.r-universe.dev)
 [![R-CMD-check](https://github.com/shikokuchuo/mirai/workflows/R-CMD-check/badge.svg)](https://github.com/shikokuchuo/mirai/actions)
 [![codecov](https://codecov.io/gh/shikokuchuo/mirai/branch/main/graph/badge.svg)](https://app.codecov.io/gh/shikokuchuo/mirai)
 <!-- badges: end -->
@@ -28,9 +28,10 @@ communications, courtesy of ‘nanonext’ and ‘NNG’ (Nanomsg Next Gen).
 `mirai()` returns a ‘mirai’ object immediately. ‘mirai’ (未来 みらい) is
 Japanese for ‘future’.
 
-{mirai} has a tiny pure R code base, relying solely on {nanonext}, a
-high-performance binding for the ‘NNG’ (Nanomsg Next Gen) C library with
-zero package dependencies.
+`mirai` has a tiny pure R code base, relying solely on
+[`nanonext`](https://doi.org/10.5281/zenodo.7903429), a high-performance
+binding for the ‘NNG’ (Nanomsg Next Gen) C library with zero package
+dependencies.
 
 ### Table of Contents
 
@@ -46,7 +47,8 @@ zero package dependencies.
 7.  [Compute Profiles](#compute-profiles)
 8.  [Errors, Interrupts and Timeouts](#errors-interrupts-and-timeouts)
 9.  [Deferred Evaluation Pipe](#deferred-evaluation-pipe)
-10. [Links](#links)
+10. [Crew, Targets, Shiny](#crew-targets-shiny)
+11. [Links](#links)
 
 ### Installation
 
@@ -80,10 +82,14 @@ A ‘mirai’ object is returned immediately.
 ``` r
 library(mirai)
 
-m <- mirai({
-  res <- rnorm(n) + m
-  res / rev(res)
-}, m = runif(1), n = 1e8)
+m <- mirai(
+  {
+    res <- rnorm(n) + m
+    res / rev(res)
+  },
+  m = runif(1),
+  n = 1e8
+)
 
 m
 #> < mirai >
@@ -106,7 +112,7 @@ result.
 
 ``` r
 m$data |> str()
-#>  num [1:100000000] 0.97 5.532 -2.559 -0.254 0.303 ...
+#>  num [1:100000000] 1.369 0.836 -0.218 0.476 2.641 ...
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -114,7 +120,7 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data |> str()
-#>  num [1:100000000] 0.97 5.532 -2.559 -0.254 0.303 ...
+#>  num [1:100000000] 1.369 0.836 -0.218 0.476 2.641 ...
 ```
 
 For easy programmatic use of `mirai()`, ‘.expr’ accepts a
@@ -132,7 +138,7 @@ args <- list(m = runif(1), n = 1e8)
 m <- mirai(.expr = expr, .args = args)
 
 call_mirai(m)$data |> str()
-#>  num [1:100000000] 0.221 -0.603 -2.056 -0.347 -1.014 ...
+#>  num [1:100000000] 19.59 -2.174 -7.987 0.295 -0.21 ...
 ```
 
 [« Back to ToC](#table-of-contents)
@@ -228,8 +234,8 @@ for (i in 1:10) {
 #> iteration 5 successful 
 #> iteration 6 successful 
 #> iteration 7 successful 
-#> Error: random error 
 #> iteration 8 successful 
+#> Error: random error 
 #> iteration 9 successful 
 #> iteration 10 successful
 ```
@@ -273,12 +279,12 @@ daemons()
 #> 
 #> $daemons
 #>                                                     online instance assigned complete
-#> abstract://6910477e0d73f6158ceb229482f08568443e2cd1      1        1        0        0
-#> abstract://a4a1cbd88330c8b6f2f312e037e865496ffe34a1      1        1        0        0
-#> abstract://7e754a74b5b31f58a94427ecf7c8b8dd1a4290c5      1        1        0        0
-#> abstract://91290cbcfedec37ddacf5ff1d101cdc3ac4d4a29      1        1        0        0
-#> abstract://038e1d4c08ce14ab61ddc273db85b68fa8b5bfa6      1        1        0        0
-#> abstract://cccec64e89d21aba0b9a7093fdf724379cf88921      1        1        0        0
+#> abstract://e7534011d9c165ba2d5000f16a56e2172b75ffbc      1        1        0        0
+#> abstract://ab0c3f1663964d6575fae13c51c36f01e24b7433      1        1        0        0
+#> abstract://b110d9d72f3a45b76d9beb5de27f9cf788c03997      1        1        0        0
+#> abstract://e2f6c11fbe59f4bd5c7359eedf77a6e305108b26      1        1        0        0
+#> abstract://6953e4d0a3938074e92e9e1f6c8f772897c86092      1        1        0        0
+#> abstract://88139ccc4a4419fdcbc03a7e95bf6db33b714137      1        1        0        0
 ```
 
 The default `dispatcher = TRUE` creates a `dispatcher()` background
@@ -287,6 +293,12 @@ machine on behalf of the client. This ensures that tasks are dispatched
 efficiently on a first-in first-out (FIFO) basis to servers for
 processing. Tasks are queued at the dispatcher and sent to a daemon as
 soon as it can accept the task for immediate execution.
+
+Dispatcher uses synchronisation primitives from
+[`nanonext`](https://doi.org/10.5281/zenodo.7903429), waiting upon
+rather than polling for tasks, which is efficient both in terms of
+consuming no resources while waiting, and also being fully synchronised
+with events (having no latency).
 
 ``` r
 daemons(0)
@@ -422,10 +434,12 @@ statistics for the remote servers.
 `online` shows as 1 when there is an active connection, or else 0 if a
 server has yet to connect or has disconnected.
 
-`instance` will increment by 1 every time there is a new connection at a
-URL. When this happens, the `assigned` and `complete` statistics will
-also reset. This is designed to track new server instances connecting
-after previous ones have ended (due to time-outs etc.).
+`instance` increments by 1 every time there is a new connection at a
+URL. When this happens, the ‘assigned’ and ‘complete’ statistics reset
+to zero. This counter is designed to track new server instances
+connecting after previous ones have ended (due to time-outs etc.).
+‘instance’ itself resets to zero if the URL is regenerated by
+`saisei()`.
 
 `assigned` shows the cumulative number of tasks assigned to the server
 instance by the dispatcher.
@@ -433,9 +447,9 @@ instance by the dispatcher.
 `complete` shows the cumulative number of tasks completed by the server
 instance.
 
-The dispatcher will automatically adjust to the number of servers
-actually connected. Hence it is possible to dynamically scale up or down
-the number of servers according to requirements (limited to the ‘n’ URLs
+The dispatcher automatically adjusts to the number of servers actually
+connected. Hence it is possible to dynamically scale up or down the
+number of servers according to requirements (limited to the ‘n’ URLs
 assigned at the dispatcher).
 
 To reset all connections and revert to default behaviour:
@@ -464,7 +478,7 @@ listen on all interfaces on the local host, for example:
 
 ``` r
 daemons(url = "tcp://:0", dispatcher = FALSE)
-#> [1] "tcp://:38185"
+#> [1] "tcp://:37225"
 ```
 
 Note that above, the port number is specified as zero. This is a
@@ -479,7 +493,7 @@ On the server, `server()` may be called from an R session, or an Rscript
 invocation from a shell. This sets up a remote daemon process that
 connects to the client URL and receives tasks:
 
-    Rscript -e 'mirai::server("tcp://10.111.5.13:38185")'
+    Rscript -e 'mirai::server("tcp://10.111.5.13:37225")'
 
 –
 
@@ -496,7 +510,7 @@ daemons()
 #> [1] 0
 #> 
 #> $daemons
-#> [1] "tcp://:38185"
+#> [1] "tcp://:37225"
 ```
 
 To reset all connections and revert to default behaviour:
@@ -586,11 +600,11 @@ and timeouts.
 
 ### Deferred Evaluation Pipe
 
-{mirai} implements a deferred evaluation pipe `%>>%` for working with
+`mirai` implements a deferred evaluation pipe `%>>%` for working with
 potentially unresolved values.
 
-Pipe a mirai `$data` value forward into a function or series of
-functions and it initially returns an ‘unresolvedExpr’.
+Pipe a ‘mirai’ or mirai `$data` value forward into a function or series
+of functions and it initially returns an ‘unresolvedExpr’.
 
 The result may be queried at `$data`, which will return another
 ‘unresolvedExpr’ whilst unresolved. However when the original value
@@ -598,8 +612,12 @@ resolves, the ‘unresolvedExpr’ will simultaneously resolve into a
 ‘resolvedExpr’, for which the evaluated result will be available at
 `$data`.
 
-It is possible to use `unresolved()` around a ‘unresolvedExpr’ or its
-`$data` element to test for resolution, as in the example below.
+A piped expression should be wrapped in `.()` to ensure that the return
+value is always an ‘unresolvedExpr’ or ‘resolvedExpr’ as the case may
+be.
+
+It is possible to use `unresolved()` around an expression, or its
+`$data` element, to test for resolution, as in the example below.
 
 The pipe operator semantics are similar to R’s base pipe `|>`:
 
@@ -608,38 +626,69 @@ The pipe operator semantics are similar to R’s base pipe `|>`:
 
 ``` r
 m <- mirai({nanonext::msleep(500); 1})
-b <- m$data %>>% c(2, 3) %>>% as.character()
+b <- .(m %>>% c(2, 3) %>>% as.character)
+
+unresolved(b)
+#> [1] TRUE
 b
 #> < unresolvedExpr >
 #>  - $data to query resolution
 b$data
 #> < unresolvedExpr >
 #>  - $data to query resolution
-nanonext::msleep(800)
-b$data
-#> [1] "1" "2" "3"
+
+nanonext::msleep(1000)
+unresolved(b)
+#> [1] FALSE
 b
 #> < resolvedExpr: $data >
+b$data
+#> [1] "1" "2" "3"
 ```
+
+[« Back to ToC](#table-of-contents)
+
+### Crew, Targets, Shiny
+
+The [`crew`](https://wlandau.github.io/crew/) package (available on
+CRAN) by William Landau is a distributed worker-launcher that provides
+an R6-based interface extending `mirai` to different computing platforms
+for distributed workers. It has been integrated with and adopted as the
+predominant high-performance computing backend for
+[`targets`](https://docs.ropensci.org/targets/), a Make-like pipeline
+tool for statistics and data science.
+
+[`crew`](https://wlandau.github.io/crew/) further provides an extensible
+interface for plugins to different distributed computing platforms, from
+traditional clusters to cloud services. The
+[`crew.cluster`](https://wlandau.github.io/crew.cluster/) package
+(available on CRAN) enables mirai-based workflows on traditional
+high-performance computing clusters such as Sun Grid Engine (SGE).
+
+`mirai` also serves as the backend for enterprise asynchronous
+[`shiny`](https://shiny.rstudio.com/) applications. The
+[`crew`](https://wlandau.github.io/crew/) package provides a Shiny
+vignette with tutorial and sample code for this purpose. The
+[`crew`](https://wlandau.github.io/crew/) interface provides a nice
+abstraction layer that makes it easy to deploy `mirai` for
+[`shiny`](https://shiny.rstudio.com/); `mirai` itself is sufficient,
+although requires the individual `mirai()` requests to be managed using
+a list or equivalent.
 
 [« Back to ToC](#table-of-contents)
 
 ### Links
 
-{mirai} website: <https://shikokuchuo.net/mirai/><br /> {mirai} on CRAN:
+`mirai` website: <https://shikokuchuo.net/mirai/><br /> `mirai` on CRAN:
 <https://cran.r-project.org/package=mirai>
 
 Listed in CRAN Task View: <br /> - High Performance Computing:
 <https://cran.r-project.org/view=HighPerformanceComputing>
 
-{nanonext} website: <https://shikokuchuo.net/nanonext/><br /> {nanonext}
+`nanonext` website: <https://shikokuchuo.net/nanonext/><br /> `nanonext`
 on CRAN: <https://cran.r-project.org/package=nanonext>
 
 NNG website: <https://nng.nanomsg.org/><br />
-
-The {crew} package <https://wlandau.github.io/crew/> (available on CRAN)
-by William Landau further extends {mirai} to different computing
-platforms for distributed workers.
 
 [« Back to ToC](#table-of-contents)
 

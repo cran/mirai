@@ -2,21 +2,32 @@
 % Please edit documentation in R/pipe.R
 \name{\%>>\%}
 \alias{\%>>\%}
+\alias{.}
 \title{Deferred Evaluation Pipe}
 \usage{
 x \%>>\% f
+
+.(expr)
 }
 \arguments{
-\item{x}{a value that is possibly an 'unresolvedValue'.}
+\item{x}{a 'mirai' or mirai value at \code{$data} that is possibly an
+'unresolvedValue'.}
 
 \item{f}{a function that accepts 'x' as its first argument.}
+
+\item{expr}{a piped expression.}
 }
 \value{
-The evaluated result, or if x is an 'unresolvedValue', an
-    'unresolvedExpr'.
+The evaluated result, or if the mirai value of x is an
+    'unresolvedValue', an 'unresolvedExpr'.
+
+    It is advisable to wrap \code{resolve()} around a piped expression to
+    ensure stability of return types, as this is guaranteed to return either
+    an 'unresolvedExpr' or 'resolvedExpr'.
 }
 \description{
-Pipe a possibly unresolved value forward into a function.
+Pipe a possibly unresolved value forward into a function. The piped expression
+    should be wrapped in \code{.()}.
 }
 \details{
 An 'unresolvedExpr' encapsulates the eventual evaluation result.
@@ -27,8 +38,13 @@ An 'unresolvedExpr' encapsulates the eventual evaluation result.
     Supports stringing together a series of piped expressions (as per
     the below example).
 
-    \code{\link{unresolved}} may be used on an 'unresolvedExpr' or its
-    \code{$data} element to test for resolution.
+    Wrap a piped expression in \code{.()} to ensure that the return value is
+    always an 'unresolvedExpr' or 'resolvedExpr' as the case may be,
+    otherwise if 'x' is already resolved, the evaluated result would be
+    returned directly.
+
+    \code{\link{unresolved}} may be used on an expression or its \code{$data}
+    element to test for resolution.
 }
 \section{Usage}{
 
@@ -50,12 +66,15 @@ if (interactive()) {
 # Only run examples in interactive R sessions
 
 m <- mirai({Sys.sleep(0.5); 1})
-b <- m$data \%>>\% c(2, 3) \%>>\% as.character()
+b <- .(m \%>>\% c(2, 3) \%>>\% as.character)
+unresolved(b)
 b
 b$data
+
 call_mirai(m)
-b$data
+unresolved(b)
 b
+b$data
 
 }
 

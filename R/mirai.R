@@ -45,15 +45,13 @@
 #'     currently in progress. The default can be set wider if computations are
 #'     expected to return very large objects (> GBs).
 #' @param ... reserved but not currently used.
-#' @param cleanup [default NULL] The default NULL is equivalent to a value of 7L
-#'     and performs all cleanup steps below apart from garbage collection.
-#'     Integer additive bitmask controlling whether to perform cleanup of the
-#'     global environment (1L), reset loaded packages to an initial state (2L),
-#'     reset options to an initial state (4L), and perform garbage collection
-#'     (8L) after each evaluation. This option should not normally be modified.
-#'     Do not set unless you are certain you require persistence across
-#'     evaluations. Note: it may be an error to reset options but not loaded
-#'     packages if the package sets options on load.
+#' @param cleanup [default 7L] Integer additive bitmask controlling whether to
+#'     perform cleanup of the global environment (1L), reset loaded packages to
+#'     an initial state (2L), reset options to an initial state (4L), and
+#'     perform garbage collection (8L) after each evaluation. This option should
+#'     not normally be modified. Do not set unless you are certain you require
+#'     persistence across evaluations. Note: it may be an error to reset options
+#'     but not loaded packages if packages set options on load.
 #'
 #' @return Invisible NULL.
 #'
@@ -66,60 +64,44 @@
 #'
 server <- function(url, asyncdial = TRUE, maxtasks = Inf, idletime = Inf,
                    walltime = Inf, timerstart = 0L, exitlinger = 1000L, ...,
-                   cleanup = NULL) {
+                   cleanup = 7L) {
 
-  sock <- socket(protocol = "rep", dial = url, autostart = asyncdial || NA)
+  sock <- socket(protocol = "rep")
+  on.exit(close(sock))
+  cv <- cv()
+  pipe_notify(sock, cv = cv, add = FALSE, remove = TRUE, flag = TRUE)
+  dial_and_sync_socket(sock = sock, url = url, asyncdial = asyncdial)
+  op <- options()
+  se <- search()
+  count <- 0L
+  if (idletime > walltime) idletime <- walltime else if (idletime == Inf) idletime <- NULL
 
   devnull <- file(nullfile(), open = "w", blocking = FALSE)
   sink(file = devnull)
   sink(file = devnull, type = "message")
   on.exit({
-    close(sock)
     sink()
     sink(type = "message")
     close(devnull)
-  })
-  cv <- cv()
-  pipe_notify(sock, cv = cv, add = FALSE, remove = TRUE, flag = TRUE) && stop()
-  count <- 0L
-  if (idletime > walltime) idletime <- walltime else if (idletime == Inf) idletime <- NULL
-
-  if (!is.integer(cleanup))
-    cleanup <- if (is.logical(cleanup)) cleanup * 7L else 7L # compatibility for crew <= 0.0.5
-  cleanup_globals <- cleanup_packages <- cleanup_options <- cleanup_gc <- FALSE
-  for (i in 3:0)
-    if (cleanup >= 2 ^ i) {
-      cleanup <- cleanup - 2 ^ i
-      switch (i + 1L,
-              cleanup_globals <- TRUE,
-              cleanup_packages <- TRUE,
-              cleanup_options <- TRUE,
-              cleanup_gc <- TRUE)
-    }
-  if (cleanup_options) op <- options()
-  if (cleanup_packages) se <- search()
+  }, add = TRUE)
   start <- mclock()
-
   while (count < maxtasks && mclock() - start < walltime) {
 
-    ctx <- context(sock, verify = FALSE)
+    ctx <- .context(sock)
     aio <- recv_aio_signal(ctx, mode = 1L, timeout = idletime, cv = cv)
     wait(cv) || return(invisible())
-    envir <- .subset2(call_aio(aio), "data")
-    is.integer(envir) && {
+    ._mirai_. <- .subset2(call_aio(aio), "data")
+    is.integer(._mirai_.) && {
       count < timerstart && {
         start <- mclock()
         next
       }
       break
     }
-    data <- tryCatch(eval(expr = envir[[".expr"]], envir = envir, enclos = NULL),
+    data <- tryCatch(eval(expr = ._mirai_.[[".expr"]], envir = ._mirai_., enclos = NULL),
                      error = mk_mirai_error, interrupt = mk_interrupt_error)
     send(ctx, data = data, mode = 1L)
-    if (cleanup_globals) rm(list = ls(.GlobalEnv, all.names = TRUE, sorted = FALSE), envir = .GlobalEnv)
-    if (cleanup_packages) lapply((new <- search())[!new %in% se], detach, unload = TRUE, character.only = TRUE)
-    if (cleanup_options) options(op)
-    if (cleanup_gc) gc(verbose = FALSE, reset = TRUE, full = TRUE)
+    perform_cleanup(cleanup = cleanup, op = op, se = se)
     if (count < timerstart) start <- mclock()
     count <- count + 1L
 
@@ -129,27 +111,29 @@ server <- function(url, asyncdial = TRUE, maxtasks = Inf, idletime = Inf,
 
 }
 
-#' mirai dot Daemon
+#' mirai dot Server (Async Executor)
 #'
 #' Implements an ephemeral executor/server for the remote process.
 #'
 #' @inheritParams server
+#' @param exitlinger [default 2000L] time in milliseconds to linger before
+#'     exiting to allow the socket to complete sends currently in progress.
 #'
 #' @return Invisible NULL.
 #'
 #' @keywords internal
 #' @export
 #'
-. <- function(url) {
+.server <- function(url, exitlinger = 2000L) {
 
   sock <- socket(protocol = "rep", dial = url)
   on.exit(close(sock))
-  ctx <- context(sock, verify = FALSE)
-  envir <- recv(ctx, mode = 1L)
-  data <- tryCatch(eval(expr = envir[[".expr"]], envir = envir, enclos = NULL),
+  ctx <- .context(sock)
+  ._mirai_. <- recv(ctx, mode = 1L)
+  data <- tryCatch(eval(expr = ._mirai_.[[".expr"]], envir = ._mirai_., enclos = NULL),
                    error = mk_mirai_error, interrupt = mk_interrupt_error)
   send(ctx, data = data, mode = 1L)
-  msleep(2000L)
+  msleep(exitlinger)
 
 }
 
@@ -196,37 +180,24 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
                        token = FALSE, lock = FALSE, ..., monitor = NULL) {
 
   n <- if (is.numeric(n)) as.integer(n) else length(url)
-  n > 0L || stop("at least one URL must be supplied for 'url' or 'n' must be at least 1")
+  n > 0L || stop(.messages[["missing_url"]])
 
-  sock <- socket(protocol = "rep", dial = client, autostart = asyncdial || NA)
+  sock <- socket(protocol = "rep")
   on.exit(close(sock))
   cv <- cv()
-  pipe_notify(sock, cv = cv, add = FALSE, remove = TRUE, flag = TRUE) && stop()
+  pipe_notify(sock, cv = cv, add = FALSE, remove = TRUE, flag = TRUE)
+  dial_and_sync_socket(sock = sock, url = client, asyncdial = asyncdial)
 
   auto <- is.null(url)
   vectorised <- length(url) == n
   seq_n <- seq_len(n)
   basenames <- servernames <- character(n)
-  instance <- istore <- complete <- assigned <- integer(n)
+  activestore <- instance <- complete <- assigned <- integer(n)
   serverfree <- !integer(n)
   active <- servers <- queue <- vector(mode = "list", length = n)
-
-  ctrchannel <- is.character(monitor)
-  if (ctrchannel) {
-    ctx <- context(sock, verify = FALSE)
-    recv(ctx, mode = 5L, block = 2000L) && stop()
-    send(ctx, 0L, mode = 2L, block = 2000L) && stop()
-    close(ctx)
-    statnames <- c("online", "instance", "assigned", "complete")
-    attr(servernames, "dispatcher_pid") <- Sys.getpid()
-    sockc <- socket(protocol = "bus", dial = monitor, autostart = asyncdial || NA)
-    on.exit(close(sockc), add = TRUE, after = FALSE)
-    cmessage <- recv_aio_signal(sockc, mode = 5L, cv = cv)
-  }
-
   if (!auto) {
     baseurl <- parse_url(url)
-    if (grepl("tcp", baseurl[["scheme"]], fixed = TRUE)) {
+    if (substr(baseurl[["scheme"]], 1L, 3L) == "tcp") {
       ports <- if (baseurl[["port"]] == "0") integer(n) else seq.int(baseurl[["port"]], length.out = n)
       token <- FALSE
     } else {
@@ -241,38 +212,43 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
           sub(ports[1L], ports[i], url, fixed = TRUE)
     basenames[i] <- nurl
     if (auto || token)
-      nurl <- append_token(url = nurl, auto = auto)
-    nsock <- socket(protocol = "req")
-    `opt<-`(nsock, "req:resend-time", .intmax)
+      nurl <- new_tokenized_url(url = nurl, auto = auto)
+    nsock <- req_socket(NULL)
     ncv <- cv()
-    pipe_notify(nsock, cv = ncv, cv2 = cv, flag = FALSE) && stop()
+    pipe_notify(nsock, cv = ncv, cv2 = cv, flag = FALSE)
     listen(nsock, url = nurl, error = TRUE)
     if (lock)
       lock(nsock, cv = ncv)
-    if (i == 1L && !auto && parse_url(opt(attr(nsock, "listener")[[1L]], "url"))[["port"]] == "0") {
-      realport <- opt(attr(nsock, "listener")[[1L]], "tcp-bound-port")
-      nurl <- sub("(?<=:)0(?![^/])", realport, nurl, perl = TRUE)
+    listener <- attr(nsock, "listener")[[1L]]
+    if (i == 1L && !auto && parse_url(opt(listener, "url"))[["port"]] == "0") {
+      realport <- opt(listener, "tcp-bound-port")
+      servernames[i] <- sub_real_port(port = realport, url = nurl)
       if (!vectorised || n == 1L)
-        basenames[1L] <- url <- sub("(?<=:)0(?![^/])", realport, url, perl = TRUE)
-      servernames[i] <- nurl
+        basenames[1L] <- url <- sub_real_port(port = realport, url = url)
     } else {
-      servernames[i] <- opt(attr(nsock, "listener")[[1L]], "url")
+      servernames[i] <- opt(listener, "url")
     }
 
-    dotstring <- if (missing(...)) "" else
-      sprintf(",%s", paste(names(dots <- as.expression(list(...))), dots, sep = "=", collapse = ","))
-
     if (auto)
-      launch_daemon(sprintf("mirai::server(\"%s\"%s)", nurl, dotstring))
+      launch_daemon(type = 2L, nurl, parse_dots(...))
 
     servers[[i]] <- nsock
     active[[i]] <- ncv
-    ctx <- context(sock, verify = FALSE)
+    ctx <- .context(sock)
     req <- recv_aio_signal(ctx, mode = 1L, cv = cv)
     queue[[i]] <- list(ctx = ctx, req = req)
   }
 
   on.exit(lapply(servers, close), add = TRUE, after = TRUE)
+
+  ctrchannel <- is.character(monitor)
+  if (ctrchannel) {
+    sockc <- socket(protocol = "bus")
+    on.exit(close(sockc), add = TRUE, after = FALSE)
+    dial_and_sync_socket(sock = sockc, url = monitor, asyncdial = asyncdial)
+    send(sockc, c(Sys.getpid(), servernames), mode = 2L)
+    cmessage <- recv_aio_signal(sockc, mode = 5L, cv = cv)
+  }
 
   suspendInterrupts(
     repeat {
@@ -281,10 +257,10 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
 
       cv_values <- as.integer(lapply(active, cv_value))
       activevec <- cv_values %% 2L
-      instance <- (cv_values + activevec) / 2L
-      changes <- (instance - istore) > 0L
-      istore <- instance
+      changes <- (activevec - activestore) > 0L
+      activestore <- activevec
       if (any(changes)) {
+        instance[changes] <- instance[changes] + 1L
         assigned[changes] <- 0L
         complete[changes] <- 0L
       }
@@ -295,18 +271,16 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
           if (i > 0L && i <= n && !activevec[i] || i < 0L && (i <- -i) <= n) {
             close(attr(servers[[i]], "listener")[[1L]])
             attr(servers[[i]], "listener") <- NULL
-            cv_reset(active[[i]])
-            data <- servernames[i] <- append_token(url = basenames[i], auto = auto)
+            data <- servernames[i] <- new_tokenized_url(url = basenames[i], auto = auto)
+            instance[i] <- 0L
             listen(servers[[i]], url = data, error = TRUE)
           } else {
-            data <- 1L
+            data <- ""
           }
-
         } else {
-          data <- `attributes<-`(c(activevec, instance, assigned, complete),
-                                 list(dim = c(n, 4L), dimnames = list(servernames, statnames)))
+          data <- as.integer(c(activevec, instance, assigned, complete))
         }
-        send(sockc, data = data, mode = 1L)
+        send(sockc, data = data, mode = 2L)
         cmessage <- recv_aio_signal(sockc, mode = 5L, cv = cv)
         next
       }
@@ -317,10 +291,7 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
         for (q in free)
           for (i in seq_n) {
             if (length(queue[[i]]) == 2L && !unresolved(queue[[i]][["req"]])) {
-              ctx <- context(servers[[q]], verify = FALSE)
-              queue[[i]][["rctx"]] <- ctx
-              queue[[i]][["res"]] <- request_signal(ctx, data = .subset2(queue[[i]][["req"]], "data"),
-                                                    send_mode = 1L, recv_mode = 1L, cv = cv)
+              queue[[i]][["res"]] <- request_signal(.context(servers[[q]]), data = .subset2(queue[[i]][["req"]], "data"), send_mode = 1L, recv_mode = 1L, cv = cv)
               queue[[i]][["daemon"]] <- q
               serverfree[q] <- FALSE
               assigned[q] <- assigned[q] + 1L
@@ -335,7 +306,7 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
           q <- queue[[i]][["daemon"]]
           serverfree[q] <- TRUE
           complete[q] <- complete[q] + 1L
-          ctx <- context(sock, verify = FALSE)
+          ctx <- .context(sock)
           req <- recv_aio_signal(ctx, mode = 1L, cv = cv)
           queue[[i]] <- list(ctx = ctx, req = req)
         }
@@ -355,16 +326,16 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
 #' @param .expr an expression to evaluate asynchronously (of arbitrary length,
 #'     wrapped in \{\} if necessary), or a language object passed by \link{name}.
 #' @param ... (optional) named arguments (name = value pairs) specifying
-#'     objects referenced in '.expr'. Used in addition to or instead of, and
-#'     taking precedence over, named arguments specified via '.args'.
+#'     objects referenced in '.expr'. Used in addition to and taking precedence
+#'     over, any arguments specified via '.args'.
 #' @param .args (optional) either (i) a list of objects to be passed by
 #'     \link{name}, i.e. also found in the current scope with the same name, or
 #'     else (ii) a list of name = value pairs, as in '...'.
-#' @param .timeout (optional) integer value in milliseconds or NULL for no
-#'     timeout. A mirai will resolve to an 'errorValue' 5 (timed out) if
+#' @param .timeout [default NULL] for no timeout, or an integer value in
+#'     milliseconds. A mirai will resolve to an 'errorValue' 5 (timed out) if
 #'     evaluation exceeds this limit.
-#' @param .compute (optional) character value for the compute profile to use
-#'     when sending the mirai.
+#' @param .compute [default 'default'] character value for the compute profile
+#'     to use when sending the mirai.
 #'
 #' @return A 'mirai' object.
 #'
@@ -382,8 +353,8 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
 #'     (although interruptible with e.g. ctrl+c).
 #'
 #'     The expression '.expr' will be evaluated in a separate R process in a
-#'     clean environment consisting only of the named objects passed as '...'
-#'     and/or the list supplied to '.args'.
+#'     clean environment, which is not the global environment, consisting only
+#'     of the named objects passed as '...' and/or the list supplied to '.args'.
 #'
 #'     If an error occurs in evaluation, the error message is returned as a
 #'     character string of class 'miraiError' and 'errorValue'.
@@ -399,34 +370,59 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' m <- mirai(x + y + 1, x = 2, y = 3)
+#' # specifying objects via '...'
+#' n <- 3
+#' m <- mirai(x + y + 2, x = 2, y = n)
 #' m
 #' m$data
 #' Sys.sleep(0.2)
 #' m$data
 #'
+#' # passing existing objects by name via '.args'
 #' df1 <- data.frame(a = 1, b = 2)
 #' df2 <- data.frame(a = 3, b = 1)
 #' m <- mirai(as.matrix(rbind(df1, df2)), .args = list(df1, df2), .timeout = 1000)
 #' call_mirai(m)$data
 #'
-#' m <- mirai({
-#'   res <- rnorm(n)
-#'   res / rev(res)
-#' }, n = 1e6)
+#' # using unresolved()
+#' m <- mirai(
+#'   {
+#'     res <- rnorm(n)
+#'     res / rev(res)
+#'   },
+#'   n = 1e6
+#' )
 #' while (unresolved(m)) {
 #'   cat("unresolved\n")
 #'   Sys.sleep(0.1)
 #' }
 #' str(m$data)
 #'
+#' # evaluating scripts using source(local = TRUE) in '.expr'
+#' n <- 10L
 #' file <- tempfile()
 #' cat("r <- rnorm(n)", file = file)
-#' n <- 10L
 #' m <- mirai({source(file, local = TRUE); r}, .args = list(file, n))
 #' call_mirai(m)[["data"]]
 #' unlink(file)
 #'
+#' # specifying global variables using list2env(envir = .GlobalEnv) in '.expr'
+#' n <- 10L
+#' file <- tempfile()
+#' cat("r <- rnorm(n)", file = file)
+#' globals <- list(file = file, n = n)
+#' m <- mirai(
+#'   {
+#'     list2env(globals, envir = .GlobalEnv)
+#'     source(file)
+#'     r
+#'   },
+#'   globals = globals
+#' )
+#' call_mirai(m)[["data"]]
+#' unlink(file)
+#'
+#' # passing a language object to '.expr' and a named list to '.args'
 #' expr <- quote(a + b + 2)
 #' args <- list(a = 2, b = 3)
 #' m <- mirai(.expr = expr, .args = args)
@@ -438,13 +434,13 @@ dispatcher <- function(client, url = NULL, n = NULL, asyncdial = TRUE,
 #'
 mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "default") {
 
-  missing(.expr) && stop("missing expression, perhaps wrap in {}?")
+  missing(.expr) && stop(.messages[["missing_expression"]])
 
   expr <- substitute(.expr)
   arglist <- list(..., .expr = if (is.symbol(expr) && is.language(get0(expr, envir = sys.frame(-1L)))) .expr else expr)
 
   if (length(.args)) {
-    is.list(.args) || stop("'.args' must be specified as a list")
+    is.list(.args) || stop(.messages[["requires_list"]])
     arglist <- if (length(names(.args))) c(.args, arglist) else
       c(`names<-`(.args, `storage.mode<-`(substitute(.args)[-1L], "character")), arglist)
   }
@@ -452,24 +448,13 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
   envir <- list2env(arglist, envir = NULL, parent = .GlobalEnv)
 
   if (length(..[[.compute]][["sock"]])) {
-    aio <- request(context(..[[.compute]][["sock"]], verify = is.null(..[[.compute]][["sockc"]]) || NA),
-                   data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
+    aio <- request(.context(..[[.compute]][["sock"]]), data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
 
   } else {
-    url <- sprintf(.urlfmt, new_token())
-    sock <- socket(protocol = "req", listen = url)
-    `opt<-`(sock, "req:resend-time", .intmax)
-    if (length(.timeout)) {
-      cv <- cv()
-      pipe_notify(sock, cv = cv, add = TRUE, remove = FALSE, flag = TRUE)
-      launch_daemon(sprintf("mirai::.(\"%s\")", url))
-      until(cv, 5000L) && stop("connection to local server process timed out after 5s")
-      aio <- request(context(sock, verify = NA), data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
-    } else {
-      launch_daemon(sprintf("mirai::.(\"%s\")", url))
-      aio <- request(context(sock, verify = FALSE), data = envir, send_mode = 1L, recv_mode = 1L)
-    }
-
+    url <- auto_tokenized_url()
+    sock <- req_socket(url)
+    if (length(.timeout)) launch_and_sync_daemon(sock = sock, type = 1L, url) else launch_daemon(type = 1L, url)
+    aio <- request(.context(sock), data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
     `attr<-`(.subset2(aio, "aio"), "sock", sock)
 
   }
@@ -490,31 +475,31 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'     approach of distributing tasks to servers in an even fashion.
 #'
 #' @param n integer number of daemons (server processes) to set.
-#' @param url (optional) the client URL as a character vector, including a
-#'     port accepting incoming connections and (optionally for websockets) a
-#'     path e.g. 'tcp://192.168.0.2:5555' or 'ws://192.168.0.2:5555/path'.
+#' @param url [default NULL] if specified (for connecting to remote servers),
+#'     the client URL as a character vector, including a port accepting incoming
+#'     connections (and optionally for websockets a path) e.g.
+#'     'tcp://192.168.0.2:5555' or 'ws://192.168.0.2:5555/path'.
 #' @param dispatcher [default TRUE] logical value whether to use dispatcher.
 #'     Dispatcher is a background process that connects to servers on behalf of
 #'     the client and ensures FIFO scheduling, queueing tasks if necessary
-#'     (futher details below).
+#'     (see Dispatcher section below).
 #' @param ... additional arguments passed through to \code{\link{dispatcher}} if
 #'     using dispatcher and/or \code{\link{server}} if launching local daemons.
-#' @param .compute (optional) character compute profile to use for creating the
-#'     daemons (each compute profile has its own set of daemons for connecting
-#'     to different resources).
+#' @param .compute [default 'default'] character compute profile to use for
+#'     creating the daemons (each compute profile has its own set of daemons for
+#'     connecting to different resources).
 #'
 #' @return Setting daemons: integer number of daemons set, or the character
 #'     client URL.
 #'
 #'     Viewing current status: a named list comprising: \itemize{
-#'     \item{\code{connections}} {- number of active connections at the client.
-#'     Will always be 1L when using dispatcher as there is only a single
-#'     connection to the dispatcher, which then connects to the servers in turn.}
-#'     \item{\code{daemons}} {- if using dispatcher: a matrix of statistics
-#'     for each server: URL, online status, instance number (increments each
-#'     time a server connects to the URL), cumulative tasks assigned and
-#'     completed (reset if a server re-connects). If not using dispatcher: the
-#'     number of daemons set, or else the client URL.}
+#'     \item{\strong{connections}} {- number of active connections at the client.
+#'     Always 1L when using dispatcher as there is only a single connection to
+#'     the dispatcher, which then in turn connects to the servers.}
+#'     \item{\strong{daemons}} {- if using dispatcher: a status matrix (see
+#'     Status Matrix section below), or else an integer 'errorValue' if
+#'     communication with the dispatcher was unsuccessful. If not using
+#'     dispatcher: the number of daemons set, or else the client URL.}
 #'     }
 #'
 #' @details For viewing the currrent status, specify \code{daemons()} with no
@@ -542,7 +527,11 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'     By default \code{dispatcher = TRUE}. This launches a background process
 #'     running \code{\link{dispatcher}}.  A dispatcher connects to servers on
 #'     behalf of the client and queues tasks until a server is able to begin
-#'     immediate execution of that task, ensuring FIFO scheduling.
+#'     immediate execution of that task, ensuring FIFO scheduling. Dispatcher
+#'     uses synchronisation primitives from \code{nanonext}, waiting rather than
+#'     polling for tasks, which is efficient both in terms of consuming no
+#'     resources while waiting, and also being fully synchronised with events
+#'     (having no latency).
 #'
 #'     By specifying \code{dispatcher = FALSE}, servers connect to the client
 #'     directly rather than through a dispatcher. The client sends tasks to
@@ -581,7 +570,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 #'     \strong{With Dispatcher}
 #'
-#'     When using a dispatcher, it is recommended to use a websocket URL rather
+#'     When using dispatcher, it is recommended to use a websocket URL rather
 #'     than TCP, as this requires only one port to connect to all servers: a
 #'     websocket URL supports a path after the port number, which can be made
 #'     unique for each server.
@@ -595,11 +584,13 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'     be inferred by the length of vector supplied.
 #'
 #'     Individual \code{\link{server}} instances should then be started on the
-#'     remote resource, which dial in to each of these client URLs.
+#'     remote resource, which dial in to each of these client URLs. At most one
+#'     server should be dialled into each URL at any given time.
 #'
-#'     Server instances may be scaled up or down dynamically, subject to the
-#'     maximum number initially specified, with the dispatcher adjusting
-#'     automatically.
+#'     The dispatcher automatically adjusts to the number of servers actually
+#'     connected. Hence it is possible to dynamically scale up or down the
+#'     number of servers as required, subject to the maximum number initially
+#'     specified.
 #'
 #'     Alternatively, supplying a single TCP URL will listen on a block of URLs
 #'     with ports starting from the supplied port number and incrementing by one
@@ -643,6 +634,28 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'     via \code{daemons(0)} should be carried out with the desired '.compute'
 #'     argument specified.
 #'
+#' @section Status Matrix:
+#'
+#'     When using dispatcher, calling \code{daemons()} returns a matrix with the
+#'     following columns:
+#'
+#'     'online' shows as 1 when there is an active connection, or else 0 if a
+#'     server has yet to connect or has disconnected.
+#'
+#'     'instance' increments by 1 every time there is a new connection at a URL.
+#'     When this happens, the 'assigned' and 'complete' statistics reset to zero.
+#'     This counter is designed to track new server instances connecting after
+#'     previous ones have ended (due to time-outs etc.). 'instance' itself
+#'     resets to zero if the URL is regenerated by \code{\link{saisei}}.
+#'
+#'     'assigned' shows the cumulative number of tasks assigned to the server
+#'     instance by the dispatcher.
+#'
+#'     'complete' shows the cumulative number of tasks completed by the server
+#'     instance.
+#'
+#'     The URLs are stored as row names to the matrix.
+#'
 #' @section Timeouts:
 #'
 #'     Specifying the \code{.timeout} argument in \code{\link{mirai}} will ensure
@@ -650,10 +663,10 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 #'     However, the task may not have completed and still be ongoing in the
 #'     daemon process. In such situations, dispatcher ensures that queued tasks
-#'     are not assigned to the busy process, however performance may still be
-#'     degraded if they remain in use. If a process hangs, they may be restarted
-#'     manually, or else \code{\link{saisei}} specifying \code{force = TRUE} may
-#'     be used to regenerate any particular URL for a new \code{\link{server}}
+#'     are not assigned to the busy process, however overall performance may
+#'     still be degraded if they remain in use. If a process hangs and cannot be
+#'     restarted manually, \code{\link{saisei}} specifying \code{force = TRUE}
+#'     may be used to regenerate any particular URL for a new \code{\link{server}}
 #'     to connect to.
 #'
 #' @examples
@@ -674,7 +687,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #' # Reset to zero
 #' daemons(0)
 #'
-#' # 2 remote servers via dispatcher (using zero wildcard)
+#' # 2 remote daemons via dispatcher (using zero wildcard)
 #' daemons(2, url = "ws://:0")
 #' # View status
 #' daemons()
@@ -694,86 +707,74 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 daemons <- function(n, url = NULL, dispatcher = TRUE, ..., .compute = "default") {
 
+  envir <- ..[[.compute]]
   missing(n) && missing(url) &&
-    return(list(connections = ifle(..[[.compute]][["sock"]], stat, "pipes", 0),
-                daemons = ifle(..[[.compute]][["sockc"]], query_nodes, 0L, ..[[.compute]][["proc"]] %||% 0L)))
+    return(list(connections = if (length(envir[["sock"]])) stat(envir[["sock"]], "pipes") else 0L,
+                daemons = if (length(envir[["sockc"]])) query_status(envir) else envir[["proc"]] %||% 0L))
 
-  if (is.null(..[[.compute]])) `[[<-`(.., .compute, new.env(hash = FALSE, parent = environment(daemons)))
+  if (is.null(envir)) {
+    `[[<-`(.., .compute, new.env(hash = FALSE, parent = environment(daemons)))
+    envir <- ..[[.compute]]
+  }
 
   if (is.character(url)) {
 
-    if (is.null(..[[.compute]][["sock"]])) {
+    if (is.null(envir[["sock"]])) {
       if (dispatcher) {
-        n <- if (missing(n)) length(url) else if (is.numeric(n) && n > 0L) as.integer(n) else
-          stop("'n' must be 1 or greater if specified with a client URL")
+        n <- if (missing(n)) length(url) else if (is.numeric(n) && n > 0L) as.integer(n) else stop(.messages[["n_one"]])
         parse_url(url)
-        urld <- sprintf(.urlfmt, new_token())
-        urlc <- sprintf("%s%s", urld, "c")
-        sock <- socket(protocol = "req", listen = urld)
-        `opt<-`(sock, "req:resend-time", .intmax)
+        urld <- auto_tokenized_url()
+        urlc <- new_control_url(urld)
+        sock <- req_socket(urld)
         sockc <- socket(protocol = "bus", listen = urlc)
-        cv <- cv()
-        pipe_notify(sock, cv = cv, add = TRUE, remove = FALSE, flag = TRUE)
-        dotstring <- if (missing(...)) "" else
-          sprintf(",%s", paste(names(dots <- as.expression(list(...))), dots, sep = "=", collapse = ","))
-        args <- sprintf("mirai::dispatcher(\"%s\",c(%s),n=%d,monitor=\"%s\"%s)",
-                        urld, paste(sprintf("\"%s\"", url), collapse = ","), n, urlc, dotstring)
-        launch_daemon(args)
-        until(cv, 5000L) && stop("connection to local dispatcher process timed out after 5s")
-        request_ack(sock)
-        `[[<-`(..[[.compute]], "sockc", sockc)
+        launch_and_sync_daemon(sock = sock, type = 5L, urld, url, n, urlc, parse_dots(...))
+        recv_and_store(sockc = sockc, envir = envir)
         proc <- n
       } else {
-        sock <- socket(protocol = "req", listen = url)
-        `opt<-`(sock, "req:resend-time", .intmax)
-        proc <- opt(attr(sock, "listener")[[1L]], "url")
+        sock <- req_socket(url)
+        listener <- attr(sock, "listener")[[1L]]
+        proc <- opt(listener, "url")
         if (parse_url(proc)[["port"]] == "0")
-          proc <- sub("(?<=:)0(?![^/])", opt(attr(sock, "listener")[[1L]], "tcp-bound-port"), proc, perl = TRUE)
+          proc <- sub_real_port(port = opt(listener, "tcp-bound-port"), url = proc)
       }
-      `[[<-`(`[[<-`(..[[.compute]], "sock", sock), "proc", proc)
+      `[[<-`(`[[<-`(envir, "sock", sock), "proc", proc)
     }
 
   } else {
 
-    is.numeric(n) || stop("'n' must be numeric, did you mean to provide 'url'?")
+    is.numeric(n) || stop(.messages[["numeric_n"]])
     n <- as.integer(n)
 
     if (n == 0L) {
-      length(..[[.compute]][["proc"]]) || return(0L)
+      length(envir[["proc"]]) || return(0L)
 
-      close(..[[.compute]][["sock"]])
-      `[[<-`(`[[<-`(`[[<-`(..[[.compute]], "sock", NULL), "sockc", NULL), "proc", NULL)
-      gc(verbose = FALSE)
-
-    } else if (is.null(..[[.compute]][["sock"]])) {
-
-      n > 0L || stop("the number of daemons must be zero or greater")
-      urld <- sprintf(.urlfmt, new_token())
-      sock <- socket(protocol = "req", listen = urld)
-      `opt<-`(sock, "req:resend-time", .intmax)
-      dotstring <- if (missing(...)) "" else
-        sprintf(",%s", paste(names(dots <- as.expression(list(...))), dots, sep = "=", collapse = ","))
-      if (dispatcher) {
-        urlc <- sprintf("%s%s", urld, "c")
-        sockc <- socket(protocol = "bus", listen = urlc)
-        cv <- cv()
-        pipe_notify(sock, cv = cv, add = TRUE, remove = FALSE, flag = TRUE)
-        args <- sprintf("mirai::dispatcher(\"%s\",n=%d,monitor=\"%s\"%s)", urld, n, urlc, dotstring)
-        launch_daemon(args)
-        until(cv, 5000L) && stop("connection to local dispatcher process timed out after 5s")
-        request_ack(sock)
-        `[[<-`(..[[.compute]], "sockc", sockc)
-      } else {
-        args <- sprintf("mirai::server(\"%s\"%s)", urld, dotstring)
-        for (i in seq_len(n))
-          launch_daemon(args)
+      close(envir[["sock"]])
+      if (length(envir[["sockc"]])) {
+        close(envir[["sockc"]])
+        `[[<-`(envir, "sockc", NULL)
       }
-      `[[<-`(`[[<-`(..[[.compute]], "sock", sock), "proc", n)
+      `[[<-`(`[[<-`(envir, "sock", NULL), "proc", NULL)
+
+    } else if (is.null(envir[["sock"]])) {
+
+      n > 0L || stop(.messages[["n_zero"]])
+      urld <- auto_tokenized_url()
+      sock <- req_socket(urld)
+      if (dispatcher) {
+        urlc <- new_control_url(urld)
+        sockc <- socket(protocol = "bus", listen = urlc)
+        launch_and_sync_daemon(sock = sock, type = 4L, urld, n, urlc, parse_dots(...))
+        recv_and_store(sockc = sockc, envir = envir)
+      } else {
+        for (i in seq_len(n))
+          launch_daemon(type = 2L, urld, parse_dots(...))
+      }
+      `[[<-`(`[[<-`(envir, "sock", sock), "proc", n)
     }
 
   }
 
-  ..[[.compute]][["proc"]] %||% 0L
+  envir[["proc"]] %||% 0L
 
 }
 
@@ -800,25 +801,20 @@ daemons <- function(n, url = NULL, dispatcher = TRUE, ..., .compute = "default")
 #'
 #' @export
 #'
-launch_server <- function(url, ...) {
-
-  dotstring <- if (missing(...)) "" else
-    sprintf(",%s", paste(names(dots <- as.expression(list(...))), dots, sep = "=", collapse = ","))
-  args <- sprintf("mirai::server(\"%s\"%s)", url, dotstring)
-  launch_daemon(args)
-
-}
+launch_server <- function(url, ...)
+  launch_daemon(type = 2L, url, parse_dots(...))
 
 #' Saisei - Regenerate Token
 #'
 #' When using daemons with a local dispatcher service, regenerates the token for
 #'     the URL a dispatcher socket listens at.
 #'
-#' @param i integer \code{i}th URL to replace.
+#' @param i [default 1L] integer \code{i}th URL to replace.
 #' @param force [default FALSE] logical value whether to replace the listener
 #'     even when there is an existing connection.
-#' @param .compute (optional) character compute profile to use (each compute
-#'     profile has its own set of daemons for connecting to different resources).
+#' @param .compute [default 'default'] character compute profile to use (each
+#'     compute profile has its own set of daemons for connecting to different
+#'     resources).
 #'
 #' @return The regenerated character URL upon success, or else NULL.
 #'
@@ -831,9 +827,10 @@ launch_server <- function(url, ...) {
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' daemons(1, token = TRUE)
+#' daemons(1L)
+#' Sys.sleep(1L)
 #' daemons()
-#' saisei(i = 1L)
+#' saisei(i = 1L, force = TRUE)
 #' daemons()
 #'
 #' daemons(0)
@@ -842,12 +839,16 @@ launch_server <- function(url, ...) {
 #'
 #' @export
 #'
-saisei <- function(i = 1L, force = FALSE, .compute = "default")
-  if (length(..[[.compute]][["sockc"]])) {
-    r <- query_nodes(..[[.compute]][["sockc"]], as.integer(if (force) -i else i))
-    is.character(r) || return()
-    r
-  }
+saisei <- function(i = 1L, force = FALSE, .compute = "default") {
+
+  envir <- ..[[.compute]]
+  length(envir[["sockc"]]) || return()
+  r <- query_dispatcher(sock = envir[["sockc"]], command = as.integer(if (force) -i else i), mode = 2L)
+  nzchar(r) || return()
+  envir[["urls"]][i] <- r
+  r
+
+}
 
 #' mirai (Call Value)
 #'
@@ -889,33 +890,23 @@ saisei <- function(i = 1L, force = FALSE, .compute = "default")
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' m <- mirai(x + y + 1, x = 2, y = 3)
-#' m
-#' m$data
-#' Sys.sleep(0.2)
-#' m$data
-#'
+#' # using call_mirai()
 #' df1 <- data.frame(a = 1, b = 2)
 #' df2 <- data.frame(a = 3, b = 1)
 #' m <- mirai(as.matrix(rbind(df1, df2)), .args = list(df1, df2), .timeout = 1000)
 #' call_mirai(m)$data
 #'
+#' # using unresolved()
 #' m <- mirai({
 #'   res <- rnorm(n)
 #'   res / rev(res)
-#' }, n = 1e6)
+#'   },
+#'   n = 1e6)
 #' while (unresolved(m)) {
 #'   cat("unresolved\n")
 #'   Sys.sleep(0.1)
 #' }
 #' str(m$data)
-#'
-#' file <- tempfile()
-#' cat("r <- rnorm(n)", file = file)
-#' n <- 10L
-#' m <- mirai({source(file, local = TRUE); r}, .args = list(file, n))
-#' call_mirai(m)[["data"]]
-#' unlink(file)
 #'
 #' }
 #'
@@ -1085,36 +1076,92 @@ print.miraiInterrupt <- function(x, ...) {
 
 # internals --------------------------------------------------------------------
 
-launch_daemon <- function(args)
+launch_daemon <- function(type, ...) {
+  args <- switch(type,
+                 sprintf("mirai::.server(\"%s\")", ..1),
+                 sprintf("mirai::server(\"%s\"%s)", ..1, ..2),
+                 sprintf("mirai::server(\"%s\"%s,asyncdial=%s)", ..1, ..2, ..3),
+                 sprintf("mirai::dispatcher(\"%s\",n=%d,monitor=\"%s\"%s)", ..1, ..2, ..3, ..4),
+                 sprintf("mirai::dispatcher(\"%s\",c(%s),n=%d,monitor=\"%s\"%s)",
+                         ..1, paste(sprintf("\"%s\"", ..2), collapse = ","), ..3, ..4, ..5))
   system2(command = .command, args = c("-e", shQuote(args)), stdout = NULL, stderr = NULL, wait = FALSE)
+}
 
-query_nodes <- function(sock, command) {
+launch_and_sync_daemon <- function(sock, type, ..., timeout = 5000L) {
+  cv <- cv()
+  pipe_notify(sock, cv = cv, add = TRUE, remove = FALSE, flag = TRUE)
+  launch_daemon(type = type, ...)
+  until(cv, timeout) && stop(.messages[["connection_timeout"]])
+}
+
+dial_and_sync_socket <- function(sock, url, asyncdial) {
+  cv <- cv()
+  pipe_notify(sock, cv = cv, add = TRUE, remove = FALSE, flag = FALSE)
+  dial(sock, url = url, autostart = asyncdial || NA, error = TRUE)
+  wait(cv)
+}
+
+sub_real_port <- function(port, url)
+  sub("(?<=:)0(?![^/])", port, url, perl = TRUE)
+
+auto_tokenized_url <- function() sprintf(.urlfmt, sha1(random(8L)))
+
+new_control_url <- function(url) sprintf("%s%s", url, "c")
+
+new_tokenized_url <- function(url, auto)
+  sprintf(if (auto) "%s%s" else "%s/%s", url, sha1(random(8L)))
+
+parse_dots <- function(...)
+  if (missing(...)) "" else
+    sprintf(",%s", paste(names(dots <- as.expression(list(...))), dots, sep = "=", collapse = ","))
+
+req_socket <- function(url)
+  `opt<-`(socket(protocol = "req", listen = url), "req:resend-time", .Machine[["integer.max"]])
+
+query_dispatcher <- function(sock, command, mode, timeout = 3000L) {
   send(sock, data = command, mode = 2L)
-  r <- recv(sock, mode = 1L, block = 2000L)
-  if (exists("crew_controller_callr") && is.matrix(r)) {
-    r <- cbind(r, r[, "assigned"] - r[, "complete"])
-    dimnames(r)[[2L]] <- c("status_online", "instance #", "tasks_assigned", "tasks_complete", "status_busy")
-  } # compatibility for crew <= 0.0.5
-  r
+  recv(sock, mode = mode, block = timeout)
 }
 
-request_ack <- function(sock) {
-  r <- request(context(sock), data = 0L, send_mode = 2L, recv_mode = 5L, timeout = 2000L)
-  .subset2(call_aio(r), "data") && stop("dispatcher process launch - timed out after 2s")
+query_status <- function(envir) {
+  res <- query_dispatcher(sock = envir[["sockc"]], command = 0L, mode = 5L)
+  is_error_value(res) && return(res)
+  `attributes<-`(res, list(dim = c(length(envir[["urls"]]), 4L),
+                           dimnames = list(`attr<-`(envir[["urls"]], "dispatcher_pid", envir[["pid"]]),
+                                           c("online", "instance", "assigned", "complete"))))
 }
 
-new_token <- function() sha1(random(n = 8L))
+recv_and_store <- function(sockc, envir, timeout = 3000L) {
+  res <- recv(sockc, mode = 2L, block = timeout)
+  is.integer(res) && stop(.messages[["connection_timeout"]])
+  `[[<-`(`[[<-`(`[[<-`(envir, "sockc", sockc), "urls", res[-1L]), "pid", as.integer(res[1L]))
+}
 
-append_token <- function(url, auto)
-  if (auto) sprintf("%s%s", url, new_token()) else sprintf("%s/%s", url, new_token())
-
-mk_mirai_error <- function(e) `class<-`(if (length(call <- .subset2(e, "call")))
-  sprintf("Error in %s: %s", deparse(call, nlines = 1L), .subset2(e, "message")) else
-    sprintf("Error: %s", .subset2(e, "message")), c("miraiError", "errorValue"))
+perform_cleanup <- function(cleanup, op, se) {
+  if (cleanup > 7L) {
+    gc(verbose = FALSE)
+    cleanup <- cleanup - 7L
+  }
+  if (cleanup > 3L) {
+    options(op)
+    cleanup <- cleanup - 3L
+  }
+  if (cleanup > 1L) {
+    lapply((new <- search())[!new %in% se], detach, unload = TRUE, character.only = TRUE)
+    cleanup <- cleanup - 1L
+  }
+  if (cleanup > 0L)
+    rm(list = ls(.GlobalEnv, all.names = TRUE, sorted = FALSE), envir = .GlobalEnv)
+}
 
 mk_interrupt_error <- function(e) `class<-`("", c("miraiInterrupt", "errorValue"))
 
+mk_mirai_error <- function(e) {
+  call <- deparse(.subset2(e, "call"), backtick = TRUE, control = NULL, nlines = 1L)
+  msg <- if (call == "NULL" || call == "eval(expr = ._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = NULL)")
+    sprintf("Error: %s", .subset2(e, "message")) else
+      sprintf("Error in %s: %s", call, .subset2(e, "message"))
+  `class<-`(msg, c("miraiError", "errorValue"))
+}
+
 `%||%` <- function(x, y) if (length(x)) x else y
-
-ifle <- function(x, f, a, y) if (length(x)) f(x, a) else y
-

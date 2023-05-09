@@ -7,13 +7,14 @@
 saisei(i = 1L, force = FALSE, .compute = "default")
 }
 \arguments{
-\item{i}{integer \code{i}th URL to replace.}
+\item{i}{[default 1L] integer \code{i}th URL to replace.}
 
 \item{force}{[default FALSE] logical value whether to replace the listener
 even when there is an existing connection.}
 
-\item{.compute}{(optional) character compute profile to use (each compute
-profile has its own set of daemons for connecting to different resources).}
+\item{.compute}{[default 'default'] character compute profile to use (each
+compute profile has its own set of daemons for connecting to different
+resources).}
 }
 \value{
 The regenerated character URL upon success, or else NULL.
@@ -32,9 +33,10 @@ As the specified listener is closed and replaced immediately, this
 if (interactive()) {
 # Only run examples in interactive R sessions
 
-daemons(1, token = TRUE)
+daemons(1L)
+Sys.sleep(1L)
 daemons()
-saisei(i = 1L)
+saisei(i = 1L, force = TRUE)
 daemons()
 
 daemons(0)

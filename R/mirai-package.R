@@ -33,7 +33,7 @@
 #'     This may be overriden if required by specifying 'url' in the
 #'     \code{\link{daemons}} interface, and starting server and/or dispatcher
 #'     processes manually using \code{\link{server}} and \code{\link{dispatcher}}
-#'     respectively, on the same machine.
+#'     respectively, on the local machine.
 #'
 #' @section Links:
 #'
@@ -49,8 +49,8 @@
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
-#' @importFrom nanonext call_aio context cv cv_reset cv_value is_error_value
-#'     listen lock mclock msleep opt opt<- parse_url pipe_notify random recv
+#' @importFrom nanonext call_aio .context cv cv_value dial is_error_value listen
+#'     lock mclock msleep opt opt<- parse_url pipe_notify random recv
 #'     recv_aio_signal request request_signal send sha1 socket stat stop_aio
 #'     unresolved until wait
 #'
@@ -59,27 +59,35 @@
 #'
 NULL
 
-.onLoad <- function(libname, pkgname)
+.onLoad <- function(libname, pkgname) {
+
+  .. <<- `[[<-`(new.env(hash = FALSE), "default", new.env(hash = FALSE))
   switch(Sys.info()[["sysname"]],
          Linux = {
            .command <<- file.path(R.home("bin"), "Rscript")
            .urlfmt <<- "abstract://%s"
-           .intmax <<- .Machine[["integer.max"]]
          },
          Windows = {
            .command <<- file.path(R.home("bin"), "Rscript.exe")
            .urlfmt <<- "ipc://%s"
-           .intmax <<- .Machine[["integer.max"]]
          },
          {
            .command <<- file.path(R.home("bin"), "Rscript")
            .urlfmt <<- "ipc:///tmp/%s"
-           .intmax <<- .Machine[["integer.max"]]
          })
 
+}
+
+.. <- NULL
 .command <- NULL
 .urlfmt <- NULL
-.intmax <- NULL
 
-.. <- `[[<-`(new.env(hash = FALSE), "default", new.env(hash = FALSE))
-
+.messages <- list(
+  connection_timeout = "connection to local process timed out after 5s",
+  missing_url = "at least one URL must be supplied for 'url' or 'n' must be at least 1",
+  missing_expression = "missing expression, perhaps wrap in {}?",
+  n_one = "'n' must be 1 or greater if specified with a client URL",
+  n_zero = "the number of daemons must be zero or greater",
+  numeric_n = "'n' must be numeric, did you mean to provide 'url'?",
+  requires_list = "'.args' must be specified as a list"
+)
