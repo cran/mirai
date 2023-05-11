@@ -11,6 +11,7 @@ status](https://www.r-pkg.org/badges/version/mirai?color=112d4e)](https://CRAN.R
 badge](https://shikokuchuo.r-universe.dev/badges/mirai?color=24a60e)](https://shikokuchuo.r-universe.dev)
 [![R-CMD-check](https://github.com/shikokuchuo/mirai/workflows/R-CMD-check/badge.svg)](https://github.com/shikokuchuo/mirai/actions)
 [![codecov](https://codecov.io/gh/shikokuchuo/mirai/branch/main/graph/badge.svg)](https://app.codecov.io/gh/shikokuchuo/mirai)
+[![DOI](https://zenodo.org/badge/459341940.svg)](https://zenodo.org/badge/latestdoi/459341940)
 <!-- badges: end -->
 
 Minimalist async evaluation framework for R.
@@ -28,7 +29,8 @@ communications, courtesy of ‘nanonext’ and ‘NNG’ (Nanomsg Next Gen).
 `mirai()` returns a ‘mirai’ object immediately. ‘mirai’ (未来 みらい) is
 Japanese for ‘future’.
 
-`mirai` has a tiny pure R code base, relying solely on
+[`mirai`](https://doi.org/10.5281/zenodo.7912722) has a tiny pure R code
+base, relying solely on
 [`nanonext`](https://doi.org/10.5281/zenodo.7903429), a high-performance
 binding for the ‘NNG’ (Nanomsg Next Gen) C library with zero package
 dependencies.
@@ -112,7 +114,7 @@ result.
 
 ``` r
 m$data |> str()
-#>  num [1:100000000] 1.369 0.836 -0.218 0.476 2.641 ...
+#>  num [1:100000000] 0.174 -5.781 1.115 -0.444 1.194 ...
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -120,7 +122,7 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data |> str()
-#>  num [1:100000000] 1.369 0.836 -0.218 0.476 2.641 ...
+#>  num [1:100000000] 0.174 -5.781 1.115 -0.444 1.194 ...
 ```
 
 For easy programmatic use of `mirai()`, ‘.expr’ accepts a
@@ -138,7 +140,7 @@ args <- list(m = runif(1), n = 1e8)
 m <- mirai(.expr = expr, .args = args)
 
 call_mirai(m)$data |> str()
-#>  num [1:100000000] 19.59 -2.174 -7.987 0.295 -0.21 ...
+#>  num [1:100000000] 0.0221 1.192 -0.4676 -1.3978 -0.8437 ...
 ```
 
 [« Back to ToC](#table-of-contents)
@@ -232,10 +234,10 @@ for (i in 1:10) {
 #> iteration 3 successful 
 #> iteration 4 successful 
 #> iteration 5 successful 
+#> Error: random error 
 #> iteration 6 successful 
 #> iteration 7 successful 
 #> iteration 8 successful 
-#> Error: random error 
 #> iteration 9 successful 
 #> iteration 10 successful
 ```
@@ -279,12 +281,12 @@ daemons()
 #> 
 #> $daemons
 #>                                                     online instance assigned complete
-#> abstract://e7534011d9c165ba2d5000f16a56e2172b75ffbc      1        1        0        0
-#> abstract://ab0c3f1663964d6575fae13c51c36f01e24b7433      1        1        0        0
-#> abstract://b110d9d72f3a45b76d9beb5de27f9cf788c03997      1        1        0        0
-#> abstract://e2f6c11fbe59f4bd5c7359eedf77a6e305108b26      1        1        0        0
-#> abstract://6953e4d0a3938074e92e9e1f6c8f772897c86092      1        1        0        0
-#> abstract://88139ccc4a4419fdcbc03a7e95bf6db33b714137      1        1        0        0
+#> abstract://e1dd3bc7f970cf1df1c96be172a0638c6d1f5933      1        1        0        0
+#> abstract://9094018c5e2aa87a526f5c3de6953e35340c8054      1        1        0        0
+#> abstract://36b6705cf5928b8a7de4e9065ea30367a872a879      1        1        0        0
+#> abstract://67d5cb47bf656f95902a73b4e28efd0fac4a96d2      1        1        0        0
+#> abstract://a79cff350c04afcbbb1bd74d45af3f7ef4d8092e      1        1        0        0
+#> abstract://fc6df3fa9e207c722f1415813110bdc2769f8445      1        1        0        0
 ```
 
 The default `dispatcher = TRUE` creates a `dispatcher()` background
@@ -410,6 +412,12 @@ into one of the unique URLs that the dispatcher is listening to:
     Rscript -e 'mirai::server("ws://10.111.5.13:5555/3")'
     Rscript -e 'mirai::server("ws://10.111.5.13:5555/4")'
 
+Note that `daemons()` should be set up on the client before launching
+`server()` on remote resources, otherwise the server instances will exit
+if a connection is not immediately available. Alternatievly specifying
+`server(asyncdial = TRUE)` will allow servers to wait (indefinitely) for
+a connection to become available.
+
 –
 
 Requesting status, on the client:
@@ -478,7 +486,7 @@ listen on all interfaces on the local host, for example:
 
 ``` r
 daemons(url = "tcp://:0", dispatcher = FALSE)
-#> [1] "tcp://:37225"
+#> [1] "tcp://:39271"
 ```
 
 Note that above, the port number is specified as zero. This is a
@@ -493,7 +501,13 @@ On the server, `server()` may be called from an R session, or an Rscript
 invocation from a shell. This sets up a remote daemon process that
 connects to the client URL and receives tasks:
 
-    Rscript -e 'mirai::server("tcp://10.111.5.13:37225")'
+    Rscript -e 'mirai::server("tcp://10.111.5.13:39271")'
+
+As before, `daemons()` should be set up on the client before launching
+`server()` on remote resources, otherwise the server instances will exit
+if a connection is not immediately available. Alternatievly specifying
+`server(asyncdial = TRUE)` will allow servers to wait (indefinitely) for
+a connection to become available.
 
 –
 
@@ -510,7 +524,7 @@ daemons()
 #> [1] 0
 #> 
 #> $daemons
-#> [1] "tcp://:37225"
+#> [1] "tcp://:39271"
 ```
 
 To reset all connections and revert to default behaviour:
