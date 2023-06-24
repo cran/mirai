@@ -1,3 +1,16 @@
+# mirai 0.9.0
+
+* mirai 0.9.0 is a major release focusing on stability improvements. 
+* Improvements to dispatcher:
+  + Ensures the first URL retains the same format if `saisei(i = 1L)` is called.
+  + Optimal scheduling when tasks are submitted prior to any servers coming online.
+  + Fixes rare occasions where dispatcher running a single server instance could get stuck with a task.
+  + `daemons()` status requests have been rendered more robust.
+* Ensures `saisei()` always returns `NULL` if 'tcp://' URLs are being used as they do not support tokens.
+* Daemons status matrix 'assigned' and 'complete' are now cumulative statistics, and not reset upon new instances.
+* Requires nanonext >= 0.9.0 and R >= 3.5.0.
+* Internal performance enhancements.
+
 # mirai 0.8.7
 
 * `server()` and `dispatcher()` argument 'asyncdial' is now FALSE by default, causing these functions to exit if a connection is not immediately available. This means that for distributed computing purposes, `dameons()` should be called before `server()` is launched on remote resources, or else `server(asyncdial = TRUE)` allows servers to wait for a connection.
