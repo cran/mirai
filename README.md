@@ -18,9 +18,9 @@ Minimalist async evaluation framework for R. <br /><br /> Lightweight
 parallel code execution and distributed computing. <br /><br /> Designed
 for simplicity, a ‘mirai’ evaluates an R expression asynchronously, on
 local or network resources, resolving automatically upon completion.
-<br /><br /> Features efficient task scheduling, scalability beyond R
-connection limits, and transports faster than TCP/IP for inter-process
-communications, courtesy of ‘nanonext’ and ‘NNG’ (Nanomsg Next Gen).
+<br /><br /> Features efficient task scheduling, fast inter-process
+communications, and Transport Layer Security over TCP/IP for remote
+connections, courtesy of ‘nanonext’ and ‘NNG’ (Nanomsg Next Gen).
 <br /><br /> `mirai()` returns a ‘mirai’ object immediately. ‘mirai’
 (未来 みらい) is Japanese for ‘future’. <br /><br />
 [`mirai`](https://doi.org/10.5281/zenodo.7912722) has a tiny pure R code
@@ -39,14 +39,16 @@ dependencies. <br /><br />
 5.  [Daemons: Local Persistent
     Processes](#daemons-local-persistent-processes)
 6.  [Distributed Computing: Remote
-    Servers](#distributed-computing-remote-servers)
-7.  [Compute Profiles](#compute-profiles)
-8.  [Errors, Interrupts and Timeouts](#errors-interrupts-and-timeouts)
-9.  [Deferred Evaluation Pipe](#deferred-evaluation-pipe)
-10. [Integrations with Crew, Targets,
+    Daemons](#distributed-computing-remote-daemons)
+7.  [Distributed Computing: TLS Secure
+    Connections](#distributed-computing-tls-secure-connections)
+8.  [Compute Profiles](#compute-profiles)
+9.  [Errors, Interrupts and Timeouts](#errors-interrupts-and-timeouts)
+10. [Deferred Evaluation Pipe](#deferred-evaluation-pipe)
+11. [Integrations with Crew, Targets,
     Shiny](#integrations-with-crew-targets-shiny)
-11. [Acknowledgements](#acknowledgements)
-12. [Links](#links)
+12. [Thanks](#thanks)
+13. [Links](#links)
 
 ### Installation
 
@@ -110,7 +112,7 @@ result.
 
 ``` r
 m$data |> str()
-#>  num [1:100000000] 2.014 0.353 -0.486 0.406 -0.108 ...
+#>  num [1:100000000] -0.7431 -0.9353 24.3926 0.5017 -0.0927 ...
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -118,7 +120,7 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data |> str()
-#>  num [1:100000000] 2.014 0.353 -0.486 0.406 -0.108 ...
+#>  num [1:100000000] -0.7431 -0.9353 24.3926 0.5017 -0.0927 ...
 ```
 
 For easy programmatic use of `mirai()`, ‘.expr’ accepts a
@@ -136,7 +138,7 @@ args <- list(m = runif(1), n = 1e8)
 m <- mirai(.expr = expr, .args = args)
 
 call_mirai(m)$data |> str()
-#>  num [1:100000000] -0.58 -0.724 -0.552 -1.282 -0.949 ...
+#>  num [1:100000000] 1.946 0.115 2.753 1.629 -2.095 ...
 ```
 
 [« Back to ToC](#table-of-contents)
@@ -211,7 +213,7 @@ library(mirai)
 run_iteration <- function(i) {
   
   if (runif(1) < 0.1) stop("random error", call. = FALSE) # simulates a stochastic error rate
-  sprintf("iteration %d successful", i)
+  sprintf("iteration %d successful\n", i)
   
 }
 
@@ -219,22 +221,22 @@ for (i in 1:10) {
   
   m <- mirai(run_iteration(i), .args = list(run_iteration, i))
   while (is_error_value(call_mirai(m)$data)) {
-    cat(m$data, "\n")
+    cat(m$data)
     m <- mirai(run_iteration(i), .args = list(run_iteration, i))
   }
-  cat(m$data, "\n")
+  cat(m$data)
   
 }
-#> iteration 1 successful 
-#> iteration 2 successful 
-#> Error: random error 
-#> iteration 3 successful 
-#> iteration 4 successful 
-#> iteration 5 successful 
-#> iteration 6 successful 
-#> iteration 7 successful 
-#> iteration 8 successful 
-#> iteration 9 successful 
+#> iteration 1 successful
+#> iteration 2 successful
+#> iteration 3 successful
+#> iteration 4 successful
+#> iteration 5 successful
+#> iteration 6 successful
+#> iteration 7 successful
+#> iteration 8 successful
+#> Error: random error
+#> iteration 9 successful
 #> iteration 10 successful
 ```
 
@@ -266,31 +268,30 @@ daemons(6)
 #> [1] 6
 ```
 
-To view the current status, call `daemons()` with no arguments. This
-provides the number of active connections along with a matrix of
-statistics for each daemon.
+To view the current status, `status()` provides the number of active
+connections along with a matrix of statistics for each daemon.
 
 ``` r
-daemons()
+status()
 #> $connections
 #> [1] 1
 #> 
 #> $daemons
 #>                                                     online instance assigned complete
-#> abstract://423f95771594786387944c3fde680d8d9a586287      1        1        0        0
-#> abstract://f929afd8d0e5f72d0d853db04daefb3005cdb445      1        1        0        0
-#> abstract://068b212ffef83c82cfe6122f690d78238ee4aad8      1        1        0        0
-#> abstract://9af3255a78af6176691b1f5ab42d13e1146d66f1      1        1        0        0
-#> abstract://1959d5ea05ce4690c45113075b2d30935e25a86c      1        1        0        0
-#> abstract://f9cb2b1873dad45f9466f989a290a5c6b13ce47c      1        1        0        0
+#> abstract://449576e9e32f55a1fd1184c039ddb34341d56c8b      1        1        0        0
+#> abstract://787f0e8784a5679082a93c1ae70dfbc879c4dc44      1        1        0        0
+#> abstract://c903e3bbb8f40f511c4dbb1f33a236628bce05c0      1        1        0        0
+#> abstract://457fcb84899d086a1c6a746a4713c99b71fa03ad      1        1        0        0
+#> abstract://00db3ed12b513e8e86cfd46c0e99e87c0ba8d374      1        1        0        0
+#> abstract://f88f2f0bb64de3df6f781dd3162fdef19947c43c      1        1        0        0
 ```
 
 The default `dispatcher = TRUE` creates a `dispatcher()` background
 process that connects to individual daemon processes on the local
-machine on behalf of the client. This ensures that tasks are dispatched
-efficiently on a first-in first-out (FIFO) basis to servers for
-processing. Tasks are queued at the dispatcher and sent to a daemon as
-soon as it can accept the task for immediate execution.
+machine. This ensures that tasks are dispatched efficiently on a
+first-in first-out (FIFO) basis to daemons for processing. Tasks are
+queued at the dispatcher and sent to a daemon as soon as it can accept
+the task for immediate execution.
 
 Dispatcher uses synchronisation primitives from
 [`nanonext`](https://doi.org/10.5281/zenodo.7903429), waiting upon
@@ -308,23 +309,24 @@ of creating a new background process for each ‘mirai’ request.
 
 #### Without Dispatcher
 
-Alternatively, specifying `dispatcher = FALSE`, the background daemon
-processes connect directly to the client.
+Alternatively, specifying `dispatcher = FALSE`, the background daemons
+connect directly to the host process.
 
 ``` r
 daemons(6, dispatcher = FALSE)
 #> [1] 6
 ```
 
-Requesting the status now shows 6 connections and 6 daemons.
+Requesting the status now shows 6 connections, along with the host URL
+at `$daemons`.
 
 ``` r
-daemons()
+status()
 #> $connections
 #> [1] 6
 #> 
 #> $daemons
-#> [1] 6
+#> [1] "abstract://83a9e2201058c1e31c6ee7d7d7b24fa57d0628f0"
 ```
 
 This implementation sends tasks immediately, and ensures that tasks are
@@ -347,38 +349,41 @@ Set the number of daemons to zero to reset.
 
 [« Back to ToC](#table-of-contents)
 
-### Distributed Computing: Remote Servers
+### Distributed Computing: Remote Daemons
 
 The daemons interface may also be used to send tasks for computation to
-server processes on the network.
+remote daemon processes on the network.
 
-Call `daemons()` specifying ‘url’ as a character string the client
-network address and a port that is able to accept incoming connections.
+Call `daemons()` specifying ‘url’ as a character value the host network
+address and a port that is able to accept incoming connections.
 
 The examples below use an illustrative local network IP address of
-‘10.111.5.13’.
+‘10.216.62.86’.
 
-A port on the client also needs to be open and available for inbound
-connections from the local network, illustratively ‘5555’ in the
+A port on the host machine also needs to be open and available for
+inbound connections from the local network, illustratively ‘5555’ in the
 examples below.
 
-#### Connecting to Remote Servers Through Dispatcher
+IPv6 addresses are also supported and must be enclosed in square
+brackets `[]` to avoid confusion with the final colon separating the
+port. For example, port 5555 on the IPv6 address `::ffff:a6f:50d` would
+be specified as `tcp://[::ffff:a6f:50d]:5555`.
+
+#### Connecting to Remote Daemons Through Dispatcher
 
 The default `dispatcher = TRUE` creates a background `dispatcher()`
-process on the local client machine, which listens to a vector of URLs
-that remote `server()` processes dial in to, with each server having its
+process on the local machine, which listens to a vector of URLs that
+remote `daemon()` processes dial in to, with each daemon having its own
 unique URL.
 
 It is recommended to use a websocket URL starting `ws://` instead of TCP
 in this scenario (used interchangeably with `tcp://`). A websocket URL
 supports a path after the port number, which can be made unique for each
-server. In this way a dispatcher can connect to an arbitrary number of
-servers over a single port.
+daemon. In this way a dispatcher can connect to an arbitrary number of
+daemons over a single port.
 
 ``` r
-# daemons(n = 4, url = "ws://10.111.5.13:5555")
-
-daemons(n = 4, url = "ws://:5555")
+daemons(n = 4, url = "ws://10.216.62.86:5555")
 #> [1] 4
 ```
 
@@ -391,7 +396,7 @@ Alternatively, supplying a vector of URLs allows the use of arbitrary
 port numbers / paths, e.g.:
 
 ``` r
-# daemons(url = c("ws://:5555/cpu", "ws://:5555/gpu", "ws://:12560", "ws://:12560/2"))
+daemons(url = c("ws://10.216.62.86:5566/cpu", "ws://10.216.62.86:5566/gpu", "ws://10.216.62.86:7788/1"))
 ```
 
 Above, ‘n’ is not specified, in which case its value is inferred from
@@ -399,58 +404,72 @@ the length of the ‘url’ vector supplied.
 
 –
 
-On the remote resource, `server()` may be called from an R session, or
-directly from a shell using Rscript. Each server instance should dial
-into one of the unique URLs that the dispatcher is listening to:
+On the remote resource, `daemon()` may be called from an R session, or
+directly from a shell using Rscript. Each daemon instance should dial
+into one of the unique URLs that the dispatcher is listening at:
 
-    Rscript -e 'mirai::server("ws://10.111.5.13:5555/1")'
-    Rscript -e 'mirai::server("ws://10.111.5.13:5555/2")'
-    Rscript -e 'mirai::server("ws://10.111.5.13:5555/3")'
-    Rscript -e 'mirai::server("ws://10.111.5.13:5555/4")'
+    Rscript -e 'mirai::daemon("ws://10.216.62.86:5555/1")'
+    Rscript -e 'mirai::daemon("ws://10.216.62.86:5555/2")'
+    Rscript -e 'mirai::daemon("ws://10.216.62.86:5555/3")'
+    Rscript -e 'mirai::daemon("ws://10.216.62.86:5555/4")'
 
-Note that `daemons()` should be set up on the client before launching
-`server()` on remote resources, otherwise the server instances will exit
-if a connection is not immediately available. Alternatievly specifying
-`server(asyncdial = TRUE)` will allow servers to wait (indefinitely) for
-a connection to become available.
+Note that `daemons()` should be set up on the host machine before
+launching `daemon()` on remote resources, otherwise the daemon instances
+will exit if a connection is not immediately available. Alternatively,
+specifying `daemon(asyncdial = TRUE)` will allow daemons to wait
+(indefinitely) for a connection to become available.
+
+`launch_remote()` may also be used to launch daemons directly on a
+remote machine. For example, if the remote machine at 10.216.62.100
+accepts SSH connections over port 22:
+
+``` r
+launch_remote(1:4, command = "ssh", args = c("-p 22 10.216.62.100", .))
+#> [1] "Rscript -e 'mirai::daemon(\"ws://10.216.62.86:5555/1\")'"
+#> [2] "Rscript -e 'mirai::daemon(\"ws://10.216.62.86:5555/2\")'"
+#> [3] "Rscript -e 'mirai::daemon(\"ws://10.216.62.86:5555/3\")'"
+#> [4] "Rscript -e 'mirai::daemon(\"ws://10.216.62.86:5555/4\")'"
+```
+
+The returned vector comprises the shell commands executed on the remote
+machine.
 
 –
 
-Requesting status, on the client:
+Requesting status, on the host machine:
 
 ``` r
-daemons()
+status()
 #> $connections
 #> [1] 1
 #> 
 #> $daemons
-#>              online instance assigned complete
-#> ws://:5555/1      1        1        0        0
-#> ws://:5555/2      1        1        0        0
-#> ws://:5555/3      1        1        0        0
-#> ws://:5555/4      1        1        0        0
+#>                          online instance assigned complete
+#> ws://10.216.62.86:5555/1      1        1        0        0
+#> ws://10.216.62.86:5555/2      1        1        0        0
+#> ws://10.216.62.86:5555/3      1        1        0        0
+#> ws://10.216.62.86:5555/4      1        1        0        0
 ```
 
-As per the local case, `$connections` will show the single connection to
-the dispatcher process, however `$daemons` will provide the matrix of
-statistics for the remote servers.
+As per the local case, `$connections` shows the single connection to
+dispatcher, however `$daemons` now provides a matrix of statistics for
+the remote daemons.
 
-`online` shows as 1 when there is an active connection, or else 0 if a
-server has yet to connect or has disconnected.
+- `online` shows as 1 when there is an active connection, or else 0 if a
+  daemon has yet to connect or has disconnected.
+- `instance` increments by 1 every time there is a new connection at a
+  URL. This counter is designed to track new daemon instances connecting
+  after previous ones have ended (due to time-outs etc.). ‘instance’
+  resets to zero if the URL is regenerated by `saisei()`.
+- `assigned` shows the cumulative number of tasks assigned to the
+  daemon.
+- `complete` shows the cumulative number of tasks completed by the
+  daemon.
 
-`instance` increments by 1 every time there is a new connection at a
-URL. This counter is designed to track new server instances connecting
-after previous ones have ended (due to time-outs etc.). ‘instance’
-resets to zero if the URL is regenerated by `saisei()`.
-
-`assigned` shows the cumulative number of tasks assigned to the server.
-
-`complete` shows the cumulative number of tasks completed by the server.
-
-The dispatcher automatically adjusts to the number of servers actually
+Dispatcher automatically adjusts to the number of daemons actually
 connected. Hence it is possible to dynamically scale up or down the
-number of servers according to requirements (limited to the ‘n’ URLs
-assigned at the dispatcher).
+number of daemons according to requirements (limited to the ‘n’ URLs
+assigned).
 
 To reset all connections and revert to default behaviour:
 
@@ -460,17 +479,17 @@ daemons(0)
 ```
 
 Closing the connection causes the dispatcher to exit automatically, and
-in turn all connected servers when their respective connections with the
+in turn all connected daemons when their respective connections with the
 dispatcher are terminated.
 
-#### Connecting to Remote Servers Directly
+#### Connecting to Remote Daemons Directly
 
-By specifying `dispatcher = FALSE`, remote servers connect directly to
-the client. The client listens at a single URL address, and distributes
-tasks to all connected server processes.
+By specifying `dispatcher = FALSE`, remote daemons connect directly to
+the host process. The host listens at a single URL, and distributes
+tasks to all connected daemons.
 
 ``` r
-daemons(url = "tcp://10.111.5.13:0", dispatcher = FALSE)
+daemons(url = "tcp://10.216.62.86:0", dispatcher = FALSE)
 ```
 
 Alternatively, simply supply a colon followed by the port number to
@@ -478,45 +497,55 @@ listen on all interfaces on the local host, for example:
 
 ``` r
 daemons(url = "tcp://:0", dispatcher = FALSE)
-#> [1] "tcp://:34929"
+#> [1] "tcp://:41793"
 ```
 
 Note that above, the port number is specified as zero. This is a
 wildcard value that will automatically cause a free ephemeral port to be
-assigned. The actual assigned port is provided as the return value of
-the call, or it may be queried at any time by requesting the status via
-`daemons()`.
+assigned. The actual assigned port is provided in the return value of
+the call, or it may be queried at any time via `status()`.
 
 –
 
-On the server, `server()` may be called from an R session, or an Rscript
-invocation from a shell. This sets up a remote daemon process that
-connects to the client URL and receives tasks:
+On the network resource, `daemon()` may be called from an R session, or
+an Rscript invocation from a shell. This sets up a remote daemon process
+that connects to the host URL and receives tasks:
 
-    Rscript -e 'mirai::server("tcp://10.111.5.13:34929")'
+    Rscript -e 'mirai::daemon("tcp://10.216.62.86:41793")'
 
-As before, `daemons()` should be set up on the client before launching
-`server()` on remote resources, otherwise the server instances will exit
-if a connection is not immediately available. Alternatievly specifying
-`server(asyncdial = TRUE)` will allow servers to wait (indefinitely) for
-a connection to become available.
+Note that `daemons()` should be set up on the host machine before
+launching `daemon()` on remote resources, otherwise the daemon instances
+will exit if a connection is not immediately available. Alternatively,
+specifying `daemon(asyncdial = TRUE)` will allow daemons to wait
+(indefinitely) for a connection to become available.
 
-–
-
-The number of daemons connecting to the client URL is not limited and
-network resources may be added or removed at any time, with tasks
-automatically distributed to all server processes.
-
-`$connections` will show the actual number of connected server
-instances.
+`launch_remote()` may also be used to launch daemons directly on a
+remote machine. For example, if the remote machine at 10.216.62.100
+accepts SSH connections over port 22:
 
 ``` r
-daemons()
+launch_remote("tcp://10.216.62.86:41793", command = "ssh", args = c("-p 22 10.216.62.100", .))
+#> [1] "Rscript -e 'mirai::daemon(\"tcp://10.216.62.86:41793\")'"
+```
+
+The returned vector comprises the shell commands executed on the remote
+machine.
+
+–
+
+The number of daemons connecting to the host URL is not limited and
+network resources may be added or removed at any time, with tasks
+automatically distributed to all connected daemons.
+
+`$connections` will show the actual number of connected daemons.
+
+``` r
+status()
 #> $connections
-#> [1] 0
+#> [1] 1
 #> 
 #> $daemons
-#> [1] "tcp://:34929"
+#> [1] "tcp://:41793"
 ```
 
 To reset all connections and revert to default behaviour:
@@ -526,7 +555,54 @@ daemons(0)
 #> [1] 0
 ```
 
-This causes all connected server instances to exit automatically.
+This causes all connected daemons to exit automatically.
+
+[« Back to ToC](#table-of-contents)
+
+### Distributed Computing: TLS Secure Connections
+
+TLS can be enabled to secure communications from the local machine to
+remote daemons.
+
+An automatic zero-configuration default is implemented - all that is
+required is to specify a secure URL of the form `wss://` or
+`tls+tcp://`. For example, on the IPv6 loopback address:
+
+``` r
+daemons(n = 4, url = "wss://[::1]:5555")
+#> [1] 4
+```
+
+Single-use keys and certificates are automatically generated and
+configured, without requiring any user intervention. The private key is
+always retained on the host and never transmitted, and also not stored
+or accessible as an R object.
+
+The generated self-signed certificate is made available for read-only
+access via `launch_remote()`. This function conveniently constructs the
+full shell command to launch a daemon, including the correctly specified
+‘tls’ argument to `daemon()`.
+
+``` r
+launch_remote(1)
+#> [1] "Rscript -e 'mirai::daemon(\"wss://[::1]:5555/1\",tls=c(\"-----BEGIN CERTIFICATE-----\nMIIFJTCCAw2gAwIBAgIBATANBgkqhkiG9w0BAQsFADAqMQwwCgYDVQQDDAM6OjEx\nDzANBgNVBAoMBkhpYmlraTEJMAcGA1UEBhMAMB4XDTAxMDEwMTAwMDAwMFoXDTMw\nMTIzMTIzNTk1OVowKjEMMAoGA1UEAwwDOjoxMQ8wDQYDVQQKDAZIaWJpa2kxCTAH\nBgNVBAYTADCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAMYXAsp9h4LD\nNHQaFJJU0IIiMZzrOIdsYxZlvc0s3X0g23t/kBnmTJ1A/EQjKNUhDdgZBADZiJ3a\n842aSYgPtWwn7dVBjCN/Rh04tCXujXAlfBR7KGco/iJrP+ww8ZI0eicVAIHMjVn3\nNi7ckG3a59mDX71U1ZFz3PBWdXqOOW/gNKCUG+BLDDBEu6t/D/qGKlzPpnMLxn4A\nmvNT4S5ecOKLSZqpmge3vc2YthNqRYeOFMfZmxCTjF3cT+dzM9LVC7QVcBEkqklz\nPdYF4nS6kecQWe3nJ5xPKfl6KmA3kEOMnBigpLICaVq3gvkfsOTc3BP1ZaGiVC1J\nYxZ1GYHcmRqTgMNzB4CmrgOx/15M3/gBOu0W3uw2a6figRZHZEjk69H0XjjZ9Ysn\nhe91lRuSvfIVXmjekZw2vLh9hbns35kzRLCQ74tvNLY3IZ2CQwjqIWUTngEzpGKu\nBHmaeWyUOU1Btxncixm9oy5Njp73Ju2XgW6Y+/Yg25WwcLObWpHowfgnVggRMkds\nTl1rZlzV+SneM1yxGqaxh6NuRb+35SuVT1pEJ/9XwPzPg2YsIZDBDsJDytVqbmbg\nQPNznYcLY3D9bg9C8lxY3CorHrIkWTcVHJR2vWE0iC+s4y5yAAiOdM0dpQK6wCF8\nWkJOqiob4p20nSZo/x1IMYMQwYZntiUVAgMBAAGjVjBUMBIGA1UdEwEB/wQIMAYB\nAf8CAQAwHQYDVR0OBBYEFIvjOPAsySHDhk8J7iJaVDSvk/fXMB8GA1UdIwQYMBaA\nFIvjOPAsySHDhk8J7iJaVDSvk/fXMA0GCSqGSIb3DQEBCwUAA4ICAQC6SZVaDIBc\nPZNNJm+OiVqSfMVMb7xELr55Vl50hv6jxv/7JqKnl4e20N/KU0KHIvMvZhfkmfrH\njYgv4TCm5D+hKKi/SG4CApOeDzlZto8O4OuYQMENK5Sl/2iebdSBD7EBuU/w1LBL\n98V3vCdnY0CnpeL7/uyf3a+R9+NsJSBioHZO+vCnfr62wKc6A4VW2kmL0kilVMMr\nSzOMg+7OzJMWVrDvCleT+nbwdWWUaR0v6MbAZS31e4u9h4sF6lQPkxCwv9Azu8HX\n+g/h/yHbYXJSi30D7hltsjUGi11rSOHLya1fBP9kFhbo7ubc+5jrpeMggBNnKK7K\nJmrcDvaFf7x8MpJYO97hEiSFLGEJx/ox/kQDZqYroX0z6s5cCuBs7IgP8YyH+roL\nC1Tstlf65+6MLwHMMGYZOOVhWwC0idQIh6bmdLDQ081vUvb4FXDRQ0qt19qmSE3i\nXExQCinTZXdLmlZGGb3fvTVGFuXJRDoAv26PJ0mREUvaJaqIr9bjzel9D4UQPWi9\nmBcd7OrT1GTs6IiuS48z1oObbvWXxIKXm3icPjiMG8K4RCTL/o1eakc/uNODiUqx\nTUpAPchgAIVdcgZRK/metRcLfbp16sqTR9E2hFHzqxOGijO/i464hUHCf2o1JOG8\nAjlpB7BoNrfVS/+DUzUfCR+TXCSbgaVLOA==\n-----END CERTIFICATE-----\n\",\"\"))'"
+```
+
+The return value may be deployed manually on a remote machine, or
+directly via SSH or a resource manager by additionally specifying
+‘command’ and ‘args’ to `launch_remote()`.
+
+\_\_
+
+As an alternative to the automatic process described above, a
+certificate may also be generated in the traditional manner via a
+Certificate Signing Request (CSR) to a Certificate Authority (CA), which
+may be a public CA or a CA internal to your organisation.
+
+- The generated certificate along with the associated private key may
+  then be specified as the ‘tls’ argument to `daemons()`.
+- The certificate chain to the CA is supplied as the ‘tls’ argument to
+  `daemon()`.
 
 [« Back to ToC](#table-of-contents)
 
@@ -535,7 +611,7 @@ This causes all connected server instances to exit automatically.
 The `daemons()` interface also allows the specification of compute
 profiles for managing tasks with heterogeneous compute requirements:
 
-- send tasks to different servers or server clusters with the
+- send tasks to different daemons or clusters of daemons with the
   appropriate specifications (in terms of CPUs / memory / GPU /
   accelerators etc.)
 - split tasks between local and remote computation
@@ -544,17 +620,21 @@ Simply specify the argument `.compute` when calling `daemons()` with a
 profile name (which is ‘default’ for the default profile). The daemons
 settings are saved under the named profile.
 
-To launch a ‘mirai’ task using a specific compute profile, specify the
+To create a ‘mirai’ task using a specific compute profile, specify the
 ‘.compute’ argument to `mirai()`, which defaults to the ‘default’
 compute profile.
+
+Similarly, functions such as `status()`, `launch_local()` or
+`launch_remote()` should be specified with the desired ‘.compute’
+argument.
 
 [« Back to ToC](#table-of-contents)
 
 ### Errors, Interrupts and Timeouts
 
 If execution in a mirai fails, the error message is returned as a
-character string of class ‘miraiError’ and ‘errorValue’ to facilitate
-debugging. `is_mirai_error()` can be used to test for mirai execution
+character vector of class ‘miraiError’ and ‘errorValue’ to facilitate
+debugging. `is_mirai_error()` may be used to test for mirai execution
 errors.
 
 ``` r
@@ -573,7 +653,7 @@ is_error_value(m2$data)
 ```
 
 If during a `call_mirai()` an interrupt e.g. ctrl+c is sent, the mirai
-will resolve to an empty character string of class ‘miraiInterrupt’ and
+will resolve to an empty character vector of class ‘miraiInterrupt’ and
 ‘errorValue’. `is_mirai_interrupt()` may be used to test for such
 interrupts.
 
@@ -584,7 +664,8 @@ is_mirai_interrupt(m2$data)
 
 If execution of a mirai surpasses the timeout set via the ‘.timeout’
 argument, the mirai will resolve to an ‘errorValue’. This can, amongst
-other things, guard against mirai processes that hang and never return.
+other things, guard against mirai processes that have the potential to
+hang and never return.
 
 ``` r
 m3 <- mirai(nanonext::msleep(1000), .timeout = 500)
@@ -610,12 +691,12 @@ and timeouts.
 potentially unresolved values.
 
 Pipe a ‘mirai’ or mirai `$data` value forward into a function or series
-of functions and it initially returns an ‘unresolvedExpr’.
+of functions and initially an ‘unresolvedExpr’ will be returned.
 
 The result may be queried at `$data`, which will return another
 ‘unresolvedExpr’ whilst unresolved. However when the original value
 resolves, the ‘unresolvedExpr’ will simultaneously resolve into a
-‘resolvedExpr’, for which the evaluated result will be available at
+‘resolvedExpr’, for which the evaluated result will then be available at
 `$data`.
 
 A piped expression should be wrapped in `.()` to ensure that the return
@@ -660,9 +741,10 @@ The [`crew`](https://wlandau.github.io/crew/) package is a distributed
 worker-launcher that provides an R6-based interface extending `mirai` to
 different distributed computing platforms, from traditional clusters to
 cloud services. The
-[`crew.cluster`](https://wlandau.github.io/crew.cluster/) package
-enables mirai-based workflows on traditional high-performance computing
-clusters such as Sun Grid Engine (SGE).
+[`crew.cluster`](https://wlandau.github.io/crew.cluster/) package is a
+plug-in that enables mirai-based workflows on traditional
+high-performance computing clusters using LFS, PBS/TORQUE, SGE and
+SLURM.
 
 [`targets`](https://docs.ropensci.org/targets/), a Make-like pipeline
 tool for statistics and data science, has integrated and adopted
@@ -688,7 +770,7 @@ of two ways:
 
 [« Back to ToC](#table-of-contents)
 
-### Acknowledgements
+### Thanks
 
 [William Landau](https://github.com/wlandau/) has been instrumental in
 shaping development of the package, from being the first to request
@@ -705,14 +787,14 @@ patterns.
 
 ### Links
 
-`mirai` website: <https://shikokuchuo.net/mirai/><br /> `mirai` on CRAN:
+mirai website: <https://shikokuchuo.net/mirai/><br /> mirai on CRAN:
 <https://cran.r-project.org/package=mirai>
 
 Listed in CRAN Task View: <br /> - High Performance Computing:
 <https://cran.r-project.org/view=HighPerformanceComputing>
 
-`nanonext` website: <https://shikokuchuo.net/nanonext/><br /> `nanonext`
-on CRAN: <https://cran.r-project.org/package=nanonext>
+nanonext website: <https://shikokuchuo.net/nanonext/><br /> nanonext on
+CRAN: <https://cran.r-project.org/package=nanonext>
 
 NNG website: <https://nng.nanomsg.org/><br />
 

@@ -8,9 +8,12 @@ nanotestp <- function(x) invisible(is.character(capture.output(print(x))) || sto
 nanotesterr <- function(x, e = "")
   invisible(grepl(e, tryCatch(x, error = identity)[["message"]], fixed = TRUE) || stop("expected error message '", e, "' not generated"))
 
-nanotest(is.list(daemons()))
-nanotestz(daemons()[["connections"]])
-nanotestz(daemons()[["daemons"]])
+nanotest(is.list(status()))
+nanotestz(status()[["connections"]])
+nanotestz(status()[["daemons"]])
+nanotest(is.character(launch_remote("ws://[::1]:5555")))
+nanotesterr(launch_remote("ws://[::1]:5555", command = "echo", args = "invalid"), "must be an element")
+nanotesterr(launch_local(1L), "requires daemons to be set")
 nanotesto(daemons(1L, dispatcher = FALSE))
 me <- mirai(mirai::mirai(), .timeout = 2000L)
 nanotest(is_mirai_error(call_mirai(me)$data) || is_error_value(me$data))
@@ -22,16 +25,16 @@ dm <- mirai(as.matrix(df), .args = list(df), .timeout = 2000L)
 nanotest(is_mirai(call_mirai(dm)))
 nanotest(!unresolved(dm))
 nanotest(is.matrix(dm$data) || is_error_value(dm$data))
-nanotestn(stop_mirai(dm))
-nanotesto(daemons()[["connections"]])
-nanotesto(daemons()[["daemons"]])
+nanotesto(status()[["connections"]])
+nanotest(is.character(status()[["daemons"]]))
 nanotestz(daemons(0L))
-nanotestz(daemons()[["connections"]])
-nanotestz(daemons()[["daemons"]])
+nanotestz(status()[["connections"]])
+nanotestz(status()[["daemons"]])
 nanotesterr(daemons(url = "URL"), "Invalid argument")
 nanotesterr(daemons(-1), "zero or greater")
+nanotesterr(daemons(n = 0, url = "ws://localhost:0"), "1 or greater")
 nanotesterr(daemons(raw(0L)), "must be numeric")
-nanotesterr(server("URL"), "Invalid argument")
+nanotesterr(daemon("URL"), "Invalid argument")
 nanotesterr(dispatcher(client = "URL"), "at least one")
 nanotestz(daemons(0L))
 nanotest(is_mirai_interrupt(r <- mirai:::mk_interrupt_error()))
@@ -64,6 +67,7 @@ m <- mirai(.expr = `lang obj`, .args = args, .timeout = 2000L)
 nanotest(call_mirai(m)$data == 8L || is_error_value(m$data))
 Sys.sleep(2.2)
 nanotest(daemons(url = value <- mirai:::auto_tokenized_url(), dispatcher = FALSE) == value)
+nanotest(grepl("://", launch_remote(status()$daemons), fixed = TRUE))
 nanotestz(daemons(0L))
 Sys.sleep(1L)
 nanotesto(daemons(1L, dispatcher = FALSE, idletime = 500L, timerstart = 1L, cleanup = 0L, .compute = "new"))
@@ -79,6 +83,9 @@ nanotestz(daemons(0L, .compute = "new"))
 Sys.sleep(1L)
 
 if (.Platform[["OS.type"]] != "windows") {
+  nanotest(is_mirai(m <- mirai(TRUE)))
+  nanotest(is.character(launch_remote("ws://[::1]:5555", rscript = "/usr/lib/R/bin/Rscript", command = "echo", args = c("Test out:", ., ">/dev/null"))))
+  Sys.sleep(2.2)
   nanotest(daemons(n = 2L, url = value <- "ws://:0", dispatcher = FALSE) != value)
   nanotestz(daemons(0L))
   Sys.sleep(0.5)
@@ -90,7 +97,7 @@ if (.Platform[["OS.type"]] != "windows") {
   Sys.sleep(1L)
   nanotest(daemons(n = 2, "ws://:0") == 2L)
   Sys.sleep(1L)
-  status <- daemons()[["daemons"]]
+  status <- status()[["daemons"]]
   nanotest(is.matrix(status) || is_error_value(status))
   if (is.matrix(status)) {
     nanotest(is.character(dn1 <- dimnames(status)[[1L]]))
@@ -106,15 +113,16 @@ if (.Platform[["OS.type"]] != "windows") {
     nanotestz(sum(status[, "complete"]))
   }
   nanotest(is.character(saisei(i = 1L)))
+  nanotestn(saisei(i = 0L))
   nanotestn(saisei(i = 10L))
   Sys.sleep(0.5)
   nanotestz(daemons(0))
   Sys.sleep(1L)
   nanotest(daemons(n = 2, "tcp://:0") == 2L)
   Sys.sleep(1L)
-  nanotest(is.integer(launch_server(mirai:::..[["default"]][["urls"]][1L], maxtasks = 1L)))
+  nanotestn(launch_local(mirai:::..[["default"]][["urls"]][1L], maxtasks = 1L))
   Sys.sleep(1L)
-  tstatus <- daemons()[["daemons"]]
+  tstatus <- status()[["daemons"]]
   nanotest(is.matrix(tstatus) || is_error_value(tstatus))
   if (is.matrix(tstatus)) {
     nanotest(is.character(tdn1 <- dimnames(tstatus)[[1L]]))
@@ -132,17 +140,25 @@ if (.Platform[["OS.type"]] != "windows") {
 }
 
 if (Sys.getenv("NOT_CRAN") == "true" && .Platform[["OS.type"]] != "windows") {
+  nanotesto(daemons(url = "wss://:0", token = TRUE))
+  nanotestn(launch_local(1L))
+  nanotest(grepl("CERTIFICATE", launch_remote(1L), fixed = TRUE))
+  nanotesterr(launch_local(0:1), "out of bounds")
+  nanotesterr(launch_remote(1:2), "out of bounds")
+  nanotestz(daemons(0L))
+  Sys.sleep(1L)
   option <- 15L
   nanotesto(daemons(1, dispatcher = TRUE, maxtasks = 10L, timerstart = 1L, walltime = 2000L, token = TRUE, lock = TRUE, cleanup = option))
   Sys.sleep(1L)
-  mq <- mirai("server", .timeout = 1000)
-  nanotest(call_mirai(mq)$data == "server" || is_error_value(mq$data))
-  dstatus <- daemons()[["daemons"]]
+  mq <- mirai("daemon", .timeout = 1000)
+  nanotest(call_mirai(mq)$data == "daemon" || is_error_value(mq$data))
+  dstatus <- status()[["daemons"]]
   nanotest(is.matrix(dstatus) || is_error_value(dstatus))
   if (is.matrix(dstatus)) {
     nanotest(is.integer(dstatus[, "online"]))
     nanotest(is.integer(dstatus[, "instance"]))
   }
+  nanotestn(saisei(i = 1L))
   nanotestz(daemons(0))
   Sys.sleep(2L)
 }
