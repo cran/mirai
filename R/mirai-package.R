@@ -50,8 +50,11 @@
 #'
 #' @importFrom nanonext call_aio .context cv cv_value dial is_error_value listen
 #'     lock mclock msleep opt opt<- parse_url pipe_notify random recv
-#'     recv_aio_signal request request_signal send sha1 socket stat stop_aio
-#'     strcat tls_config unresolved until wait weakref weakref_value write_cert
+#'     recv_aio_signal request request_signal send send_aio sha1 socket stat
+#'     stop_aio strcat tls_config unresolved until wait weakref weakref_value
+#'     write_cert
+#' @importFrom parallel nextRNGStream
+#' @importFrom stats rexp
 #'
 #' @docType package
 #' @name mirai-package
@@ -80,20 +83,22 @@ NULL
 .. <- NULL
 .command <- NULL
 .urlscheme <- NULL
-.timelimit <- 5000L
 
+.intmax <- .Machine[["integer.max"]]
 .messages <- list2env(
   list(
-    connection_timeout = "connection to local process timed out after 5s",
-    dispatcher_inactive = "a numeric value for 'url' requires daemons to be set",
+    daemons_unset = "a numeric value for 'url' requires daemons to be set",
     dot_required = "'.' must be an element of the character vector supplied to 'args'",
-    missing_url = "at least one URL must be supplied for 'url' or 'n' must be at least 1",
     missing_expression = "missing expression, perhaps wrap in {}?",
+    missing_url = "at least one URL must be supplied for 'url' or 'n' must be at least 1",
     n_one = "'n' must be 1 or greater if specified with 'url'",
     n_zero = "the number of daemons must be zero or greater",
     numeric_n = "'n' must be numeric, did you mean to provide 'url'?",
     requires_list = "'.args' must be specified as a list",
+    sync_dispatch = "initial sync with dispatcher timed out after 5s",
+    sync_timeout = "sync between host and dispatcher/daemon timed out after 5s",
     url_spec = "numeric value for 'url' is out of bounds"
   ),
   hash = TRUE
 )
+.timelimit <- 5000L

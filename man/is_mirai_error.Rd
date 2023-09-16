@@ -19,21 +19,20 @@ is_error_value(x)
 Logical value TRUE or FALSE.
 }
 \description{
-Validator functions for error value types created by \{mirai\}.
+Validator functions for error value types created by \pkg{mirai}.
 }
 \details{
 Is the object a 'miraiError'. When execution in a mirai process fails,
     the error message is returned as a character string of class 'miraiError'
     and 'errorValue'.
 
-    Is the object a 'miraiInterrupt'. When a mirai is sent a user interrupt,
-    e.g. by ctrl+c during an ongoing \code{\link{call_mirai}}, the mirai
-    will resolve to an empty character string classed as 'miraiInterrupt' and
-    'errorValue'.
+    Is the object a 'miraiInterrupt'. When an ongoing mirai is sent a user
+    interrupt, the mirai will resolve to an empty character string classed as
+    'miraiInterrupt' and 'errorValue'.
 
-    Is the object an 'errorValue', such as a mirai timeout, a 'miraiError'
-    or a 'miraiInterrupt'. This is a catch-all condition that includes all
-    returned error values, such as timeouts, as well as the error types above.
+    Is the object an 'errorValue', such as a mirai timeout, a 'miraiError' or
+    a 'miraiInterrupt'. This is a catch-all condition that includes all
+    returned error values.
 }
 \examples{
 if (interactive()) {

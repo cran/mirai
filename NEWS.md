@@ -1,3 +1,29 @@
+# mirai 0.10.0
+
+* Uses L'Ecuyer-CMRG streams for safe and reproducible (in certain cases) random number generation across parallel processes (thanks @ltierney for discussion during R Project Sprint 2023).
+  + `daemons()` gains the new argument 'seed' to set a random seed for generating these streams.
+  + `daemon()` and `dispatcher()` gain the argument 'rs' which takes a L'Ecuyer-CMRG random seed.
+* New developer functions `nextstream()` and `nextget()`, opening interfaces for packages which extend `mirai`.
+* Dispatcher enhancements and fixes:
+  + Runs in an R session with `--vanilla` flags for efficiency, avoiding lengthy startup configurations (thanks @alexpiper).
+  + Straight pass through without serialization/unserialization allows higher performance and lower memory utilisation.
+  + Fixes edge cases of `status()` occasionally failing to communicate with dispatcher.
+  + Fixes edge cases of ending a session with unresolved mirai resulting in a crash rather than a clean exit.
+* Tweaks to `saisei()`:
+  + specifying argument 'force' as TRUE now immediately regenerates the socket and returns any ongoing mirai as an 'errorValue'. This allows tasks that consistently hang or crash to be cancelled rather than repeated when a new daemon connects.
+  + argument 'i' is now required and no longer defaults to 1L.
+* Tweaks to `status()`:
+  + The daemons status matrix adds a column 'i' for ease of use with functions such as `saisei()` or `launch_local()`.
+  + The 'instance' column is now always cumulative - regenerating a URL with `saisei()` no longer resets the counter but instead turns it negative until a new daemon connects.
+* Improves shell quoting of daemon launch commands, making it easier to deploy manually via `launch_remote()`.
+* `daemons()` and `dispatcher()` gain the argument 'pass' to support password-protected private keys when supplying TLS credentials (thanks @wlandau #76).
+* Cryptographic errors when using dispatcher with TLS are now reported to the user (thanks @wlandau #76).
+* Passing a filename to the 'tls' argument of `daemons()`, `launch_local()` or `launch_remote()` now works correctly as documented.
+* Extends and clarifies documentation surrounding use of certificate authority signed TLS certificates.
+* Certain error messages are more accurate and informative.
+* Increases in performance and lower resource utilisation due to updates in nanonext 0.10.0.
+* Requires nanonext >= 0.10.0 and R >= 3.5.
+
 # mirai 0.9.1
 
 * Secure TLS connections implemented for distributed computing:
