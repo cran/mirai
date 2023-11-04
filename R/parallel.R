@@ -16,9 +16,6 @@
 
 # mirai x parallel -------------------------------------------------------------
 
-# nocov start
-# tested manually in tests/parallel/parallel-tests.R
-
 #' Make Mirai Cluster
 #'
 #' \code{make_cluster} creates a cluster of type 'miraiCluster', which may be
@@ -110,18 +107,14 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
       n <- if (is.list(args)) length(args) else 1L
     } else {
       missing(n) && stop(.messages[["requires_n"]])
-      if (interactive()) {
-        message("Shell commands for deployment on nodes:")
-        printLaunchCmd <- TRUE
-      }
+      if (interactive()) printLaunchCmd <- TRUE
     }
 
-    daemons(url = url, remote = remote, dispatcher = FALSE, resilience = FALSE,
-            cleanup = 0L, ..., .compute = id)
+    daemons(url = url, remote = remote, dispatcher = FALSE, resilience = FALSE, cleanup = FALSE, ..., .compute = id)
 
   } else {
     is.numeric(n) || stop(.messages[["numeric_n"]])
-    daemons(n = n, dispatcher = FALSE, resilience = FALSE, cleanup = 0L, ..., .compute = id)
+    daemons(n = n, dispatcher = FALSE, resilience = FALSE, cleanup = FALSE, ..., .compute = id)
   }
 
   pipe_notify(..[[id]][["sock"]], cv = ..[[id]][["cv"]], add = FALSE, remove = TRUE, flag = TRUE)
@@ -129,10 +122,11 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
   cl <- vector(mode = "list", length = n)
   for (i in seq_along(cl))
     cl[[i]] <- `attributes<-`(new.env(), list(class = "miraiNode", node = i, id = id))
-  reg.finalizer(cl[[1L]], stop_cluster, TRUE)
 
-  if (printLaunchCmd)
+  if (printLaunchCmd) {
+    message("Shell commands for deployment on nodes:")
     print(launch_remote(rep(..[[id]][["urls"]], n), .compute = id))
+  }
 
   `attributes<-`(cl, list(class = c("miraiCluster", "cluster"), id = id))
 
@@ -169,11 +163,13 @@ sendData.miraiNode <- function(node, data) {
   value <- data[["data"]]
   has_tag <- !is.null(value[["tag"]])
 
-  node[["mirai"]] <- mirai(do.call(node, data, quote = TRUE), node = value[["fun"]], data = value[["args"]],
-                           .signal = has_tag, .compute = attr(node, "id"))
+  m <- mirai(do.call(node, data, quote = TRUE), node = value[["fun"]], data = value[["args"]],
+             .signal = has_tag, .compute = attr(node, "id"))
 
   if (has_tag)
-    assign("tag", value[["tag"]], node[["mirai"]])
+    assign("tag", value[["tag"]], m)
+
+  `[[<-`(node, "mirai", m)
 
 }
 
@@ -187,18 +183,15 @@ recvData.miraiNode <- function(node) call_mirai(.subset2(node, "mirai"))
 #'
 recvOneData.miraiCluster <- function(cl) {
 
-  envir <- ..[[attr(cl, "id")]]
-
-  wait(envir[["cv"]]) || {
+  wait(..[[attr(cl, "id")]][["cv"]]) || {
     stop_cluster(cl)
     stop(.messages[["nodes_failed"]])
   }
 
   node <- which.min(lapply(cl, node_unresolved))
   m <- .subset2(.subset2(cl, node), "mirai")
-  out <- list(node = node, value = list(value = .subset2(m, "value"), tag = .subset2(m, "tag")))
-  assign("value", .unresolved_marker, m)
-  out
+  `class<-`(m, NULL)
+  list(node = node, value = m)
 
 }
 
@@ -206,8 +199,9 @@ recvOneData.miraiCluster <- function(cl) {
 #'
 print.miraiCluster <- function(x, ...) {
 
+  id <- attr(.subset2(x, 1L), "id")
   cat(sprintf("< miraiCluster >\n - cluster ID: %s\n - nodes: %d\n - active: %s\n",
-              attr(x, "id"), length(x), as.logical(length(..[[attr(x, "id")]]))), file = stdout())
+              id, length(x), as.logical(length(..[[id]]))), file = stdout())
   invisible(x)
 
 }
@@ -223,6 +217,7 @@ print.miraiNode <- function(x, ...) {
 
 # internals --------------------------------------------------------------------
 
-node_unresolved <- function(node) unresolved(.subset2(node, "mirai"))
-
-# nocov end
+node_unresolved <- function(node) {
+  m <- .subset2(node, "mirai")
+  unresolved(m) || !is.object(m)
+}

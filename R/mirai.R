@@ -160,13 +160,63 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .signal = FALSE, 
   } else {
     url <- auto_tokenized_url()
     sock <- req_socket(url, resend = 0L)
-    if (length(.timeout)) launch_and_sync_daemon(sock = sock, url) else launch_daemon(url)
+    length(.timeout) && launch_and_sync_daemon(sock = sock, url) || launch_daemon(url)
     aio <- request(.context(sock), data = envir, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
     `attr<-`(.subset2(aio, "aio"), "sock", sock)
 
   }
 
   `class<-`(aio, c("mirai", "recvAio"))
+
+}
+
+#' Evaluate Everywhere
+#'
+#' Evaluate an expression 'everywhere' on all connected daemons for the
+#'     specified compute profile. Designed for performing setup operations
+#'     across daemons, resultant changes to the global environment, loaded
+#'     packages or options are persisted regardless of a daemon's 'cleanup'
+#'     setting.
+#'
+#' @inheritParams mirai
+#'
+#' @return Invisible NULL.
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' daemons(1)
+#' everywhere(list2env(x, envir = .GlobalEnv), x = list(a = 1, b = 2))
+#' m <- mirai(a + b)
+#' call_mirai(m)$data
+#' daemons(0)
+#'
+#' daemons(1, dispatcher = FALSE)
+#' everywhere(library(parallel))
+#' m <- mirai("package:parallel" %in% search())
+#' call_mirai(m)$data
+#' daemons(0)
+#'
+#' }
+#'
+#' @export
+#'
+everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
+
+  envir <- ..[[.compute]]
+  length(envir) || stop(.messages[["daemons_required"]])
+
+  expr <- c(as.expression(substitute(.expr)), .snapshot)
+
+  if (length(envir[["sockc"]])) {
+    expr <- c(expr, .timedelay)
+    for (i in seq_len(envir[["n"]]))
+      mirai(.expr = expr, ..., .args = .args, .compute = .compute)
+  } else {
+    for (i in seq_len(max(stat(envir[["sock"]], "pipes"), envir[["n"]])))
+      mirai(.expr = expr, ..., .args = .args, .compute = .compute)
+  }
 
 }
 
@@ -390,14 +440,19 @@ print.miraiInterrupt <- function(x, ...) {
 
 # internals --------------------------------------------------------------------
 
-mk_interrupt_error <- function(e) `class<-`("", c("miraiInterrupt", "errorValue"))
+mk_interrupt_error <- function(e) `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))
 
 mk_mirai_error <- function(e) {
   x <- .subset2(e, "call")
   call <- if (length(x)) deparse(x, width.cutoff = 500L, backtick = TRUE, control = NULL, nlines = 1L)
   msg <- if (is.null(call) || call == "eval(expr = ._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = NULL)")
-    sprintf("Error: %s", .subset2(e, "message")) else
+    strcat("Error: ", .subset2(e, "message")) else
       sprintf("Error in %s: %s", call, .subset2(e, "message"))
   cat(strcat(msg, "\n"), file = stderr());
   `class<-`(msg, c("miraiError", "errorValue", "try-error"))
 }
+
+snapshot <- function() `[[<-`(`[[<-`(`[[<-`(., 'vars', names(.GlobalEnv)), 'se', search()), 'op', .Options)
+
+.snapshot <- expression(mirai:::snapshot())
+.timedelay <- expression(nanonext::msleep(500L))

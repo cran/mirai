@@ -11,7 +11,6 @@ dispatcher(
   ...,
   asyncdial = FALSE,
   token = FALSE,
-  lock = FALSE,
   tls = NULL,
   pass = NULL,
   rs = NULL,
@@ -21,11 +20,11 @@ dispatcher(
 \arguments{
 \item{host}{the character host URL to dial (where tasks are sent from),
 including the port to connect to (and optionally for websockets, a path),
-e.g. 'tcp://10.75.32.70:5555' or 'ws://10.75.32.70:5555/path'.}
+e.g. 'tcp://hostname:5555' or 'ws://10.75.32.70:5555/path'.}
 
 \item{url}{(optional) the character URL or vector of URLs dispatcher should
 listen at, including the port to connect to (and optionally for websockets,
-a path), e.g. 'tcp://10.75.32.70:5555' or 'ws://10.75.32.70:5555/path'.
+a path), e.g. 'tcp://hostname:5555' or 'ws://10.75.32.70:5555/path'.
 Specify 'tls+tcp://' or 'wss://' to use secure TLS connections. Tasks are
 sent to daemons dialled into these URLs. If not supplied, 'n' local
 inter-process URLs will be assigned automatically.}
@@ -36,8 +35,8 @@ Where a single URL is supplied and 'n' > 1, 'n' unique URLs will be
 automatically assigned for daemons to dial into.}
 
 \item{...}{(optional) additional arguments passed through to \code{\link{daemon}}.
-These include 'maxtasks', 'idletime', 'walltime', 'timerstart', and
-'cleanup'.}
+These include 'autoexit', 'cleanup', 'maxtasks', 'idletime', 'walltime'
+and 'timerstart'.}
 
 \item{asyncdial}{[default FALSE] whether to perform dials asynchronously. The
 default FALSE will error if a connection is not immediately possible
@@ -49,10 +48,6 @@ can mask potential connection issues.}
 \item{token}{[default FALSE] if TRUE, appends a unique 40-character token
 to each URL path the dispatcher listens at (not applicable for TCP URLs
 which do not accept a path).}
-
-\item{lock}{[default FALSE] if TRUE, sockets lock once a connection has been
-accepted, preventing further connection attempts. This provides safety
-against more than one daemon attempting to connect to a unique URL.}
 
 \item{tls}{[default NULL] (required for secure TLS connections) \strong{either}
 the character path to a file containing the PEM-encoded TLS certificate

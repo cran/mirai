@@ -24,10 +24,10 @@
 #' @inheritParams daemon
 #' @param host the character host URL to dial (where tasks are sent from),
 #'     including the port to connect to (and optionally for websockets, a path),
-#'     e.g. 'tcp://10.75.32.70:5555' or 'ws://10.75.32.70:5555/path'.
+#'     e.g. 'tcp://hostname:5555' or 'ws://10.75.32.70:5555/path'.
 #' @param url (optional) the character URL or vector of URLs dispatcher should
 #'     listen at, including the port to connect to (and optionally for websockets,
-#'     a path), e.g. 'tcp://10.75.32.70:5555' or 'ws://10.75.32.70:5555/path'.
+#'     a path), e.g. 'tcp://hostname:5555' or 'ws://10.75.32.70:5555/path'.
 #'     Specify 'tls+tcp://' or 'wss://' to use secure TLS connections. Tasks are
 #'     sent to daemons dialled into these URLs. If not supplied, 'n' local
 #'     inter-process URLs will be assigned automatically.
@@ -36,14 +36,17 @@
 #'     Where a single URL is supplied and 'n' > 1, 'n' unique URLs will be
 #'     automatically assigned for daemons to dial into.
 #' @param ... (optional) additional arguments passed through to \code{\link{daemon}}.
-#'     These include 'maxtasks', 'idletime', 'walltime', 'timerstart', and
-#'     'cleanup'.
+#'     These include 'autoexit', 'cleanup', 'maxtasks', 'idletime', 'walltime'
+#'     and 'timerstart'.
+#' @param asyncdial [default FALSE] whether to perform dials asynchronously. The
+#'     default FALSE will error if a connection is not immediately possible
+#'     (e.g. \code{\link{daemons}} has yet to be called on the host, or the
+#'     specified port is not open etc.). Specifying TRUE continues retrying
+#'     (indefinitely) if not immediately successful, which is more resilient but
+#'     can mask potential connection issues.
 #' @param token [default FALSE] if TRUE, appends a unique 40-character token
 #'     to each URL path the dispatcher listens at (not applicable for TCP URLs
 #'     which do not accept a path).
-#' @param lock [default FALSE] if TRUE, sockets lock once a connection has been
-#'     accepted, preventing further connection attempts. This provides safety
-#'     against more than one daemon attempting to connect to a unique URL.
 #' @param tls [default NULL] (required for secure TLS connections) \strong{either}
 #'     the character path to a file containing the PEM-encoded TLS certificate
 #'     and associated private key (may contain additional certificates leading
@@ -65,16 +68,16 @@
 #'
 #' @export
 #'
-dispatcher <- function(host, url = NULL, n = NULL, ...,
-                       asyncdial = FALSE, token = FALSE, lock = FALSE,
-                       tls = NULL, pass = NULL, rs = NULL, monitor = NULL) {
+dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
+                       token = FALSE, tls = NULL, pass = NULL, rs = NULL,
+                       monitor = NULL) {
 
   n <- if (is.numeric(n)) as.integer(n) else length(url)
   n > 0L || stop(.messages[["missing_url"]])
 
+  cv <- cv()
   sock <- socket(protocol = "rep")
   on.exit(reap(sock))
-  cv <- cv()
   pipe_notify(sock, cv = cv, add = FALSE, remove = TRUE, flag = TRUE)
   dial_and_sync_socket(sock = sock, url = host, asyncdial = asyncdial)
 
@@ -121,9 +124,9 @@ dispatcher <- function(host, url = NULL, n = NULL, ...,
     nurl <- if (auto) auto_tokenized_url() else if (token) new_tokenized_url(burl) else burl
     nsock <- req_socket(NULL)
     ncv <- cv()
-    pipe_notify(nsock, cv = ncv, cv2 = cv, flag = FALSE)
+    pipe_notify(nsock, cv = ncv, cv2 = cv, add = TRUE, remove = TRUE, flag = FALSE)
     listen(nsock, url = nurl, tls = tls, error = TRUE)
-    lock && lock(nsock, cv = ncv)
+    lock(nsock, cv = ncv)
     listener <- attr(nsock, "listener")[[1L]]
     if (i == 1L && !auto && parse_url(opt(listener, "url"))[["port"]] == "0") {
       realport <- opt(listener, "tcp-bound-port")
@@ -151,9 +154,8 @@ dispatcher <- function(host, url = NULL, n = NULL, ...,
   if (ctrchannel) {
     sockc <- socket(protocol = "rep")
     on.exit(reap(sockc), add = TRUE, after = FALSE)
-    pipe_notify(sockc, cv = cv, add = FALSE, remove = TRUE, flag = TRUE)
     dial_and_sync_socket(sock = sockc, url = monitor, asyncdial = asyncdial)
-    recv(sockc, mode = 5L, block = .timelimit) && stop(.messages[["sync_timeout"]])
+    recv(sockc, mode = 6L, block = .timelimit) && stop(.messages[["sync_timeout"]])
     send_aio(sockc, c(Sys.getpid(), servernames), mode = 2L)
     cmessage <- recv_aio_signal(sockc, cv = cv, mode = 5L)
   }
@@ -173,7 +175,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ...,
       }
 
       ctrchannel && !unresolved(cmessage) && {
-        i <- .subset2(cmessage, "data")
+        i <- .subset2(cmessage, "value")
         if (i) {
           if (i > 0L && !activevec[[i]]) {
             reap(attr(servers[[i]], "listener")[[1L]])
@@ -186,11 +188,11 @@ dispatcher <- function(host, url = NULL, n = NULL, ...,
             i <- -i
             reap(servers[[i]])
             servers[[i]] <- nsock <- req_socket(NULL)
-            pipe_notify(nsock, cv = active[[i]], cv2 = cv, flag = FALSE)
+            pipe_notify(nsock, cv = active[[i]], cv2 = cv, add = TRUE, remove = TRUE, flag = FALSE)
             data <- servernames[i] <- if (auto) auto_tokenized_url() else new_tokenized_url(basenames[i])
             instance[i] <- -abs(instance[i])
             listen(nsock, url = data, tls = tls, error = TRUE)
-            lock && lock(nsock, cv = active[[i]])
+            lock(nsock, cv = active[[i]])
 
           } else {
             data <- ""
@@ -208,11 +210,11 @@ dispatcher <- function(host, url = NULL, n = NULL, ...,
         if (length(queue[[i]]) > 2L && !unresolved(queue[[i]][["res"]])) {
           req <- .subset2(queue[[i]][["res"]], "value")
           if (is.object(req)) req <- serialize(req, NULL)
-          send(queue[[i]][["ctx"]], data = req, mode = 2L)
+          send_aio(queue[[i]][["ctx"]], data = req, mode = 2L)
           q <- queue[[i]][["daemon"]]
-          if (req[1L] == .next_format_identifier) {
+          if (req[1L] == .nextmode) {
             ctx <- .context(servers[[q]])
-            send_aio(ctx, data = .next_format_identifier, mode = 2L)
+            send_aio(ctx, data = .nextmode, mode = 2L)
             reap(ctx)
           } else {
             serverfree[q] <- TRUE
@@ -229,7 +231,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ...,
         for (q in free)
           for (i in seq_n) {
             if (length(queue[[i]]) == 2L && !unresolved(queue[[i]][["req"]])) {
-              queue[[i]][["res"]] <- request_signal(.context(servers[[q]]), data = queue[[i]][["req"]], cv = cv, send_mode = 2L, recv_mode = 8L)
+              queue[[i]][["res"]] <- request_signal(.context(servers[[q]]), data = .subset2(queue[[i]][["req"]], "value"), cv = cv, send_mode = 2L, recv_mode = 8L)
               queue[[i]][["daemon"]] <- q
               serverfree[q] <- FALSE
               assigned[q] <- assigned[q] + 1L
@@ -316,7 +318,7 @@ query_status <- function(envir) {
 }
 
 init_monitor <- function(sockc, envir) {
-  res <- query_dispatcher(sockc, command = 0L, mode = 2L)
+  res <- query_dispatcher(sockc, command = FALSE, mode = 2L)
   is.object(res) && stop(.messages[["sync_timeout"]])
   `[[<-`(`[[<-`(`[[<-`(envir, "sockc", sockc), "urls", res[-1L]), "pid", as.integer(res[1L]))
 }
@@ -328,3 +330,5 @@ get_and_reset_env <- function(x) {
     candidate
   }
 }
+
+.nextmode <- as.raw(7L)

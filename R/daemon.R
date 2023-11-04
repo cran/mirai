@@ -24,13 +24,19 @@
 #'
 #' @param url the character host or dispatcher URL to dial into, including the
 #'     port to connect to (and optionally for websockets, a path), e.g.
-#'     'tcp://10.75.32.70:5555' or 'ws://10.75.32.70:5555/path'.
-#' @param asyncdial [default FALSE] whether to perform dials asynchronously. The
-#'     default FALSE will error if a connection is not immediately possible
-#'     (e.g. \code{\link{daemons}} has yet to be called on the host, or the
-#'     specified port is not open etc.). Specifying TRUE continues retrying
-#'     (indefinitely) if not immediately successful, which is more resilient but
-#'     can mask potential connection issues.
+#'     'tcp://hostname:5555' or 'ws://10.75.32.70:5555/path'.
+#' @param autoexit [default TRUE] logical value, whether the daemon should
+#'     exit automatically when its socket connection ends (see 'Persistence'
+#'     section below).
+#' @param cleanup [default TRUE] logical value, whether to perform cleanup of
+#'     the global environment and restore loaded packages and options to an
+#'     initial state after each evaluation. For more granular control, also
+#'     accepts an integer value (see 'Cleanup Options' section below).
+#' @param output [default FALSE] logical value, to output generated stdout /
+#'     stderr if TRUE, or else discard if FALSE. Specify as TRUE in the '...'
+#'     argument to \code{\link{daemons}} or \code{\link{launch_local}} to provide
+#'     redirection of output to the host process (applicable only for local
+#'     daemons when not using dispatcher).
 #' @param maxtasks [default Inf] the maximum number of tasks to execute (task
 #'     limit) before exiting.
 #' @param idletime [default Inf] maximum idle time, since completion of the last
@@ -40,19 +46,7 @@
 #' @param timerstart [default 0L] number of completed tasks after which to start
 #'     the timer for 'idletime' and 'walltime'. 0L implies timers are started
 #'     upon launch.
-#' @param output [default FALSE] logical value, to output generated stdout /
-#'     stderr if TRUE, or else discard if FALSE. Specify as TRUE in the '...'
-#'     argument to \code{\link{daemons}} or \code{\link{launch_local}} to provide
-#'     redirection of output to the host process (applicable only for local
-#'     daemons when not using dispatcher).
 #' @param ... reserved but not currently used.
-#' @param cleanup [default 7L] Integer additive bitmask controlling whether to
-#'     perform cleanup of the global environment (1L), reset loaded packages to
-#'     an initial state (2L), reset options to an initial state (4L), and
-#'     perform garbage collection (8L) after each evaluation. This option should
-#'     not normally be modified. Do not set unless you are certain you require
-#'     persistence across evaluations. Note: it may be an error to reset options
-#'     but not loaded packages if packages set options on load.
 #' @param tls [default NULL] required for secure TLS connections over 'tls+tcp://'
 #'     or 'wss://'. \strong{Either} the character path to a file containing
 #'     X.509 certificate(s) in PEM format, comprising the certificate authority
@@ -71,18 +65,49 @@
 #'     resources may be added or removed dynamically and the host or
 #'     dispatcher automatically distributes tasks to all available daemons.
 #'
+#' @section Persistence:
+#'
+#'     The 'autoexit' argument governs persistence settings for the daemon. The
+#'     default TRUE ensures that it will exit cleanly under all circumstances
+#'     once its socket connection has ended.
+#'
+#'     Setting to FALSE allows the daemon to persist indefinitely even when
+#'     there is no longer a socket connection. This allows a host session to end
+#'     and a new session to connect at the URL where the daemon is dialled in.
+#'     Daemons must be terminated with \code{daemons(NULL)} in this case, which
+#'     sends an exit signal to all connected daemons.
+#'
+#'     Persistence also implies that dials are performed asynchronously, which
+#'     means retries are attempted (indefinitely) if not immediately successful.
+#'     This is resilient behaviour but can mask potential connection issues.
+#'
+#' @section Cleanup Options:
+#'
+#'     The 'cleanup' argument also accepts an integer value, which operates an
+#'     additive bitmask: perform cleanup of the global environment (1L), reset
+#'     loaded packages to an initial state (2L), restore options to an initial
+#'     state (4L), and perform garbage collection (8L).
+#'
+#'     As an example, to perform cleanup of the global environment and garbage
+#'     collection, specify 9L (1L + 8L). The default argument value of TRUE
+#'     performs all actions apart from garbage collection and is equivalent to a
+#'     value of 7L.
+#'
+#'     Caution: do not reset options but not loaded packages if packages set
+#'     options on load.
+#'
 #' @export
 #'
-daemon <- function(url, asyncdial = FALSE, maxtasks = Inf, idletime = Inf,
-                   walltime = Inf, timerstart = 0L, output = FALSE, ...,
-                   cleanup = 7L, tls = NULL, rs = NULL) {
+daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
+                   maxtasks = Inf, idletime = Inf, walltime = Inf, timerstart = 0L,
+                   ..., tls = NULL, rs = NULL) {
 
+  cv <- cv()
   sock <- socket(protocol = "rep")
   on.exit(reap(sock))
-  cv <- cv()
-  pipe_notify(sock, cv = cv, add = FALSE, remove = TRUE, flag = TRUE)
+  autoexit && pipe_notify(sock, cv = cv, add = FALSE, remove = TRUE, flag = TRUE)
   if (length(tls)) tls <- tls_config(client = tls)
-  dial_and_sync_socket(sock = sock, url = url, asyncdial = asyncdial, tls = tls)
+  dial_and_sync_socket(sock = sock, url = url, asyncdial = !autoexit, tls = tls)
 
   if (is.numeric(rs)) `[[<-`(.GlobalEnv, ".Random.seed", as.integer(rs))
   if (idletime > walltime) idletime <- walltime else if (idletime == Inf) idletime <- NULL
@@ -97,8 +122,7 @@ daemon <- function(url, asyncdial = FALSE, maxtasks = Inf, idletime = Inf,
       close(devnull)
     }, add = TRUE)
   }
-  op <- .Options
-  se <- search()
+  `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", ".Random.seed")
   count <- 0L
   start <- mclock()
 
@@ -106,7 +130,7 @@ daemon <- function(url, asyncdial = FALSE, maxtasks = Inf, idletime = Inf,
 
     ctx <- .context(sock)
     aio <- recv_aio_signal(ctx, cv = cv, mode = 1L, timeout = idletime)
-    wait(cv) || return(invisible())
+    wait(cv) || break
     ._mirai_. <- .subset2(aio, "data")
     is.environment(._mirai_.) || {
       count < timerstart && {
@@ -121,17 +145,13 @@ daemon <- function(url, asyncdial = FALSE, maxtasks = Inf, idletime = Inf,
 
     (count >= maxtasks || count > timerstart && mclock() - start >= walltime) && {
       send(ctx, data = data, mode = 3L)
-      data <- recv_aio_signal(sock, cv = cv, mode = 8L)
+      data <- recv_aio_signal(sock, cv = cv, mode = 8L, timeout = .timelimit)
       wait(cv)
       break
     }
 
     send(ctx, data = data, mode = 1L)
-
-    if (cleanup[1L]) rm(list = (vars <- names(.GlobalEnv))[vars != ".Random.seed"], envir = .GlobalEnv)
-    if (cleanup[2L]) lapply((new <- search())[!new %in% se], detach, unload = TRUE, character.only = TRUE)
-    if (cleanup[3L]) options(op)
-    if (cleanup[4L]) gc(verbose = FALSE)
+    perform_cleanup(cleanup)
     if (count <= timerstart) start <- mclock()
 
   }
@@ -143,15 +163,13 @@ daemon <- function(url, asyncdial = FALSE, maxtasks = Inf, idletime = Inf,
 #' Implements an ephemeral executor for the remote process.
 #'
 #' @inheritParams daemon
-#' @param exitlinger [default 2000L] time in milliseconds to linger before
-#'     exiting to allow the socket to complete sends currently in progress.
 #'
 #' @return Invisible NULL.
 #'
 #' @keywords internal
 #' @export
 #'
-.daemon <- function(url, exitlinger = 2000L) {
+.daemon <- function(url) {
 
   sock <- socket(protocol = "rep", dial = url, autostart = NA)
   on.exit(reap(sock))
@@ -159,7 +177,7 @@ daemon <- function(url, asyncdial = FALSE, maxtasks = Inf, idletime = Inf,
   data <- tryCatch(eval(expr = ._mirai_.[[".expr"]], envir = ._mirai_., enclos = NULL),
                    error = mk_mirai_error, interrupt = mk_interrupt_error)
   send(sock, data = data, mode = 1L, block = TRUE)
-  msleep(exitlinger)
+  msleep(2000L)
 
 }
 
@@ -167,16 +185,20 @@ daemon <- function(url, asyncdial = FALSE, maxtasks = Inf, idletime = Inf,
 
 dial_and_sync_socket <- function(sock, url, asyncdial, tls = NULL) {
   cv <- cv()
-  if (length(tls) && !asyncdial) {
-    pipe_notify(sock, cv = cv, add = TRUE, remove = FALSE, flag = TRUE)
-    dial(sock, url = url, autostart = TRUE, tls = tls, error = TRUE)
-    until(cv, .timelimit) && stop(.messages[["sync_timeout"]])
-  } else {
-    pipe_notify(sock, cv = cv, add = TRUE, remove = FALSE, flag = FALSE)
-    dial(sock, url = url, autostart = length(tls) || asyncdial || NA, tls = tls, error = TRUE)
-    wait(cv)
-  }
+  pipe_notify(sock, cv = cv, add = TRUE, remove = FALSE, flag = FALSE)
+  dial(sock, url = url, autostart = asyncdial || NA, tls = tls, error = TRUE)
+  wait(cv)
 }
 
-parse_cleanup <- function(cleanup)
-  c(cleanup %% 2L, (clr <- as.raw(cleanup)) & as.raw(2L), clr & as.raw(4L), clr & as.raw(8L))
+parse_cleanup <- function(cleanup) {
+  is.logical(cleanup) ||
+    return(c(as.integer(cleanup) %% 2L, (clr <- as.raw(cleanup)) & as.raw(2L), clr & as.raw(4L), clr & as.raw(8L)))
+  c(cleanup, cleanup, cleanup, FALSE)
+}
+
+perform_cleanup <- function(cleanup) {
+  if (cleanup[1L]) rm(list = (vars <- names(.GlobalEnv))[!vars %in% .[["vars"]]], envir = .GlobalEnv)
+  if (cleanup[2L]) lapply((new <- search())[!new %in% .[["se"]]], detach, unload = TRUE, character.only = TRUE)
+  if (cleanup[3L]) options(.[["op"]])
+  if (cleanup[4L]) gc(verbose = FALSE)
+}

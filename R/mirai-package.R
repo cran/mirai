@@ -36,7 +36,7 @@
 #'
 #' @section Reference Manual:
 #'
-#' \code{vignette("reference", package = "mirai")}
+#' \code{vignette("mirai", package = "mirai")}
 #'
 #' @section Links:
 #'
@@ -50,10 +50,10 @@
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
-#' @importFrom nanonext call_aio .context cv cv_value dial is_error_value listen
-#'     lock mclock msleep opt opt<- parse_url pipe_notify random reap recv
-#'     recv_aio_signal request request_signal send send_aio socket stat stop_aio
-#'     strcat tls_config unresolved until wait write_cert
+#' @importFrom nanonext base64dec call_aio .context cv cv_value dial
+#'     is_error_value listen lock mclock msleep opt opt<- parse_url pipe_notify
+#'     random reap recv recv_aio_signal request request_signal send send_aio
+#'     socket stat stop_aio strcat tls_config unresolved .until wait write_cert
 #' @importFrom parallel nextRNGStream stopCluster
 #' @importFrom stats rexp
 #'
@@ -67,8 +67,6 @@ NULL
 
 .onLoad <- function(libname, pkgname) {
 
-  .. <<- new.env(hash = FALSE, parent = environment(daemons))
-  `[[<-`(.., "default", new.env(hash = FALSE, parent = ..))
   switch(
     Sys.info()[["sysname"]],
     Linux = {
@@ -85,28 +83,55 @@ NULL
     }
   )
 
-  rversion <- .subset2(getRversion(), 1L)
-  if (rversion[1L] >= 4 && rversion[2L] >= 4 || rversion[1L] >= 5) {
-    ns <- getNamespace("parallel")
-    registerS3method("recvData", "miraiNode", recvData.miraiNode, ns)
-    registerS3method("sendData", "miraiNode", sendData.miraiNode, ns)
-    registerS3method("recvOneData", "miraiCluster", recvOneData.miraiCluster, ns)
-  }
+  registerParallelMethods()
+  if (requireNamespace("promises", quietly = TRUE)) registerPromisesMethods()
+
+}
+
+registerParallelMethods <- function() {
+
+  ns <- .getNamespace("parallel")
+  `[[<-`(
+    `[[<-`(
+      `[[<-`(
+        ns[[".__S3MethodsTable__."]],
+        "recvData.miraiNode", recvData.miraiNode
+      ), "sendData.miraiNode", sendData.miraiNode
+    ), "recvOneData.miraiCluster", recvOneData.miraiCluster
+  )
+  regs <- rbind(ns[[".__NAMESPACE__."]][["S3methods"]],
+                c("recvData", "miraiNode", "recvData.miraiNode", NA_character_),
+                c("sendData", "miraiNode", "sendData.miraiNode", NA_character_),
+                c("recvOneData", "miraiCluster", "recvOneData.miraiCluster", NA_character_))
+  `[[<-`(ns[[".__NAMESPACE__."]], "S3methods", regs)
+
+}
+
+registerPromisesMethods <- function() {
+
+  ns <- .getNamespace("promises")
+  `[[<-`(ns[[".__S3MethodsTable__."]], "as.promise.mirai", as.promise.mirai)
+  regs <- rbind(ns[[".__NAMESPACE__."]][["S3methods"]],
+                c("as.promise", "mirai", "as.promise.mirai", NA_character_))
+  `[[<-`(ns[[".__NAMESPACE__."]], "S3methods", regs)
 
 }
 
 # nocov end
 
-.. <- NULL
+. <- new.env(hash = FALSE)
+.. <- new.env(hash = FALSE)
 .command <- NULL
 .urlscheme <- NULL
 
-.intmax <- .Machine[["integer.max"]]
+.intmax <- 2147483647L
+.timelimit <- 5000L
 .messages <- list2env(
   list(
-    arglen = "length of 'args' must be 1 or the same length as 'url'",
+    arglen = "'args' and/or 'url' must be of length 1 or the same length",
     cluster_inactive = "cluster is no longer active",
     correct_context = "must be called in the correct context e.g. as a function argument",
+    daemons_required = "requires daemons to be set",
     daemons_unset = "a numeric value for 'url' requires daemons to be set",
     dot_required = "'.' must be an element of the character vector(s) supplied to 'args'",
     missing_expression = "missing expression, perhaps wrap in {}?",
@@ -126,10 +151,8 @@ NULL
   ),
   hash = TRUE
 )
-.next_format_identifier <- as.raw(7L)
-.timelimit <- 5000L
 
-.unresolved_marker <- `class<-`(new.env(parent = emptyenv()), "unresolvedValue")
+as.promise <- NULL
 recvData <- NULL
 recvOneData <- NULL
 sendData <- NULL

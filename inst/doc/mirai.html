@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<title>mirai - Minimalist Async Evaluation Framework for R</title>
+<style type="text/css">
+/**
+ * Prism.s theme ported from highlight.js's xcode style
+ */
+pre code {
+  padding: 1em;
+}
+.token.comment {
+  color: #007400;
+}
+.token.punctuation {
+  color: #999;
+}
+.token.tag,
+.token.selector {
+  color: #aa0d91;
+}
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol {
+  color: #1c00cf;
+}
+.token.property,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin {
+  color: #c41a16;
+}
+.token.inserted {
+  background-color: #ccffd8;
+}
+.token.deleted {
+  background-color: #ffebe9;
+}
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #9a6e3a;
+}
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #836c28;
+}
+.token.function,
+.token.class-name {
+  color: #DD4A68;
+}
+.token.regex,
+.token.important,
+.token.variable {
+  color: #5c2699;
+}
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+.token.italic {
+  font-style: italic;
+}
+</style>
+<style type="text/css">
+body {
+  font-family: sans-serif;
+  max-width: 800px;
+  margin: auto;
+  padding: 1em;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+body, .footnotes, code { font-size: .9em; }
+li li { font-size: .95em; }
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+pre, img { max-width: 100%; }
+pre, pre:hover {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+pre code {
+  display: block;
+  overflow-x: auto;
+}
+code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
+:not(pre) > code, code[class] { background-color: #F8F8F8; }
+code.language-undefined, pre > code:not([class]) {
+  background-color: inherit;
+  border: 1px solid #eee;
+}
+table {
+  margin: auto;
+  border-top: 1px solid #666;
+}
+table thead th { border-bottom: 1px solid #ddd; }
+th, td { padding: 5px; }
+thead, tfoot, tr:nth-child(even) { background: #eee; }
+blockquote {
+  color: #666;
+  margin: 0;
+  padding-left: 1em;
+  border-left: 0.5em solid #eee;
+}
+hr, .footnotes::before { border: 1px dashed #ddd; }
+.frontmatter { text-align: center; }
+#TOC .numbered li { list-style: none; }
+#TOC .numbered { padding-left: 0; }
+#TOC .numbered ul { padding-left: 1em; }
+table, .body h2 { border-bottom: 1px solid #666; }
+.body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
+.footnote-ref a::before { content: "["; }
+.footnote-ref a::after { content: "]"; }
+section.footnotes::before {
+  content: "";
+  display: block;
+  max-width: 20em;
+}
+
+@media print {
+  body {
+    font-size: 12pt;
+    max-width: 100%;
+  }
+  tr, img { page-break-inside: avoid; }
+}
+@media only screen and (min-width: 992px) {
+  pre { white-space: pre; }
+}
+</style>
+</head>
+<body>
+<div class="include-before">
+</div>
+<div class="frontmatter">
+<div class="title"><h1>mirai - Minimalist Async Evaluation Framework for R</h1></div>
+<div class="author"><h2></h2></div>
+<div class="date"><h3></h3></div>
+</div>
+<div class="body">
+<h3 id="table-of-contents">Table of Contents</h3>
+<p><a href="https://shikokuchuo.net/mirai/" alt="mirai"><img src="data:image/png;base64,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" alt="mirai logo" align="right" width="120"/></a></p>
+<ol>
+<li><a href="#example-1-compute-intensive-operations">Example 1: Compute-intensive Operations</a></li>
+<li><a href="#example-2-io-bound-operations">Example 2: I/O-bound Operations</a></li>
+<li><a href="#example-3-resilient-pipelines">Example 3: Resilient Pipelines</a></li>
+<li><a href="#daemons-local-persistent-processes">Daemons: Local Persistent Processes</a></li>
+<li><a href="#distributed-computing-remote-daemons">Distributed Computing: Remote Daemons</a></li>
+<li><a href="#distributed-computing-launching-daemons">Distributed Computing: Launching Daemons</a></li>
+<li><a href="#distributed-computing-tls-secure-connections">Distributed Computing: TLS Secure Connections</a></li>
+<li><a href="#compute-profiles">Compute Profiles</a></li>
+<li><a href="#errors-interrupts-and-timeouts">Errors, Interrupts and Timeouts</a></li>
+<li><a href="#parallel-clusters">Parallel Clusters</a></li>
+</ol>
+<h3 id="example-1-compute-intensive-operations">Example 1: Compute-intensive Operations</h3>
+<p>Use case: minimise execution times by performing long-running tasks concurrently in separate processes.</p>
+<p>Multiple long computes (model fits etc.) can be performed in parallel on available computing cores.</p>
+<p>Use <code>mirai()</code> to evaluate an expression asynchronously in a separate, clean R process.</p>
+<p>A ‘mirai’ object is returned immediately.</p>
+<pre><code class="language-r">library(mirai)
+
+m &lt;- mirai(
+  {
+    res &lt;- rnorm(n) + m
+    res / rev(res)
+  },
+  m = runif(1),
+  n = 1e8
+)
+
+m
+#&gt; &lt; mirai &gt;
+#&gt;  - $data for evaluated result
+</code></pre>
+<p>Above, all specified <code>name = value</code> pairs are passed through to the ‘mirai’.</p>
+<p>The ‘mirai’ yields an ‘unresolved’ logical NA whilst the async operation is ongoing.</p>
+<pre><code class="language-r">m$data
+#&gt; 'unresolved' logi NA
+</code></pre>
+<p>Upon completion, the ‘mirai’ resolves automatically to the evaluated result.</p>
+<pre><code class="language-r">m$data |&gt; str()
+#&gt;  num [1:100000000] 0.9602 -0.0654 0.1405 0.1419 1.4362 ...
+</code></pre>
+<p>Alternatively, explicitly call and wait for the result using <code>call_mirai()</code>.</p>
+<pre><code class="language-r">call_mirai(m)$data |&gt; str()
+#&gt;  num [1:100000000] 0.9602 -0.0654 0.1405 0.1419 1.4362 ...
+</code></pre>
+<p>For easy programmatic use of <code>mirai()</code>, ‘.expr’ accepts a pre-constructed language object, and also a list of named arguments passed via ‘.args’. So, the following would be equivalent to the above:</p>
+<pre><code class="language-r">expr &lt;- quote({
+  res &lt;- rnorm(n) + m
+  res / rev(res)
+})
+
+args &lt;- list(m = runif(1), n = 1e8)
+
+m &lt;- mirai(.expr = expr, .args = args)
+
+call_mirai(m)$data |&gt; str()
+#&gt;  num [1:100000000] -0.0995 -0.6443 8.0209 0.9771 0.917 ...
+</code></pre>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="example-2-i-o-bound-operations">Example 2: I/O-bound Operations</h3>
+<p>Use case: ensure execution flow of the main process is not blocked.</p>
+<p>High-frequency real-time data cannot be written to file/database synchronously without disrupting the execution flow.</p>
+<p>Cache data in memory and use <code>mirai()</code> to perform periodic write operations concurrently in a separate process.</p>
+<p>Below, ‘.args’ is used to pass a list of objects already present in the calling environment to the mirai by name. This is an alternative use of ‘.args’, and may be combined with <code>...</code> to also pass in <code>name = value</code> pairs.</p>
+<pre><code class="language-r">library(mirai)
+
+x &lt;- rnorm(1e6)
+file &lt;- tempfile()
+
+m &lt;- mirai(write.csv(x, file = file), .args = list(x, file))
+</code></pre>
+<p>A ‘mirai’ object is returned immediately.</p>
+<p><code>unresolved()</code> may be used in control flow statements to perform actions which depend on resolution of the ‘mirai’, both before and after.</p>
+<p>This means there is no need to actually wait (block) for a ‘mirai’ to resolve, as the example below demonstrates.</p>
+<pre><code class="language-r"># unresolved() queries for resolution itself so no need to use it again within the while loop
+
+while (unresolved(m)) {
+  cat(&quot;while unresolved\n&quot;)
+  Sys.sleep(0.5)
+}
+#&gt; while unresolved
+#&gt; while unresolved
+
+cat(&quot;Write complete:&quot;, is.null(m$data))
+#&gt; Write complete: TRUE
+</code></pre>
+<p>Now actions which depend on the resolution may be processed, for example the next write.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="example-3-resilient-pipelines">Example 3: Resilient Pipelines</h3>
+<p>Use case: isolating code that can potentially fail in a separate process to ensure continued uptime.</p>
+<p>As part of a data science / machine learning pipeline, iterations of model training may periodically fail for stochastic and uncontrollable reasons (e.g. buggy memory management on graphics cards).</p>
+<p>Running each iteration in a ‘mirai’ isolates this potentially-problematic code such that even if it does fail, it does not bring down the entire pipeline.</p>
+<pre><code class="language-r">library(mirai)
+
+run_iteration &lt;- function(i) {
+
+  if (runif(1) &lt; 0.1) stop(&quot;random error\n&quot;, call. = FALSE) # simulates a stochastic error rate
+  sprintf(&quot;iteration %d successful\n&quot;, i)
+
+}
+
+for (i in 1:10) {
+
+  m &lt;- mirai(run_iteration(i), .args = list(run_iteration, i))
+  while (is_error_value(call_mirai(m)$data)) {
+    cat(m$data)
+    m &lt;- mirai(run_iteration(i), .args = list(run_iteration, i))
+  }
+  cat(m$data)
+
+}
+#&gt; iteration 1 successful
+#&gt; iteration 2 successful
+#&gt; Error: random error
+#&gt; iteration 3 successful
+#&gt; iteration 4 successful
+#&gt; iteration 5 successful
+#&gt; iteration 6 successful
+#&gt; iteration 7 successful
+#&gt; iteration 8 successful
+#&gt; iteration 9 successful
+#&gt; iteration 10 successful
+</code></pre>
+<p>Further, by testing the return value of each ‘mirai’ for errors, error-handling code is then able to automate recovery and re-attempts, as in the above example. Further details on <a href="#errors-interrupts-and-timeouts">error handling</a> can be found in the section below.</p>
+<p>The end result is a resilient and fault-tolerant pipeline that minimises downtime by eliminating interruptions of long computes.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="daemons-local-persistent-processes">Daemons: Local Persistent Processes</h3>
+<p>Daemons, or persistent background processes, may be set to receive ‘mirai’ requests.</p>
+<p>This is potentially more efficient as new processes no longer need to be created on an <em>ad hoc</em> basis.</p>
+<h4 id="with-dispatcher-default">With Dispatcher (default)</h4>
+<p>Call <code>daemons()</code> specifying the number of daemons to launch.</p>
+<pre><code class="language-r">daemons(6)
+#&gt; [1] 6
+</code></pre>
+<p>To view the current status, <code>status()</code> provides the number of active connections along with a matrix of statistics for each daemon.</p>
+<pre><code class="language-r">status()
+#&gt; $connections
+#&gt; [1] 1
+#&gt; 
+#&gt; $daemons
+#&gt;                                     i online instance assigned complete
+#&gt; abstract://1c2b00571cd363c90d677da0 1      1        1        0        0
+#&gt; abstract://7c6ba9326fd72cdb041a42ee 2      1        1        0        0
+#&gt; abstract://36357f7983e84e8691d5223c 3      1        1        0        0
+#&gt; abstract://c7b11b29b09226df575de2d1 4      1        1        0        0
+#&gt; abstract://4a21df1c29ef8e540c2992a0 5      1        1        0        0
+#&gt; abstract://756f6ea8aa121ad4abdf82d9 6      1        1        0        0
+</code></pre>
+<p>The default <code>dispatcher = TRUE</code> creates a <code>dispatcher()</code> background process that connects to individual daemon processes on the local machine. This ensures that tasks are dispatched efficiently on a first-in first-out (FIFO) basis to daemons for processing. Tasks are queued at the dispatcher and sent to a daemon as soon as it can accept the task for immediate execution.</p>
+<p>Dispatcher uses synchronisation primitives from <a href="https://doi.org/10.5281/zenodo.7903429"><code>nanonext</code></a>, waiting upon rather than polling for tasks, which is efficient both in terms of consuming no resources while waiting, and also being fully synchronised with events (having no latency).</p>
+<pre><code class="language-r">daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p>Set the number of daemons to zero to reset. This reverts to the default of creating a new background process for each ‘mirai’ request.</p>
+<h4 id="without-dispatcher">Without Dispatcher</h4>
+<p>Alternatively, specifying <code>dispatcher = FALSE</code>, the background daemons connect directly to the host process.</p>
+<pre><code class="language-r">daemons(6, dispatcher = FALSE)
+#&gt; [1] 6
+</code></pre>
+<p>Requesting the status now shows 6 connections, along with the host URL at <code>$daemons</code>.</p>
+<pre><code class="language-r">status()
+#&gt; $connections
+#&gt; [1] 6
+#&gt; 
+#&gt; $daemons
+#&gt; [1] &quot;abstract://4c2accce1ba3e943d774d59c&quot;
+</code></pre>
+<p>This implementation sends tasks immediately, and ensures that tasks are evenly-distributed amongst daemons. This means that optimal scheduling is not guaranteed as the duration of tasks cannot be known <em>a priori</em>. As an example, tasks could be queued at a daemon behind a long-running task, whilst other daemons are idle having already completed their tasks.</p>
+<p>The advantage of this approach is that it is low-level and does not require an additional dispatcher process. It is well-suited to working with similar-length tasks, or where the number of concurrent tasks typically does not exceed available daemons.</p>
+<p><code>everywhere()</code> may be used to evaluate an expression on all connected daemons and persist the resultant state, regardless of a daemon’s ‘cleanup’ setting.</p>
+<pre><code class="language-r">everywhere(library(parallel))
+</code></pre>
+<p>The above keeps the <code>parallel</code> package loaded for all evaluations. Other types of setup task may also be performed such as making a common resource available, etc.</p>
+<pre><code class="language-r">daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p>Set the number of daemons to zero to reset.</p>
+<h4 id="everywhere">Everywhere</h4>
+<p><code>everywhere()</code> may be used to evaluate an expression on all connected daemons and persist the resultant state, regardless of a daemon’s ‘cleanup’ setting. This may be used for performing setup of the evaluation environment, with particular packages loaded, or common resources made available, etc.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="distributed-computing-remote-daemons">Distributed Computing: Remote Daemons</h3>
+<p>The daemons interface may also be used to send tasks for computation to remote daemon processes on the network.</p>
+<p>Call <code>daemons()</code> specifying ‘url’ as a character string such as: ‘tcp://10.75.32.70:5555’ at which daemon processes should connect to. Alternatively, use <code>host_url()</code> to automatically construct a valid URL.</p>
+<p>IPv6 addresses are also supported and must be enclosed in square brackets <code>[]</code> to avoid confusion with the final colon separating the port. For example, port 5555 on the IPv6 address <code>::ffff:a6f:50d</code> would be specified as <code>tcp://[::ffff:a6f:50d]:5555</code>.</p>
+<p>For options on actually launching the daemons, please see the next section.</p>
+<h4 id="connecting-to-remote-daemons-through-dispatcher">Connecting to Remote Daemons Through Dispatcher</h4>
+<p>The default <code>dispatcher = TRUE</code> creates a background <code>dispatcher()</code> process on the local machine, which listens to a vector of URLs that remote <code>daemon()</code> processes dial in to, with each daemon having its own unique URL.</p>
+<p>It is recommended to use a websocket URL starting <code>ws://</code> instead of TCP in this scenario (used interchangeably with <code>tcp://</code>). A websocket URL supports a path after the port number, which can be made unique for each daemon. In this way a dispatcher can connect to an arbitrary number of daemons over a single port.</p>
+<p>Supplying a vector of URLs allows the use of arbitrary port numbers / paths. ‘n’ does not need to be specified if it can be inferred from the length of the ‘url’ vector, for example:</p>
+<pre><code class="language-r">daemons(url = c(&quot;ws://10.75.32.70:5566/cpu&quot;, &quot;ws://10.75.32.70:5566/gpu&quot;, &quot;ws://10.75.32.70:7788/1&quot;))
+</code></pre>
+<p>Alternatively, below a single URL is supplied, along with <code>n = 4</code> to specify that the dispatcher should listen at 4 URLs. In such a case, an integer sequence is automatically appended to the path <code>/1</code> through <code>/4</code> to produce the URLs.</p>
+<pre><code class="language-r">daemons(n = 4, url = host_url(port = 5555))
+#&gt; [1] 4
+</code></pre>
+<p>Requesting status on the host machine:</p>
+<pre><code class="language-r">status()
+#&gt; $connections
+#&gt; [1] 1
+#&gt; 
+#&gt; $daemons
+#&gt;                     i online instance assigned complete
+#&gt; tcp://hostname:5555 1      0        0        0        0
+#&gt; tcp://hostname:5556 2      0        0        0        0
+#&gt; tcp://hostname:5557 3      0        0        0        0
+#&gt; tcp://hostname:5558 4      0        0        0        0
+</code></pre>
+<p>As per the local case, <code>$connections</code> shows the single connection to dispatcher, however <code>$daemons</code> now provides a matrix of statistics for the remote daemons.</p>
+<ul>
+<li><code>i</code> index number.</li>
+<li><code>online</code> shows as 1 when there is an active connection, or else 0 if a daemon has yet to connect or has disconnected.</li>
+<li><code>instance</code> increments by 1 every time there is a new connection at a URL. This counter is designed to track new daemon instances connecting after previous ones have ended (due to time-outs etc.). The count becomes negative immediately after a URL is regenerated by <code>saisei()</code>, but increments again once a new daemon connects.</li>
+<li><code>assigned</code> shows the cumulative number of tasks assigned to the daemon.</li>
+<li><code>complete</code> shows the cumulative number of tasks completed by the daemon.</li>
+</ul>
+<p>Dispatcher automatically adjusts to the number of daemons actually connected. Hence it is possible to dynamically scale up or down the number of daemons according to requirements (limited to the ‘n’ URLs assigned).</p>
+<p>To reset all connections and revert to default behaviour:</p>
+<pre><code class="language-r">daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p>Closing the connection causes the dispatcher to exit automatically, and in turn all connected daemons when their respective connections with the dispatcher are terminated.</p>
+<h4 id="connecting-to-remote-daemons-directly">Connecting to Remote Daemons Directly</h4>
+<p>By specifying <code>dispatcher = FALSE</code>, remote daemons connect directly to the host process. The host listens at a single URL, and distributes tasks to all connected daemons.</p>
+<pre><code class="language-r">daemons(url = host_url(), dispatcher = FALSE)
+#&gt; [1] &quot;tcp://hostname:36411&quot;
+</code></pre>
+<p>Note that above, calling <code>host_url()</code> without a port value uses the default of ‘0’. This is a wildcard value that will automatically cause a free ephemeral port to be assigned. The actual assigned port is provided in the return value of the call, or it may be queried at any time via <code>status()</code>.</p>
+<p>The number of daemons connecting to the host URL is not limited and network resources may be added or removed at any time, with tasks automatically distributed to all connected daemons.</p>
+<p><code>$connections</code> will show the actual number of connected daemons.</p>
+<pre><code class="language-r">status()
+#&gt; $connections
+#&gt; [1] 0
+#&gt; 
+#&gt; $daemons
+#&gt; [1] &quot;tcp://hostname:36411&quot;
+</code></pre>
+<p>To reset all connections and revert to default behaviour:</p>
+<pre><code class="language-r">daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p>This causes all connected daemons to exit automatically.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="distributed-computing-launching-daemons">Distributed Computing: Launching Daemons</h3>
+<p>To launch remote daemons, supply a remote launch configuration to the ‘remote’ argument of <code>daemons()</code> when setting up daemons, or <code>launch_remote()</code> at any time afterwards.</p>
+<p><code>ssh_config()</code> may be used to generate a remote launch configuration if there is SSH access to the remote machine, or else <code>remote_config()</code> provides a flexible method for generating a configuration involving a custom resource manager / application.</p>
+<h4 id="ssh-direct-connection">SSH Direct Connection</h4>
+<p>The first example below launches 4 daemons on the machine 10.75.32.90 (using the default SSH port of 22 as this was not specified), connecting back to the dispatcher URLs:</p>
+<pre><code class="language-r">daemons(
+  n = 4,
+  url = host_url(ws = TRUE, port = 5555),
+  remote = ssh_config(remotes = &quot;ssh://10.75.32.90&quot;)
+)
+</code></pre>
+<p>The second example below launches one daemon on each of 10.75.32.90 and 10.75.32.91 using the custom SSH port of 222:</p>
+<pre><code class="language-r">daemons(
+  n = 2,
+  url = host_url(ws = TRUE, port = 5555),
+  remote = ssh_config(c(&quot;ssh://10.75.32.90:222&quot;, &quot;ssh://10.75.32.91:222&quot;))
+)
+</code></pre>
+<p>In the above examples, as the remote daemons connect back directly, port 5555 on the local machine must be open to incoming connections from the remote addresses.</p>
+<h4 id="ssh-tunnelling">SSH Tunnelling</h4>
+<p>Use of SSH tunnelling provides a convenient way to launch remote daemons without requiring the remote machine to be able to access the host. Often firewall configurations or security policies may prevent opening a port to accept outside connections.</p>
+<p>In these cases SSH tunnelling offers a solution by creating a tunnel once the initial SSH connection is made. For simplicity, this SSH tunnelling implementation uses the same port on both the side of the host and that of the corresponding node. SSH key-based authentication must also already be in place.</p>
+<p>Tunnelling requires the hostname for ‘url’ specified when setting up daemons to be either ‘localhost’ or ‘127.0.0.1’. This is as the tunnel is created between localhost:port or equivalently 127.0.0.1:port on each machine. The host listens to its localhost:port and the remotes each dial into localhost:port on their own respective machines.</p>
+<p>The below example launches 2 nodes on the remote machine 10.75.32.90 using SSH tunnelling over port 5555 (‘url’ hostname is specified as ‘localhost’):</p>
+<pre><code class="language-r">daemons(
+  url = &quot;tcp://localhost:5555&quot;,
+  remote = ssh_config(
+    remotes = c(&quot;ssh://10.75.32.90&quot;, &quot;ssh://10.75.32.90&quot;),
+    tunnel = TRUE
+  )
+)
+</code></pre>
+<h4 id="manual-deployment">Manual Deployment</h4>
+<p>As an alternative to automated launches, calling <code>launch_remote()</code> without specifying ‘remote’ may be used to return the shell commands for deploying daemons manually. The printed return values may be copy / pasted directly to a remote machine.</p>
+<pre><code class="language-r">daemons(n = 2, url = host_url())
+#&gt; [1] 2
+
+launch_remote(1:2)
+#&gt; [1]
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:33487',rs=c(10407,444992203,380498832,-231056815,1235316702,-1731011897,-256095140))&quot;
+#&gt; 
+#&gt; [2]
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:44347',rs=c(10407,-1000638956,1330078647,-2012273058,-1642060024,-1442978276,136125262))&quot;
+
+daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p>Note that <code>daemons()</code> should be set up on the host machine before launching <code>daemon()</code> on remote resources, otherwise the daemon instances will exit if a connection is not immediately available. Alternatively, specifying the argument <code>autoexit = FALSE</code> will allow daemons to wait (indefinitely) for a connection to become available.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="distributed-computing-tls-secure-connections">Distributed Computing: TLS Secure Connections</h3>
+<p>TLS is available as an option to secure communications from the local machine to remote daemons.</p>
+<h4 id="zero-configuration">Zero-configuration</h4>
+<p>An automatic zero-configuration default is implemented. Simply specify a secure URL of the form <code>wss://</code> or <code>tls+tcp://</code> when setting daemons, or use <code>host_url(tls = TRUE)</code>, for example:</p>
+<pre><code class="language-r">daemons(n = 4, url = host_url(ws = TRUE, tls = TRUE))
+#&gt; [1] 4
+</code></pre>
+<p>Single-use keys and certificates are automatically generated and configured, without requiring any further intervention. The private key is always retained on the host machine and never transmitted.</p>
+<p>The generated self-signed certificate is available via <code>launch_remote()</code>. This function conveniently constructs the full shell command to launch a daemon, including the correctly specified ‘tls’ argument to <code>daemon()</code>.</p>
+<pre><code class="language-r">launch_remote(1)
+#&gt; [1]
+#&gt; Rscript -e &quot;mirai::daemon('wss://hostname:46435/1',tls=c('-----BEGIN CERTIFICATE-----
+#&gt; MIIFNzCCAx+gAwIBAgIBATANBgkqhkiG9w0BAQsFADAzMREwDwYDVQQDDAhrdW1h
+#&gt; bW90bzERMA8GA1UECgwITmFub25leHQxCzAJBgNVBAYTAkpQMB4XDTAxMDEwMTAw
+#&gt; MDAwMFoXDTMwMTIzMTIzNTk1OVowMzERMA8GA1UEAwwIa3VtYW1vdG8xETAPBgNV
+#&gt; BAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDCCAiIwDQYJKoZIhvcNAQEBBQADggIP
+#&gt; ADCCAgoCggIBANHQc8/CGD7hg2vJjAnLNoR35vCXhP7yRlHOGh94dvGFls8HxpsP
+#&gt; aPK9NQv4rjU3tK7d3Nw2XZalHWTy4csdpDqg44fQItcpuc9xYeZlnEaY3lyXgeR4
+#&gt; FaPORC1y0QT17YhKj7bijtq+vT+iWMKNyHgLjM6Te14kYzCvJKGEkcEiTSqNi0EM
+#&gt; Ak4Y8NaYIODZIb4rGtQY1Iz7v2WfIUIp71TMwBxRJ1G8fvZC6mdoZqQoi/d2t7xM
+#&gt; Xzfg+Rgt1smbZ5RNIHPJPCFg4ETyi7tLppwPZQNorzOjLZqzjOxe26U5yJRbxbo/
+#&gt; I50dTW0IyqPAZ2j/CPQ8eOdcNP0+t1j6tIi+xRz4hTj2SxeFKLr5ir7vGL/BWBL8
+#&gt; qDrd/O94Nijafr/n2F3LpMUdHzt/QRUV5xK/04LKlhm8apstzpE/L7Ps2DTVJV5R
+#&gt; A+Njn1fvupmsqVTBpxBe3DdqViU2CoVbAFCSfvKFYpY4qQSghhEY8RbQdG4UbbOz
+#&gt; IxluL7fft2cDEceLtvVwqA+mljOmHYouj1Zy3qGZo5f85PTUSbTOz1gDrRIluD7g
+#&gt; PjJJVgKK8zKc8nmA5DNM20nIRk2V6PScOOl6FqmWJ3De9Rt+Yn65hmsi+/ECN9dj
+#&gt; 8A5HVPw5eLKwgSOs6R259DjXOdp7ftq0oW61tWNqeUIy0SKtMkGhcwOtAgMBAAGj
+#&gt; VjBUMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFF8htwwpdEfFPruhjVWi
+#&gt; 63/5hjx6MB8GA1UdIwQYMBaAFF8htwwpdEfFPruhjVWi63/5hjx6MA0GCSqGSIb3
+#&gt; DQEBCwUAA4ICAQAvkCzQy8Z+pgOVqBNWmyzdnjwHBQr/cBA5t0qE0z2qlc93DpSi
+#&gt; GmcvFUtouCuZLVXoGYott3giIeQ9vN8DlaUUJbB6nz3t5Kxh1ARs2lG7Z9lIP3Gw
+#&gt; vQpwLaMEixdAdj5CBHcE+6xoap5LfFQuA+vkSRcl8Xp/jsb72tnmihDF5QMnk7C5
+#&gt; K4yWm01khM+0jTeYlIHIxDj5cFMpDzhuN92luQgCbNOuC0NFlypkZzWlDU1dZmxI
+#&gt; Z4oYKzwB7vN9kdt5RoJc2apk+cDGFyAdSKm0qjdDqs/InP0QgBeQSdu1/cPlxVBv
+#&gt; bfnwHRnbi2xSmcHnloUyxO+X64ee3KAFVb2TSy0tyCm+yNuY/DiKqC+DuzWfHOxV
+#&gt; z4ctLicKYb8Z59WEPgGombiSGrGwuC4TsFZF2lQTcFlBrdcQEQOZCEh95OTghZnj
+#&gt; DVZ5YGruWys0NHKCqfHMRYnXjUew4S2ymSjIBKOO4DBMtf6c38ESDM+oq8AT5TBq
+#&gt; Uq5siadN2TI9Hfleo2uh/eok1QSrcrmASGQ15O5T+V9u1VH8tq2YAcjLjeoJw8IL
+#&gt; fRnQTBQe1GFLvLznERcS4OWp6GNbTXudz4pPciRF9Y4sAkOaeMZHVwGUkWjMeH18
+#&gt; 2FIeyCgiuarfYqNVZ0MseDW/lO/oogB9YgZvSCu58CRihJSzdpKHjCrEMA==
+#&gt; -----END CERTIFICATE-----
+#&gt; ',''),rs=c(10407,485600077,512103850,1445133091,-1142496760,325412969,384495894))&quot;
+</code></pre>
+<p>The printed value may be deployed directly on a remote machine.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h4 id="ca-signed-certificates">CA Signed Certificates</h4>
+<p>As an alternative to the zero-configuration default, a certificate may also be generated via a Certificate Signing Request (CSR) to a Certificate Authority (CA), which may be a public CA or a CA internal to an organisation.</p>
+<ol>
+<li>Generate a private key and CSR. The following resources describe how to do so:</li>
+</ol>
+<ul>
+<li>using Mbed TLS: <a href="https://mbed-tls.readthedocs.io/en/latest/kb/how-to/generate-a-certificate-request-csr/">https://mbed-tls.readthedocs.io/en/latest/kb/how-to/generate-a-certificate-request-csr/</a></li>
+<li>using OpenSSL: <a href="https://www.feistyduck.com/library/openssl-cookbook/online/">https://www.feistyduck.com/library/openssl-cookbook/online/</a> (Chapter 1.2 Key and Certificate Management)</li>
+</ul>
+<ol start="2">
+<li>Provide the generated CSR to the CA for it to sign a new TLS certificate.</li>
+</ol>
+<ul>
+<li>The common name (CN) of the certificate must be identical to the hostname or IP address actually used for the connection as it is verified, and will fail if not the same.</li>
+<li>The received certificate should comprise a block of cipher text between the markers <code>-----BEGIN CERTIFICATE-----</code> and <code>-----END CERTIFICATE-----</code>. Make sure to request the certificate in the PEM format. If only available in other formats, the TLS library used should usually provide conversion utilities.</li>
+<li>Check also that the private key is a block of cipher text between the markers <code>-----BEGIN PRIVATE KEY-----</code> and <code>-----END PRIVATE KEY-----</code>.</li>
+</ul>
+<ol start="3">
+<li>When setting daemons, the TLS certificate and private key should be provided to the ‘tls’ argument of <code>daemons()</code>.</li>
+</ol>
+<ul>
+<li>If the certificate and private key have been imported as character strings <code>cert</code> and <code>key</code> respectively, then the ‘tls’ argument may be specified as the character vector <code>c(cert, key)</code>.</li>
+<li>Alternatively, the certificate may be copied to a new text file, with the private key appended, in which case the path/filename of this file may be provided to the ‘tls’ argument.</li>
+</ul>
+<ol start="4">
+<li>When launching daemons, the certificate chain to the CA should be supplied to the ‘tls’ argument of <code>daemon()</code> or <code>launch_remote()</code>.</li>
+</ol>
+<ul>
+<li>The certificate chain should comprise multiple certificates, each between <code>-----BEGIN CERTIFICATE-----</code> and <code>-----END CERTIFICATE-----</code> markers. The first one should be the newly-generated TLS certificate, the same supplied to <code>daemons()</code>, and the final one should be a CA root certificate.</li>
+<li>These are the only certificates required if the certificate was signed directly by a CA. If not, then the intermediate certificates should be included in a certificate chain that starts with the TLS certificate and ends with the certificate of the CA.</li>
+<li>If these are concatenated together as a single character string <code>certchain</code>, then the character vector comprising this and an empty character string <code>c(certchain, &quot;&quot;)</code> may be supplied to the relevant ‘tls’ argument.</li>
+<li>Alternatively, if these are written to a file (and the file replicated on the remote machines), then the ‘tls’ argument may also be specified as a path/filename (assuming these are the same on each machine).</li>
+</ul>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="compute-profiles">Compute Profiles</h3>
+<p>The <code>daemons()</code> interface also allows the specification of compute profiles for managing tasks with heterogeneous compute requirements:</p>
+<ul>
+<li>send tasks to different daemons or clusters of daemons with the appropriate specifications (in terms of CPUs / memory / GPU / accelerators etc.)</li>
+<li>split tasks between local and remote computation</li>
+</ul>
+<p>Simply specify the argument <code>.compute</code> when calling <code>daemons()</code> with a profile name (which is ‘default’ for the default profile). The daemons settings are saved under the named profile.</p>
+<p>To create a ‘mirai’ task using a specific compute profile, specify the ‘.compute’ argument to <code>mirai()</code>, which defaults to the ‘default’ compute profile.</p>
+<p>Similarly, functions such as <code>status()</code>, <code>launch_local()</code> or <code>launch_remote()</code> should be specified with the desired ‘.compute’ argument.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="errors-interrupts-and-timeouts">Errors, Interrupts and Timeouts</h3>
+<p>If execution in a mirai fails, the error message is returned as a character string of class ‘miraiError’ and ‘errorValue’ to facilitate debugging. <code>is_mirai_error()</code> may be used to test for mirai execution errors.</p>
+<pre><code class="language-r">m1 &lt;- mirai(stop(&quot;occurred with a custom message&quot;, call. = FALSE))
+call_mirai(m1)$data
+#&gt; 'miraiError' chr Error: occurred with a custom message
+
+m2 &lt;- mirai(mirai::mirai())
+call_mirai(m2)$data
+#&gt; 'miraiError' chr Error in mirai::mirai(): missing expression, perhaps wrap in {}?
+
+is_mirai_error(m2$data)
+#&gt; [1] TRUE
+is_error_value(m2$data)
+#&gt; [1] TRUE
+</code></pre>
+<p>If a daemon instance is sent a user interrupt, the mirai will resolve to an empty character string of class ‘miraiInterrupt’ and ‘errorValue’. <code>is_mirai_interrupt()</code> may be used to test for such interrupts.</p>
+<pre><code class="language-r">is_mirai_interrupt(m2$data)
+#&gt; [1] FALSE
+</code></pre>
+<p>If execution of a mirai surpasses the timeout set via the ‘.timeout’ argument, the mirai will resolve to an ‘errorValue’. This can, amongst other things, guard against mirai processes that have the potential to hang and never return.</p>
+<pre><code class="language-r">m3 &lt;- mirai(nanonext::msleep(1000), .timeout = 500)
+call_mirai(m3)$data
+#&gt; 'errorValue' int 5 | Timed out
+
+is_mirai_error(m3$data)
+#&gt; [1] FALSE
+is_mirai_interrupt(m3$data)
+#&gt; [1] FALSE
+is_error_value(m3$data)
+#&gt; [1] TRUE
+</code></pre>
+<p><code>is_error_value()</code> tests for all mirai execution errors, user interrupts and timeouts.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="parallel-clusters">Parallel Clusters</h3>
+<p>This package contains experimental functions and S3 methods using <code>mirai</code> as an alternative communications backend for R. These were developed to fulfil a request by R Core at R Project Sprint 2023.</p>
+<p><code>make_cluster()</code> creates a cluster of type ‘miraiCluster’, which may be used as a cluster object for any function in the <code>parallel</code> base package such as <code>parallel::clusterApply()</code>, <code>parallel::parLapply()</code> or the load-balanced version <code>parallel::parLapplyLB()</code>.</p>
+<ul>
+<li>Specify ‘n’ to launch nodes on the local machine.</li>
+<li>Specify ‘url’ for receiving connections from remote nodes.</li>
+<li>Specify ‘remote’ to launch remote daemons using a remote configuration generated by <code>remote_config()</code> or <code>ssh_config()</code>. Otherwise, the shell commands for manual deployment of nodes on remote resources are printed in interactive sessions.</li>
+<li><code>launch_remote()</code> may also be called on a ’miraiCluster` to return the shell commands for deployment of remote nodes.</li>
+<li><code>status()</code> may be called on a ’miraiCluster` to check the number of connected nodes at any time.</li>
+</ul>
+<pre><code class="language-r">cl &lt;- make_cluster(4)
+cl
+#&gt; &lt; miraiCluster &gt;
+#&gt;  - cluster ID: `1`
+#&gt;  - nodes: 4
+#&gt;  - active: TRUE
+
+parallel::parLapply(cl, 1:5, rnorm)
+#&gt; [[1]]
+#&gt; [1] -1.212712
+#&gt; 
+#&gt; [[2]]
+#&gt; [1] 1.2130663 0.4265574
+#&gt; 
+#&gt; [[3]]
+#&gt; [1]  2.4034282 -0.1885463  0.1204312
+#&gt; 
+#&gt; [[4]]
+#&gt; [1]  0.8032656 -1.1822434  1.8847008 -0.1999215
+#&gt; 
+#&gt; [[5]]
+#&gt; [1] -1.4871665 -0.6392412 -1.3339153 -1.0641440 -0.5993183
+
+status(cl)
+#&gt; $connections
+#&gt; [1] 4
+#&gt; 
+#&gt; $daemons
+#&gt; [1] &quot;abstract://f8cba7246d7744a34a23237e&quot;
+
+stop_cluster(cl)
+
+cl &lt;- make_cluster(n = 2, url = host_url())
+#&gt; Shell commands for deployment on nodes:
+#&gt; [1]
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:37661',rs=c(10407,2112621050,-595611853,-1118313768,-121790727,1877209702,524175791))&quot;
+#&gt; 
+#&gt; [2]
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:37661',rs=c(10407,1351320419,1624811523,1255164873,-1246587809,175737855,1876002473))&quot;
+
+stop_cluster(cl)
+</code></pre>
+<p>Created clusters are fully compatible with parallel cluster types.</p>
+<p>As an example, they may be registered by package <a href="https://cran.r-project.org/package=doParallel"><code>doParallel</code></a> for use with the <a href="https://cran.r-project.org/package=foreach"><code>foreach</code></a> package.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+</div>
+<div class="include-after">
+</div>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
+</body>
+</html>

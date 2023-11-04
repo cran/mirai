@@ -6,14 +6,14 @@
 \usage{
 daemon(
   url,
-  asyncdial = FALSE,
+  autoexit = TRUE,
+  cleanup = TRUE,
+  output = FALSE,
   maxtasks = Inf,
   idletime = Inf,
   walltime = Inf,
   timerstart = 0L,
-  output = FALSE,
   ...,
-  cleanup = 7L,
   tls = NULL,
   rs = NULL
 )
@@ -21,14 +21,22 @@ daemon(
 \arguments{
 \item{url}{the character host or dispatcher URL to dial into, including the
 port to connect to (and optionally for websockets, a path), e.g.
-'tcp://10.75.32.70:5555' or 'ws://10.75.32.70:5555/path'.}
+'tcp://hostname:5555' or 'ws://10.75.32.70:5555/path'.}
 
-\item{asyncdial}{[default FALSE] whether to perform dials asynchronously. The
-default FALSE will error if a connection is not immediately possible
-(e.g. \code{\link{daemons}} has yet to be called on the host, or the
-specified port is not open etc.). Specifying TRUE continues retrying
-(indefinitely) if not immediately successful, which is more resilient but
-can mask potential connection issues.}
+\item{autoexit}{[default TRUE] logical value, whether the daemon should
+exit automatically when its socket connection ends (see 'Persistence'
+section below).}
+
+\item{cleanup}{[default TRUE] logical value, whether to perform cleanup of
+the global environment and restore loaded packages and options to an
+initial state after each evaluation. For more granular control, also
+accepts an integer value (see 'Cleanup Options' section below).}
+
+\item{output}{[default FALSE] logical value, to output generated stdout /
+stderr if TRUE, or else discard if FALSE. Specify as TRUE in the '...'
+argument to \code{\link{daemons}} or \code{\link{launch_local}} to provide
+redirection of output to the host process (applicable only for local
+daemons when not using dispatcher).}
 
 \item{maxtasks}{[default Inf] the maximum number of tasks to execute (task
 limit) before exiting.}
@@ -43,21 +51,7 @@ time taken (in milliseconds) before exiting.}
 the timer for 'idletime' and 'walltime'. 0L implies timers are started
 upon launch.}
 
-\item{output}{[default FALSE] logical value, to output generated stdout /
-stderr if TRUE, or else discard if FALSE. Specify as TRUE in the '...'
-argument to \code{\link{daemons}} or \code{\link{launch_local}} to provide
-redirection of output to the host process (applicable only for local
-daemons when not using dispatcher).}
-
 \item{...}{reserved but not currently used.}
-
-\item{cleanup}{[default 7L] Integer additive bitmask controlling whether to
-perform cleanup of the global environment (1L), reset loaded packages to
-an initial state (2L), reset options to an initial state (4L), and
-perform garbage collection (8L) after each evaluation. This option should
-not normally be modified. Do not set unless you are certain you require
-persistence across evaluations. Note: it may be an error to reset options
-but not loaded packages if packages set options on load.}
 
 \item{tls}{[default NULL] required for secure TLS connections over 'tls+tcp://'
 or 'wss://'. \strong{Either} the character path to a file containing
@@ -85,3 +79,38 @@ The network topology is such that daemons dial into the host or
     resources may be added or removed dynamically and the host or
     dispatcher automatically distributes tasks to all available daemons.
 }
+\section{Persistence}{
+
+
+    The 'autoexit' argument governs persistence settings for the daemon. The
+    default TRUE ensures that it will exit cleanly under all circumstances
+    once its socket connection has ended.
+
+    Setting to FALSE allows the daemon to persist indefinitely even when
+    there is no longer a socket connection. This allows a host session to end
+    and a new session to connect at the URL where the daemon is dialled in.
+    Daemons must be terminated with \code{daemons(NULL)} in this case, which
+    sends an exit signal to all connected daemons.
+
+    Persistence also implies that dials are performed asynchronously, which
+    means retries are attempted (indefinitely) if not immediately successful.
+    This is resilient behaviour but can mask potential connection issues.
+}
+
+\section{Cleanup Options}{
+
+
+    The 'cleanup' argument also accepts an integer value, which operates an
+    additive bitmask: perform cleanup of the global environment (1L), reset
+    loaded packages to an initial state (2L), restore options to an initial
+    state (4L), and perform garbage collection (8L).
+
+    As an example, to perform cleanup of the global environment and garbage
+    collection, specify 9L (1L + 8L). The default argument value of TRUE
+    performs all actions apart from garbage collection and is equivalent to a
+    value of 7L.
+
+    Caution: do not reset options but not loaded packages if packages set
+    options on load.
+}
+
