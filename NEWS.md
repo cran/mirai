@@ -1,3 +1,10 @@
+# mirai 0.11.2
+
+* `make_cluster()` specifying only 'url' now succeeds with implied 'n' of one.
+* Fixes `mirai()` specifying a language object by name for '.expr' in R versions 4.0 and earlier. 
+* Fixes regression in 0.11.1 which prevented the correct random seed being set when using dispatcher.
+* Internal performance enhancements.
+
 # mirai 0.11.1
 
 * Adds 'mirai' method for 'as.promise()' from the {promises} package (if available). This functionality is merged from the package {mirai.promises}, allowing use of the promise pipe `%...>%` with a 'mirai'.
