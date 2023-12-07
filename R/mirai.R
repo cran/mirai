@@ -31,16 +31,14 @@
 #'     over, any arguments specified via '.args'.
 #' @param .args (optional) \strong{either} a list of objects to be passed by
 #'     \link{name} (found in the current scope), \strong{or else} a list of
-#'     name = value pairs, as in '...'.
+#'     name = value pairs, as in '...'. If an object other than a list is
+#'     supplied, it will be coerced to a list.
 #' @param .timeout [default NULL] for no timeout, or an integer value in
 #'     milliseconds. A mirai will resolve to an 'errorValue' 5 (timed out) if
 #'     evaluation exceeds this limit.
-#' @param .signal [default FALSE] logical value, whether to signal the condition
-#'     variable within the compute profile (only applicable when daemons have
-#'     been set). See \code{\link[nanonext]{cv}} for further information on
-#'     condition variables.
 #' @param .compute [default 'default'] character value for the compute profile
-#'     to use when sending the mirai.
+#'     to use (each compute profile has its own set of daemons for connecting to
+#'     different resources).
 #'
 #' @return A 'mirai' object.
 #'
@@ -137,7 +135,7 @@
 #'
 #' @export
 #'
-mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .signal = FALSE, .compute = "default") {
+mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "default") {
 
   missing(.expr) && stop(.messages[["missing_expression"]])
 
@@ -145,23 +143,20 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .signal = FALSE, 
   arglist <- list(..., .expr = if (is.symbol(expr) && is.language(get0(as.character(expr), envir = sys.frame(-1L)))) .expr else expr)
 
   if (length(.args)) {
-    is.list(.args) || stop(.messages[["requires_list"]])
-    arglist <- if (length(names(.args))) c(.args, arglist) else
-      c(`names<-`(.args, as.character(substitute(.args)[-1L])), arglist)
+    if (!is.list(.args)) .args <- as.list(.args)
+    arglist <- if (length(names(.args))) c(.args, arglist) else c(`names<-`(.args, as.character(substitute(.args)[-1L])), arglist)
   }
 
   data <- list2env(arglist, envir = NULL, parent = .GlobalEnv)
 
   envir <- ..[[.compute]]
   if (length(envir)) {
-    aio <- if (.signal)
-      request_signal(.context(envir[["sock"]]), data = data, cv = envir[["cv"]], send_mode = 1L, recv_mode = 1L, timeout = .timeout) else
-        request(.context(envir[["sock"]]), data = data, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
+    aio <- request_signal(.context(envir[["sock"]]), data = data, cv = envir[["cv"]], send_mode = 3L, recv_mode = 1L, timeout = .timeout)
 
   } else {
     url <- auto_tokenized_url()
     sock <- req_socket(url, resend = 0L)
-    length(.timeout) && launch_and_sync_daemon(sock = sock, url) || launch_daemon(url)
+    launch_daemon(url)
     aio <- request(.context(sock), data = data, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
     `attr<-`(.subset2(aio, "aio"), "sock", sock)
 
@@ -206,25 +201,25 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .signal = FALSE, 
 everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
 
   envir <- ..[[.compute]]
-  length(envir) || stop(.messages[["daemons_required"]])
 
-  expr <- c(as.expression(substitute(.expr)), .snapshot)
-
-  if (length(envir[["sockc"]])) {
-    expr <- c(expr, .timedelay)
-    for (i in seq_len(envir[["n"]]))
-      mirai(.expr = expr, ..., .args = .args, .compute = .compute)
-  } else {
-    for (i in seq_len(max(stat(envir[["sock"]], "pipes"), envir[["n"]])))
-      mirai(.expr = expr, ..., .args = .args, .compute = .compute)
+  if (length(envir)) {
+    expr <- c(as.expression(substitute(.expr)), .snapshot)
+    if (length(envir[["sockc"]])) {
+      expr <- c(expr, .timedelay)
+      for (i in seq_len(envir[["n"]]))
+        mirai(.expr = expr, ..., .args = .args, .compute = .compute)
+    } else {
+      for (i in seq_len(max(stat(envir[["sock"]], "pipes"), envir[["n"]])))
+        mirai(.expr = expr, ..., .args = .args, .compute = .compute)
+    }
   }
 
 }
 
 #' mirai (Call Value)
 #'
-#' Call the value of a mirai, waiting for the the asynchronous operation to
-#'     resolve if it is still in progress.
+#' \code{call_mirai} retrieves the value of a mirai, waiting for the the
+#'     asynchronous operation to resolve if it is still in progress.
 #'
 #' @param aio a 'mirai' object.
 #'
@@ -279,6 +274,16 @@ everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
 #' @export
 #'
 call_mirai <- call_aio
+
+#' mirai (Call Value)
+#'
+#' \code{call_mirai_} is a variant that allows user interrupts, suitable for
+#'     interactive use.
+#'
+#' @rdname call_mirai
+#' @export
+#'
+call_mirai_ <- call_aio_
 
 #' mirai (Stop Evaluation)
 #'
@@ -441,7 +446,7 @@ print.miraiInterrupt <- function(x, ...) {
 
 # internals --------------------------------------------------------------------
 
-mk_interrupt_error <- function(e) `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))
+mk_interrupt_error <- function(e) .interrupt_error
 
 mk_mirai_error <- function(e) {
   x <- .subset2(e, "call")
@@ -455,5 +460,6 @@ mk_mirai_error <- function(e) {
 
 snapshot <- function() `[[<-`(`[[<-`(`[[<-`(., 'vars', names(.GlobalEnv)), 'se', search()), 'op', .Options)
 
+.interrupt_error <- `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))
 .snapshot <- expression(mirai:::snapshot())
 .timedelay <- expression(nanonext::msleep(500L))

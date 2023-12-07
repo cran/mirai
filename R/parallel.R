@@ -37,8 +37,8 @@
 #' @return For \strong{make_cluster}: An object of class 'miraiCluster' and
 #'     'cluster'. Each 'miraiCluster' has an automatically assigned ID and 'n'
 #'     nodes of class 'miraiNode'. If 'url' is supplied but not 'remote', the
-#'     shell commands for deployment of nodes on remote resources is printed in
-#'     interactive sessions.
+#'     shell commands for deployment of nodes on remote resources are printed to
+#'     the console.
 #'
 #'     For \strong{stop_cluster}: invisible NULL.
 #'
@@ -53,8 +53,7 @@
 #'     is disregarded.
 #'
 #'     If 'remote' is not supplied, the shell commands for deploying nodes
-#'     manually on remote resources are automatically printed in interactive
-#'     sessions.
+#'     manually on remote resources are automatically printed to the console.
 #'
 #'     \code{\link{launch_remote}} may be called at any time on a 'miraiCluster'
 #'     to return the shell commands for deployment of all nodes, or on a
@@ -65,16 +64,18 @@
 #'     Call \code{\link{status}} on a 'miraiCluster' to check the number of
 #'     currently active connections as well as the host URL.
 #'
-#' @note Requires R >= 4.4 (currently R-devel). Clusters created with this
-#'     function will not work with prior R versions. The functionality is
-#'     experimental prior to release of R 4.4 and the interface is consequently
-#'     subject to change at any time.
+#' @section Errors:
 #'
-#'     The default behaviour of clusters created by this function is
-#'     designed to map as closely as possible to clusters created by the
-#'     \pkg{parallel} package. However, '...' arguments are passed onto
-#'     \code{\link{daemons}} for additional customisation if desired, although
-#'     resultant behaviour may not be supported.
+#'     Errors are thrown by the 'parallel' mechanism if one or more nodes failed
+#'     (quit unexpectedly). The resulting 'errorValue' returned is 19
+#'     (Connection reset). Other types of error, e.g. in evaluation, should
+#'     result in the usual 'miraiError' being returned.
+#'
+#' @note The default behaviour of clusters created by this function is designed
+#'     to map as closely as possible to clusters created by the \pkg{parallel}
+#'     package. However, '...' arguments are passed onto \code{\link{daemons}}
+#'     for additional customisation if desired, although resultant behaviour may
+#'     not be supported.
 #'
 #' @examples
 #' if (interactive()) {
@@ -96,11 +97,11 @@
 make_cluster <- function(n, url = NULL, remote = NULL, ...) {
 
   id <- sprintf("`%d`", length(..))
-  printLaunchCmd <- FALSE
 
   if (is.character(url)) {
 
     length(url) == 1L || stop(.messages[["single_url"]])
+    cv2 <- cv()
     daemons(url = url, remote = remote, dispatcher = FALSE, resilience = FALSE, cleanup = FALSE, ..., .compute = id)
 
     if (length(remote)) {
@@ -109,22 +110,22 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
     } else {
       if (missing(n)) n <- 1L
       is.numeric(n) || stop(.messages[["numeric_n"]])
-      if (interactive()) {
-        cat("Shell commands for deployment on nodes:\n\n", file = stdout())
-        print(launch_remote(rep(..[[id]][["urls"]], n), .compute = id))
-      }
+      cat("Shell commands for deployment on nodes:\n\n", file = stdout())
+      print(launch_remote(rep(..[[id]][["urls"]], n), .compute = id))
     }
 
   } else {
     is.numeric(n) || stop(.messages[["numeric_n"]])
+    n >= 1L || stop(.messages[["n_one"]])
+    cv2 <- cv()
     daemons(n = n, dispatcher = FALSE, resilience = FALSE, cleanup = FALSE, ..., .compute = id)
   }
 
-  pipe_notify(..[[id]][["sock"]], cv = ..[[id]][["cv"]], add = FALSE, remove = TRUE, flag = TRUE)
+  `[[<-`(`[[<-`(..[[id]], "cv2", cv2), "swapped", FALSE)
 
   cl <- vector(mode = "list", length = n)
   for (i in seq_along(cl))
-    cl[[i]] <- `attributes<-`(new.env(), list(class = "miraiNode", node = i, id = id))
+    cl[[i]] <- `attributes<-`(new.env(hash = FALSE, parent = emptyenv()), list(class = "miraiNode", node = i, id = id))
 
   `attributes<-`(cl, list(class = c("miraiCluster", "cluster"), id = id))
 
@@ -139,12 +140,8 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
 #' @rdname make_cluster
 #' @export
 #'
-stop_cluster <- function(cl) {
-
-  daemons(0L, .compute = attr(cl, "id"))
-  invisible()
-
-}
+stop_cluster <- function(cl)
+  daemons(0L, .compute = attr(cl, "id")) || return(invisible())
 
 #' @method stopCluster miraiCluster
 #' @export
@@ -156,16 +153,17 @@ stopCluster.miraiCluster <- stop_cluster
 #'
 sendData.miraiNode <- function(node, data) {
 
-  length(..[[attr(node, "id")]]) || stop(.messages[["cluster_inactive"]])
+  id <- attr(node, "id")
+  envir <- ..[[id]]
+  length(envir) || stop(.messages[["cluster_inactive"]])
 
   value <- data[["data"]]
-  has_tag <- !is.null(value[["tag"]])
+  tagged <- !is.null(value[["tag"]])
+  tagged && { envir[["swapped"]] || cv_swap(envir, TRUE) } || { envir[["swapped"]] && cv_swap(envir, FALSE) }
 
-  m <- mirai(do.call(node, data, quote = TRUE), node = value[["fun"]], data = value[["args"]],
-             .signal = has_tag, .compute = attr(node, "id"))
+  m <- mirai(do.call(node, data, quote = TRUE), node = value[["fun"]], data = value[["args"]], .compute = id)
 
-  if (has_tag)
-    assign("tag", value[["tag"]], m)
+  if (tagged) assign("tag", value[["tag"]], m)
 
   `[[<-`(node, "mirai", m)
 
@@ -174,22 +172,17 @@ sendData.miraiNode <- function(node, data) {
 #' @method recvData miraiNode
 #' @export
 #'
-recvData.miraiNode <- function(node) call_mirai(.subset2(node, "mirai"))
+recvData.miraiNode <- function(node) call_aio(.subset2(node, "mirai"))
 
 #' @method recvOneData miraiCluster
 #' @export
 #'
 recvOneData.miraiCluster <- function(cl) {
 
-  wait(..[[attr(cl, "id")]][["cv"]]) || {
-    stop_cluster(cl)
-    stop(.messages[["nodes_failed"]])
-  }
-
+  wait(..[[attr(cl, "id")]][["cv"]])
   node <- which.min(lapply(cl, node_unresolved))
   m <- .subset2(.subset2(cl, node), "mirai")
-  `class<-`(m, NULL)
-  list(node = node, value = m)
+  list(node = node, value = `class<-`(m, NULL))
 
 }
 
@@ -198,8 +191,7 @@ recvOneData.miraiCluster <- function(cl) {
 print.miraiCluster <- function(x, ...) {
 
   id <- attr(.subset2(x, 1L), "id")
-  cat(sprintf("< miraiCluster >\n - cluster ID: %s\n - nodes: %d\n - active: %s\n",
-              id, length(x), as.logical(length(..[[id]]))), file = stdout())
+  cat(sprintf("< miraiCluster >\n - cluster ID: %s\n - nodes: %d\n - active: %s\n", id, length(x), as.logical(length(..[[id]]))), file = stdout())
   invisible(x)
 
 }
@@ -214,6 +206,13 @@ print.miraiNode <- function(x, ...) {
 }
 
 # internals --------------------------------------------------------------------
+
+cv_swap <- function(envir, state) {
+  cv <- envir[["cv"]]
+  envir[["cv"]] <- envir[["cv2"]]
+  envir[["cv2"]] <- cv
+  envir[["swapped"]] <- state
+}
 
 node_unresolved <- function(node) {
   m <- .subset2(node, "mirai")

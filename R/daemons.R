@@ -25,8 +25,8 @@
 #'     remote daemons via a remote configuration. By default, dispatcher ensures
 #'     optimal scheduling.
 #'
+#' @inheritParams mirai
 #' @inheritParams dispatcher
-#' @inheritParams launch_remote
 #' @param n integer number of daemons to set.
 #' @param url [default NULL] if specified, the character URL or vector of URLs
 #'     on the host for remote daemons to dial into, including a port accepting
@@ -65,9 +65,6 @@
 #'     chain, with the TLS certificate first), \strong{or} a length 2 character
 #'     vector comprising [i] the TLS certificate (optionally certificate chain)
 #'     and [ii] the associated private key.
-#' @param .compute [default 'default'] character compute profile to use for
-#'     creating the daemons (each compute profile has its own set of daemons for
-#'     connecting to different resources).
 #'
 #' @return Depending on the arguments supplied:
 #'
@@ -298,12 +295,7 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
 
     if (is.null(envir)) {
       envir <- new.env(hash = FALSE, parent = ..)
-      purl <- parse_url(url)
-      if (substr(purl[["scheme"]], 1L, 3L) %in% c("wss", "tls") && is.null(tls)) {
-        tls <- write_cert(cn = purl[["hostname"]])
-        `[[<-`(envir, "tls", tls[["client"]])
-        tls <- tls[["server"]]
-      }
+      tls <- check_create_tls(url = url, tls = tls, envir = envir)
       cv <- cv()
       create_stream(n = n, seed = seed, envir = envir)
       if (dispatcher) {
@@ -313,15 +305,11 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
         urlc <- strcat(urld, "c")
         sock <- req_socket(urld, resend = 0L)
         sockc <- req_socket(urlc, resend = 0L)
-        launch_and_sync_daemon(sock = sock, urld, parse_dots(...), url, n, urlc, tls = tls, pass = pass)
-        init_monitor(sockc = sockc, envir = envir)
+        launch_and_sync_daemon(sock = sock, urld, parse_dots(...), url, n, urlc, tls = tls, pass = pass) || stop(.messages[["sync_timeout"]])
+        init_monitor(sockc = sockc, envir = envir) || stop(.messages[["sync_timeout"]])
       } else {
         sock <- req_socket(url, tls = if (length(tls)) tls_config(server = tls, pass = pass), resend = resilience * .intmax)
-        listener <- attr(sock, "listener")[[1L]]
-        urls <- opt(listener, "url")
-        if (parse_url(urls)[["port"]] == "0")
-          urls <- sub_real_port(port = opt(listener, "tcp-bound-port"), url = urls)
-        `[[<-`(envir, "urls", urls)
+        store_urls(sock = sock, envir = envir)
         n <- 0L
       }
       `[[<-`(.., .compute, `[[<-`(`[[<-`(`[[<-`(envir, "sock", sock), "n", n), "cv", cv))
@@ -329,26 +317,20 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
       if (!is.symbol(remotes)) remote <- remotes
       if (length(remote))
         launch_remote(url = envir[["urls"]], remote = remote, tls = envir[["tls"]], ..., .compute = .compute)
+      serialization_refhook()
     }
 
   } else {
 
-    send_signal <- is.null(n)
-    if (send_signal) n <- 0L
+    signal <- is.null(n)
+    if (signal) n <- 0L
     is.numeric(n) || stop(.messages[["numeric_n"]])
     n <- as.integer(n)
 
     if (n == 0L) {
       length(envir) || return(0L)
 
-      if (send_signal) {
-        signals <- max(length(envir[["urls"]]), stat(envir[["sock"]], "pipes"))
-        for (i in seq_len(signals)) {
-          send(envir[["sock"]], data = ._scm_., mode = 2L)
-          msleep(10L)
-        }
-      }
-
+      if (signal) send_signal(envir = envir)
       reap(envir[["sock"]])
       length(envir[["sockc"]]) && reap(envir[["sockc"]])
       ..[[.compute]] <- NULL -> envir
@@ -364,9 +346,9 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
         sock <- req_socket(urld, resend = 0L)
         urlc <- strcat(urld, "c")
         sockc <- req_socket(urlc, resend = 0L)
-        launch_and_sync_daemon(sock = sock, urld, parse_dots(...), n, urlc, rs = envir[["stream"]])
+        launch_and_sync_daemon(sock = sock, urld, parse_dots(...), n, urlc, rs = envir[["stream"]]) || stop(.messages[["sync_timeout"]])
         for (i in seq_len(n)) next_stream(envir)
-        init_monitor(sockc = sockc, envir = envir)
+        init_monitor(sockc = sockc, envir = envir) || stop(.messages[["sync_timeout"]])
       } else {
         sock <- req_socket(urld, resend = resilience * .intmax)
         if (is.null(seed)) {
@@ -379,6 +361,7 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
         `[[<-`(envir, "urls", urld)
       }
       `[[<-`(.., .compute, `[[<-`(`[[<-`(`[[<-`(envir, "sock", sock), "n", n), "cv", cv))
+      serialization_refhook()
     }
 
   }
@@ -452,44 +435,79 @@ status <- function(.compute = "default") {
 
 }
 
-#' Host URL Constructor
+#' Custom Serialization Functions
 #'
-#' Automatically constructs a valid host URL (at which daemons may connect)
-#'     based on the computer's hostname. This may be supplied directly to the
-#'     'url' argument of \code{\link{daemons}}.
+#' Registers custom serialization and unserialization functions for sending and
+#'     receiving external pointer reference objects.
 #'
-#' @param ws [default FALSE] logical value whether to use a WebSockets 'ws://'
-#'     or else TCP 'tcp://' scheme.
-#' @param tls [default FALSE] logical value whether to use TLS in which case the
-#'     scheme used will be either 'wss://' or 'tls+tcp://' accordingly.
-#' @param port [default 0] numeric port to use. This should be open to
-#'     connections from the network addresses the daemons are connecting from.
-#'     '0' is a wildcard value that automatically assigns a free ephemeral port.
+#' @param refhook \strong{either} a list of two functions: the signature for the
+#'     first must accept a list of external pointer type objects and return a
+#'     raw vector, e.g. \code{torch::torch_serialize}, and the second must
+#'     accept a raw vector and return a list of external pointer type objects,
+#'     e.g. \code{torch::torch_load},\cr \strong{or else} NULL to reset.
 #'
-#' @return A character string comprising a valid host URL.
+#' @return Invisibly, a list comprising the currently-registered 'refhook'
+#'     functions. If functions are successfully registered or reset, a message
+#'     is printed to the console.
 #'
-#' @details This implementation relies on using the host name of the computer
-#'     rather than an IP address and typically works on local networks, although
-#'     this is not always guaranteed. If unsuccessful, substitute an IPv4 or
-#'     IPv6 address in place of the hostname.
+#' @details Calling without any arguments returns a list of the
+#'     currently-registered 'refhook' functions.
+#'
+#'     This function may be called prior to or after setting daemons, with the
+#'     registered functions applying across all compute profiles.
 #'
 #' @examples
-#' host_url()
-#' host_url(ws = TRUE)
-#' host_url(tls = TRUE)
-#' host_url(ws = TRUE, tls = TRUE, port = 5555)
+#' r <- serialization(list(function(x) serialize(x, NULL), unserialize))
+#' print(serialization())
+#' serialization(r)
+#'
+#' serialization(NULL)
+#' print(serialization())
 #'
 #' @export
 #'
-host_url <- function(ws = FALSE, tls = FALSE, port = 0)
-  sprintf(
-    "%s://%s:%s",
-    if (ws) { if (tls) "wss" else "ws" } else { if (tls) "tls+tcp" else "tcp" },
-    Sys.info()[["nodename"]],
-    as.character(port)
-  )
+serialization <- function(refhook = list()) {
+
+  register <- !missing(refhook)
+  cfg <- next_config(refhook = refhook)
+
+  if (register) {
+    if (is.list(refhook) && length(refhook) == 2L && is.function(refhook[[1L]]) && is.function(refhook[[2L]]))
+      cat("[ mirai ] serialization functions registered\n", file = stdout()) else
+        if (is.null(refhook))
+          cat("[ mirai ] serialization functions cancelled\n", file = stdout()) else
+            stop(.messages[["refhook_invalid"]])
+    register_everywhere(refhook)
+  }
+
+  invisible(cfg)
+
+}
 
 # internals --------------------------------------------------------------------
+
+check_create_tls <- function(url, tls, envir) {
+  purl <- parse_url(url)
+  if (substr(purl[["scheme"]], 1L, 3L) %in% c("wss", "tls") && is.null(tls)) {
+    cert <- write_cert(cn = purl[["hostname"]])
+    `[[<-`(envir, "tls", cert[["client"]])
+    tls <- cert[["server"]]
+  }
+  tls
+}
+
+create_stream <- function(n, seed, envir) {
+  rexp(n = 1L)
+  oseed <- .GlobalEnv[[".Random.seed"]]
+  RNGkind("L'Ecuyer-CMRG")
+  if (length(seed)) set.seed(seed)
+  `[[<-`(envir, "stream", .GlobalEnv[[".Random.seed"]])
+  `[[<-`(.GlobalEnv, ".Random.seed", oseed)
+}
+
+auto_tokenized_url <- function() strcat(.urlscheme, random(12L))
+
+new_tokenized_url <- function(url) sprintf("%s/%s", url, random(12L))
 
 req_socket <- function(url, tls = NULL, resend = .intmax)
   `opt<-`(socket(protocol = "req", listen = url, tls = tls), "req:resend-time", resend)
@@ -529,7 +547,7 @@ launch_daemon <- function(..., rs = NULL, tls = NULL) {
 
 launch_and_sync_daemon <- function(sock, ..., rs = NULL, tls = NULL, pass = NULL) {
   cv <- cv()
-  pipe_notify(sock, cv = cv, add = TRUE, remove = FALSE, flag = FALSE)
+  pipe_notify(sock, cv = cv, add = TRUE)
   if (is.character(tls)) {
     switch(
       length(tls),
@@ -550,16 +568,44 @@ launch_and_sync_daemon <- function(sock, ..., rs = NULL, tls = NULL, pass = NULL
     }
   }
   launch_daemon(..., rs = rs)
-  .until(cv, .timelimit) || stop(if (...length() < 3L) .messages[["sync_timeout"]] else .messages[["sync_dispatch"]])
+  until(cv, .timelimit)
 }
 
-create_stream <- function(n, seed, envir) {
-  rexp(n = 1L)
-  oseed <- .GlobalEnv[[".Random.seed"]]
-  RNGkind("L'Ecuyer-CMRG")
-  if (length(seed)) set.seed(seed)
-  `[[<-`(envir, "stream", .GlobalEnv[[".Random.seed"]])
-  `[[<-`(.GlobalEnv, ".Random.seed", oseed)
+init_monitor <- function(sockc, envir) {
+  res <- query_dispatcher(sockc, command = FALSE, mode = 2L)
+  valid <- !is.object(res)
+  if (valid) `[[<-`(`[[<-`(`[[<-`(envir, "sockc", sockc), "urls", res[-1L]), "pid", as.integer(res[1L]))
+  valid
 }
 
-._scm_. <- base64dec("QgoDAAAAAQMEAAAFAwAFAAAAVVRGLTj8AAAA", convert = FALSE)
+store_urls <- function(sock, envir) {
+  listener <- attr(sock, "listener")[[1L]]
+  urls <- opt(listener, "url")
+  if (parse_url(urls)[["port"]] == "0")
+    urls <- sub_real_port(port = opt(listener, "tcp-bound-port"), url = urls)
+  `[[<-`(envir, "urls", urls)
+}
+
+send_signal <- function(envir) {
+  signals <- max(length(envir[["urls"]]), stat(envir[["sock"]], "pipes"))
+  for (i in seq_len(signals)) {
+    send(envir[["sock"]], data = ._scm_., mode = 2L)
+    msleep(10L)
+  }
+}
+
+query_status <- function(envir) {
+  res <- query_dispatcher(sock = envir[["sockc"]], command = 0L, mode = 5L)
+  is.object(res) && return(res)
+  `attributes<-`(res, list(dim = c(envir[["n"]], 5L),
+                           dimnames = list(envir[["urls"]], c("i", "online", "instance", "assigned", "complete"))))
+}
+
+register_everywhere <- function(refhook)
+  for (.compute in names(..))
+    everywhere(mirai::serialization(refhook), refhook = refhook, .compute = .compute)
+
+serialization_refhook <- function(refhook = next_config())
+  if (length(refhook[[1L]])) register_everywhere(refhook)
+
+._scm_. <- base64dec("BwAAAEIKAwAAAAIDBAAABQMABQAAAFVURi04/AAAAA==", convert = FALSE)

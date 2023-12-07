@@ -2,9 +2,12 @@
 % Please edit documentation in R/mirai.R
 \name{call_mirai}
 \alias{call_mirai}
+\alias{call_mirai_}
 \title{mirai (Call Value)}
 \usage{
 call_mirai(aio)
+
+call_mirai_(aio)
 }
 \arguments{
 \item{aio}{a 'mirai' object.}
@@ -13,8 +16,11 @@ call_mirai(aio)
 The passed mirai (invisibly). The retrieved value is stored at \code{$data}.
 }
 \description{
-Call the value of a mirai, waiting for the the asynchronous operation to
-    resolve if it is still in progress.
+\code{call_mirai} retrieves the value of a mirai, waiting for the the
+    asynchronous operation to resolve if it is still in progress.
+
+\code{call_mirai_} is a variant that allows user interrupts, suitable for
+    interactive use.
 }
 \details{
 This function will wait for the async operation to complete if still

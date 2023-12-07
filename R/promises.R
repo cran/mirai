@@ -27,15 +27,13 @@
 #' @details This function is an S3 method for the generic \code{as.promise} for
 #'     class 'mirai'.
 #'
-#'     Requires the packages \CRANpkg{promises} and \CRANpkg{later}.
+#'     Requires the \CRANpkg{promises} package.
 #'
 #'     Allows a 'mirai' to be used with the promise pipe \code{\%...>\%}, which
 #'     schedules a function to run upon resolution of the 'mirai'.
 #'
 #' @examples
-#' if (interactive() &&
-#'   requireNamespace("promises", quietly = TRUE) &&
-#'   requireNamespace("later", quietly = TRUE)) {
+#' if (interactive() && requireNamespace("promises", quietly = TRUE)) {
 #'
 #' library(promises)
 #'
@@ -55,12 +53,11 @@
 as.promise.mirai <- function(x)
   promises::promise(
     function(resolve, reject) {
+      later <- .getNamespace("later")[["later"]]
       query <- function()
         if (unresolved(x))
-          later::later(query, delay = 0.1) else
-            if (is_error_value(value <- .subset2(x, "value")))
-              reject(value) else
-                resolve(value)
+          later(query, delay = 0.1) else
+            if (is_error_value(value <- .subset2(x, "value"))) reject(value) else resolve(value)
       query()
     }
   )

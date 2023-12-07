@@ -21,7 +21,7 @@
 #' \code{launch_local} spawns a new background \code{Rscript} process calling
 #'     \code{\link{daemon}} with the specified arguments.
 #'
-#' @inheritParams saisei
+#' @inheritParams mirai
 #' @param url the character host URL or vector of host URLs, including the port
 #'     to connect to (and optionally for websockets, a path), e.g.
 #'     tcp://hostname:5555' or 'ws://10.75.32.70:5555/path'
@@ -241,11 +241,11 @@ remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript"
 #'     be in place.
 #'
 #'     Tunnelling requires the hostname for 'url' specified when setting up
-#'     \code{\link{daemons}} to be either 'localhost' or '127.0.0.1'. This is as
-#'     the tunnel is created between \code{localhost:port} or equivalently
-#'     \code{127.0.0.1:port} on each machine. The host listens to its
-#'     \code{localhost:port} and the remotes each dial into \code{localhost:port}
-#'     on their own respective machines.
+#'     \code{\link{daemons}} to be either '127.0.0.1' or 'localhost'. This is as
+#'     the tunnel is created between \code{127.0.0.1:port} or equivalently
+#'     \code{localhost:port} on each machine. The host listens to \code{port} on
+#'     its machine and the remotes each dial into \code{port} on their own
+#'     respective machines.
 #'
 #' @examples
 #' ssh_config(remotes = c("ssh://10.75.32.90:222", "ssh://nodename"), timeout = 10)
@@ -303,6 +303,43 @@ ssh_config <- function(remotes, timeout = 5, tunnel = FALSE, command = "ssh", rs
   list(command = command, args = args, rscript = rscript)
 
 }
+
+#' Host URL Constructor
+#'
+#' Automatically constructs a valid host URL (at which daemons may connect)
+#'     based on the computer's hostname. This may be supplied directly to the
+#'     'url' argument of \code{\link{daemons}}.
+#'
+#' @param ws [default FALSE] logical value whether to use a WebSockets 'ws://'
+#'     or else TCP 'tcp://' scheme.
+#' @param tls [default FALSE] logical value whether to use TLS in which case the
+#'     scheme used will be either 'wss://' or 'tls+tcp://' accordingly.
+#' @param port [default 0] numeric port to use. This should be open to
+#'     connections from the network addresses the daemons are connecting from.
+#'     '0' is a wildcard value that automatically assigns a free ephemeral port.
+#'
+#' @return A character string comprising a valid host URL.
+#'
+#' @details This implementation relies on using the host name of the computer
+#'     rather than an IP address and typically works on local networks, although
+#'     this is not always guaranteed. If unsuccessful, substitute an IPv4 or
+#'     IPv6 address in place of the hostname.
+#'
+#' @examples
+#' host_url()
+#' host_url(ws = TRUE)
+#' host_url(tls = TRUE)
+#' host_url(ws = TRUE, tls = TRUE, port = 5555)
+#'
+#' @export
+#'
+host_url <- function(ws = FALSE, tls = FALSE, port = 0)
+  sprintf(
+    "%s://%s:%s",
+    if (ws) { if (tls) "wss" else "ws" } else { if (tls) "tls+tcp" else "tcp" },
+    Sys.info()[["nodename"]],
+    as.character(port)
+  )
 
 #' @export
 #'

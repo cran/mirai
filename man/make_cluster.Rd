@@ -30,8 +30,8 @@ If not supplied, nodes may be deployed manually on remote resources.}
 For \strong{make_cluster}: An object of class 'miraiCluster' and
     'cluster'. Each 'miraiCluster' has an automatically assigned ID and 'n'
     nodes of class 'miraiNode'. If 'url' is supplied but not 'remote', the
-    shell commands for deployment of nodes on remote resources is printed in
-    interactive sessions.
+    shell commands for deployment of nodes on remote resources are printed to
+    the console.
 
     For \strong{stop_cluster}: invisible NULL.
 }
@@ -44,16 +44,11 @@ For \strong{make_cluster}: An object of class 'miraiCluster' and
 \code{stop_cluster} stops a cluster created by \code{make_cluster}.
 }
 \note{
-Requires R >= 4.4 (currently R-devel). Clusters created with this
-    function will not work with prior R versions. The functionality is
-    experimental prior to release of R 4.4 and the interface is consequently
-    subject to change at any time.
-
-    The default behaviour of clusters created by this function is
-    designed to map as closely as possible to clusters created by the
-    \pkg{parallel} package. However, '...' arguments are passed onto
-    \code{\link{daemons}} for additional customisation if desired, although
-    resultant behaviour may not be supported.
+The default behaviour of clusters created by this function is designed
+    to map as closely as possible to clusters created by the \pkg{parallel}
+    package. However, '...' arguments are passed onto \code{\link{daemons}}
+    for additional customisation if desired, although resultant behaviour may
+    not be supported.
 }
 \section{Remote Nodes}{
 
@@ -67,8 +62,7 @@ Requires R >= 4.4 (currently R-devel). Clusters created with this
     is disregarded.
 
     If 'remote' is not supplied, the shell commands for deploying nodes
-    manually on remote resources are automatically printed in interactive
-    sessions.
+    manually on remote resources are automatically printed to the console.
 
     \code{\link{launch_remote}} may be called at any time on a 'miraiCluster'
     to return the shell commands for deployment of all nodes, or on a
@@ -80,6 +74,15 @@ Requires R >= 4.4 (currently R-devel). Clusters created with this
 
     Call \code{\link{status}} on a 'miraiCluster' to check the number of
     currently active connections as well as the host URL.
+}
+
+\section{Errors}{
+
+
+    Errors are thrown by the 'parallel' mechanism if one or more nodes failed
+    (quit unexpectedly). The resulting 'errorValue' returned is 19
+    (Connection reset). Other types of error, e.g. in evaluation, should
+    result in the usual 'miraiError' being returned.
 }
 
 \examples{

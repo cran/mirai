@@ -80,7 +80,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
   cv <- cv()
   sock <- socket(protocol = "rep")
   on.exit(reap(sock))
-  pipe_notify(sock, cv = cv, add = FALSE, remove = TRUE, flag = TRUE)
+  pipe_notify(sock, cv = cv, remove = TRUE, flag = TRUE)
   dial_and_sync_socket(sock = sock, url = host, asyncdial = asyncdial)
 
   auto <- is.null(url)
@@ -94,61 +94,44 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
     dots <- parse_dots(...)
   } else {
     baseurl <- parse_url(url)
-    if (substr(baseurl[["scheme"]], 1L, 1L) == "t") {
-      ports <- if (baseurl[["port"]] == "0") integer(n) else seq.int(baseurl[["port"]], length.out = n)
-      token <- FALSE
-    } else {
-      ports <- NULL
-    }
-
-    if (substr(baseurl[["scheme"]], 1L, 3L) %in% c("wss", "tls") && is.null(tls)) {
-      tls <- get_and_reset_env("MIRAI_TEMP_FIELD1")
-      if (length(tls))
-        tls <- c(tls, get_and_reset_env("MIRAI_TEMP_FIELD2"))
-    }
-    if (length(tls)) {
-      if (is.null(pass))
-        pass <- get_and_reset_env("MIRAI_TEMP_VAR")
-      tls <- tls_config(server = tls, pass = pass)
-      pass <- NULL
-    }
+    ports <- get_ports(baseurl = baseurl, n = n)
+    if (length(ports)) token <- FALSE
+    tls <- get_tls(baseurl = baseurl, tls = tls, pass = pass)
+    pass <- NULL
   }
 
   envir <- new.env(hash = FALSE)
-  if (length(rs))
-    `[[<-`(envir, "stream", as.integer(rs))
+  if (length(rs)) `[[<-`(envir, "stream", as.integer(rs))
 
   for (i in seq_n) {
     burl <- if (auto) .urlscheme else
       if (vectorised) url[i] else
         if (is.null(ports)) sprintf("%s/%d", url, i) else
           sub(ports[1L], ports[i], url, fixed = TRUE)
-    basenames[i] <- burl
     nurl <- if (auto) auto_tokenized_url() else if (token) new_tokenized_url(burl) else burl
-    nsock <- req_socket(NULL)
     ncv <- cv()
-    pipe_notify(nsock, cv = ncv, cv2 = cv, add = TRUE, remove = TRUE, flag = FALSE)
+    nsock <- req_socket(NULL)
+    pipe_notify(nsock, cv = ncv, cv2 = cv, add = TRUE, remove = TRUE)
     lock(nsock, cv = ncv)
     listen(nsock, url = nurl, tls = tls, error = TRUE)
     listener <- attr(nsock, "listener")[[1L]]
-    if (i == 1L && !auto && parse_url(opt(listener, "url"))[["port"]] == "0") {
+    listurl <- opt(listener, "url")
+    if (i == 1L && !auto && parse_url(listurl)[["port"]] == "0") {
       realport <- opt(listener, "tcp-bound-port")
-      servernames[i] <- sub_real_port(port = realport, url = nurl)
+      listurl <- sub_real_port(port = realport, url = nurl)
       if (!vectorised || n == 1L) {
         url <- sub_real_port(port = realport, url = url)
-        basenames[1L] <- sub_real_port(port = realport, url = burl)
+        burl <- sub_real_port(port = realport, url = burl)
       }
-    } else {
-      servernames[i] <- opt(listener, "url")
     }
 
     auto && launch_daemon(nurl, dots, next_stream(envir))
 
+    basenames[i] <- burl
+    servernames[i] <- listurl
     servers[[i]] <- nsock
     active[[i]] <- ncv
-    ctx <- .context(sock)
-    req <- recv_aio_signal(ctx, cv = cv, mode = 8L)
-    queue[[i]] <- list(ctx = ctx, req = req)
+    queue[[i]] <- create_req(ctx = .context(sock), cv = cv)
   }
 
   on.exit(lapply(servers, reap), add = TRUE, after = TRUE)
@@ -157,9 +140,10 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
   if (ctrchannel) {
     sockc <- socket(protocol = "rep")
     on.exit(reap(sockc), add = TRUE, after = FALSE)
+    pipe_notify(sockc, cv = cv, remove = TRUE, flag = TRUE)
     dial_and_sync_socket(sock = sockc, url = monitor, asyncdial = asyncdial)
     recv(sockc, mode = 6L, block = .timelimit) && stop(.messages[["sync_timeout"]])
-    send_aio(sockc, c(Sys.getpid(), servernames), mode = 2L)
+    saio <- send_aio(sockc, c(Sys.getpid(), servernames), mode = 2L)
     cmessage <- recv_aio_signal(sockc, cv = cv, mode = 5L)
   }
 
@@ -191,7 +175,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
             i <- -i
             reap(servers[[i]])
             servers[[i]] <- nsock <- req_socket(NULL)
-            pipe_notify(nsock, cv = active[[i]], cv2 = cv, add = TRUE, remove = TRUE, flag = FALSE)
+            pipe_notify(nsock, cv = active[[i]], cv2 = cv, add = TRUE, remove = TRUE)
             lock(nsock, cv = active[[i]])
             data <- servernames[i] <- if (auto) auto_tokenized_url() else new_tokenized_url(basenames[i])
             instance[i] <- -abs(instance[i])
@@ -204,28 +188,25 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
         } else {
           data <- as.integer(c(seq_n, activevec, instance, assigned, complete))
         }
-        send_aio(sockc, data = data, mode = 2L)
+        saio <- send_aio(sockc, data = data, mode = 2L)
         cmessage <- recv_aio_signal(sockc, cv = cv, mode = 5L)
         next
       }
 
       for (i in seq_n)
-        if (length(queue[[i]]) > 2L && !unresolved(queue[[i]][["res"]])) {
-          req <- .subset2(queue[[i]][["res"]], "value")
+        if (length(queue[[i]]) > 2L && !unresolved(queue[[i]][["req"]])) {
+          req <- .subset2(queue[[i]][["req"]], "value")
           if (is.object(req)) req <- serialize(req, NULL)
-          send_aio(queue[[i]][["ctx"]], data = req, mode = 2L)
+          send(queue[[i]][["ctx"]], data = req, mode = 2L)
           q <- queue[[i]][["daemon"]]
-          if (req[1L] == .nextmode) {
-            ctx <- .context(servers[[q]])
-            send(ctx, data = NULL, mode = 2L, block = FALSE)
-            reap(ctx)
+          if (req[3L]) {
+            send(queue[[i]][["rctx"]], NULL, mode = 2L)
+            reap(queue[[i]][["rctx"]])
           } else {
             serverfree[q] <- TRUE
           }
           complete[q] <- complete[q] + 1L
-          ctx <- .context(sock)
-          req <- recv_aio_signal(ctx, cv = cv, mode = 8L)
-          queue[[i]] <- list(ctx = ctx, req = req)
+          queue[[i]] <- create_req(ctx = .context(sock), cv = cv)
         }
 
       free <- which(serverfree & activevec)
@@ -234,7 +215,8 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
         for (q in free)
           for (i in seq_n) {
             if (length(queue[[i]]) == 2L && !unresolved(queue[[i]][["req"]])) {
-              queue[[i]][["res"]] <- request_signal(.context(servers[[q]]), data = .subset2(queue[[i]][["req"]], "value"), cv = cv, send_mode = 2L, recv_mode = 8L)
+              queue[[i]][["rctx"]] <- .context(servers[[q]])
+              queue[[i]][["req"]] <- request_signal(queue[[i]][["rctx"]], data = .subset2(queue[[i]][["req"]], "value"), cv = cv, send_mode = 2L, recv_mode = 8L)
               queue[[i]][["daemon"]] <- q
               serverfree[q] <- FALSE
               assigned[q] <- assigned[q] + 1L
@@ -253,11 +235,10 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
 #' When using daemons with dispatcher, regenerates the token for the URL a
 #'     dispatcher socket listens at.
 #'
+#' @inheritParams mirai
 #' @param i integer index number URL to regenerate at dispatcher.
 #' @param force [default FALSE] logical value whether to regenerate the URL even
 #'     when there is an existing active connection.
-#' @param .compute [default 'default'] character compute profile (each compute
-#'     profile has its own set of daemons for connecting to different resources).
 #'
 #' @return The regenerated character URL upon success, or else NULL.
 #'
@@ -291,7 +272,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
 saisei <- function(i, force = FALSE, .compute = "default") {
 
   envir <- ..[[.compute]]
-  i <- as.integer(`length<-`(i, 1L))
+  i <- as.integer(i[1L])
   length(envir[["sockc"]]) && i > 0L && i <= envir[["n"]] && substr(envir[["urls"]][i], 1L, 1L) != "t" || return()
   r <- query_dispatcher(sock = envir[["sockc"]], command = if (force) -i else i, mode = 9L)
   is.character(r) && nzchar(r) || return()
@@ -302,29 +283,10 @@ saisei <- function(i, force = FALSE, .compute = "default") {
 
 # internals --------------------------------------------------------------------
 
-auto_tokenized_url <- function() strcat(.urlscheme, random(12L))
-
-new_tokenized_url <- function(url) sprintf("%s/%s", url, random(12L))
-
-sub_real_port <- function(port, url) sub("(?<=:)0(?![^/])", port, url, perl = TRUE)
-
-query_dispatcher <- function(sock, command, mode) {
-  send(sock, data = command, mode = 2L, block = .timelimit)
-  recv(sock, mode = mode, block = .timelimit)
-}
-
-query_status <- function(envir) {
-  res <- query_dispatcher(sock = envir[["sockc"]], command = 0L, mode = 5L)
-  is.object(res) && return(res)
-  `attributes<-`(res, list(dim = c(envir[["n"]], 5L),
-                           dimnames = list(envir[["urls"]], c("i", "online", "instance", "assigned", "complete"))))
-}
-
-init_monitor <- function(sockc, envir) {
-  res <- query_dispatcher(sockc, command = FALSE, mode = 2L)
-  is.object(res) && stop(.messages[["sync_timeout"]])
-  `[[<-`(`[[<-`(`[[<-`(envir, "sockc", sockc), "urls", res[-1L]), "pid", as.integer(res[1L]))
-}
+get_ports <- function(baseurl, n)
+  if (substr(baseurl[["scheme"]], 1L, 1L) == "t") {
+    if (baseurl[["port"]] == "0") integer(n) else seq.int(baseurl[["port"]], length.out = n)
+  }
 
 get_and_reset_env <- function(x) {
   candidate <- Sys.getenv(x)
@@ -334,4 +296,23 @@ get_and_reset_env <- function(x) {
   }
 }
 
-.nextmode <- as.raw(7L)
+get_tls <- function(baseurl, tls, pass) {
+  if (substr(baseurl[["scheme"]], 1L, 3L) %in% c("wss", "tls") && is.null(tls)) {
+    tls <- get_and_reset_env("MIRAI_TEMP_FIELD1")
+    if (length(tls)) tls <- c(tls, get_and_reset_env("MIRAI_TEMP_FIELD2"))
+  }
+  if (length(tls)) {
+    if (is.null(pass)) pass <- get_and_reset_env("MIRAI_TEMP_VAR")
+    tls_config(server = tls, pass = pass)
+  }
+}
+
+sub_real_port <- function(port, url) sub("(?<=:)0(?![^/])", port, url, perl = TRUE)
+
+query_dispatcher <- function(sock, command, mode) {
+  send(sock, data = command, mode = 2L, block = .timelimit)
+  recv(sock, mode = mode, block = .timelimit + .timelimit)
+}
+
+create_req <- function(ctx, cv)
+  list(ctx = ctx, req = recv_aio_signal(ctx, cv = cv, mode = 8L))

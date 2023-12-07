@@ -19,13 +19,13 @@ parallel code execution and distributed computing. <br /><br /> Designed
 for simplicity, a ‘mirai’ evaluates an R expression asynchronously, on
 local or network resources, resolving automatically upon completion.
 <br /><br /> `mirai()` returns a ‘mirai’ object immediately. ‘mirai’
-(未来 みらい) is Japanese for ‘future’. <br /><br /> Features efficient
-task scheduling, fast inter-process communications, and TLS over TCP/IP
-for remote connections. <br /><br /> {mirai} has a tiny pure R code
-base, relying solely on
-[`nanonext`](https://doi.org/10.5281/zenodo.7903429), a high-performance
-binding for the ‘NNG’ (Nanomsg Next Gen) C library with zero package
-dependencies. <br /><br />
+(未来 みらい) is Japanese for ‘future’. <br /><br /> Efficient
+scheduling over fast inter-process communications or secure TLS
+connections over TCP/IP, built on ‘nanonext’ and ‘NNG’ (Nanomsg Next
+Gen). <br /><br /> {mirai} has a tiny pure R code base, relying solely
+on [`nanonext`](https://doi.org/10.5281/zenodo.7903429), a
+high-performance binding for the ‘NNG’ (Nanomsg Next Gen) C library with
+zero package dependencies. <br /><br />
 
 ### Installation
 
@@ -88,8 +88,9 @@ result.
 
 ``` r
 m$data
-#>  [1] -0.4189294  0.4175360 -7.1428468 -0.3830076  1.6176787  1.0000000
-#>  [7]  0.6181697 -2.6109140 -0.1400002  2.3950031 -2.3870373
+#>  [1]  -0.04026068  -1.92115491   0.17933997   0.69404292   0.01749486
+#>  [6]   1.00000000  57.15965086   1.44083309   5.57600189  -0.52052023
+#> [11] -24.83812992
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -97,8 +98,9 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data
-#>  [1] -0.4189294  0.4175360 -7.1428468 -0.3830076  1.6176787  1.0000000
-#>  [7]  0.6181697 -2.6109140 -0.1400002  2.3950031 -2.3870373
+#>  [1]  -0.04026068  -1.92115491   0.17933997   0.69404292   0.01749486
+#>  [6]   1.00000000  57.15965086   1.44083309   5.57600189  -0.52052023
+#> [11] -24.83812992
 ```
 
 ### Vignette
@@ -117,6 +119,8 @@ Key topics include:
 
 - Secure TLS connections
 
+- Serialization - registering custom functions
+
 This may be accessed within R by:
 
 ``` r
@@ -128,6 +132,15 @@ vignette("mirai", package = "mirai")
 {mirai} provides an alternative communications backend for R’s base
 ‘parallel’ package.
 
+``` r
+cl <- make_cluster(4)
+cl
+#> < miraiCluster >
+#>  - cluster ID: `0`
+#>  - nodes: 4
+#>  - active: TRUE
+```
+
 `make_cluster()` creates a ‘miraiCluster’, a cluster fully compatible
 with all ‘parallel’ functions such as:
 
@@ -135,9 +148,9 @@ with all ‘parallel’ functions such as:
 - `parallel::parLapply()`
 - `parallel::parLapplyLB()`
 
-[`doParallel`](https://cran.r-project.org/package=doParallel) can also
-register a ‘miraiCluster’ for use with the
-[`foreach`](https://cran.r-project.org/package=foreach) package.
+A ‘miraiCluster’ may also be registered for use with the
+[`foreach`](https://cran.r-project.org/package=foreach) package by
+[`doParallel`](https://cran.r-project.org/package=doParallel).
 
 This functionality fulfils a request from R-Core at R Project Sprint
 2023.
@@ -173,11 +186,48 @@ promise pipe `%...>%`, or explictly by `promises::as.promise()`,
 allowing side-effects to be performed upon asynchronous resolution of a
 ‘mirai’.
 
-Alternatively, [`crew`](https://cran.r-project.org/package=crew) also
+The following example outputs “hello” to the console after one second
+when the ‘mirai’ resolves.
+
+``` r
+library(promises)
+
+p <- mirai({Sys.sleep(1); "hello"}) %...>% cat()
+p
+#> <Promise [pending]>
+```
+
+Alternatively, [`crew`](https://cran.r-project.org/package=crew)
 provides an interface that facilitates deploying {mirai} for
-[`shiny`](https://cran.r-project.org/package=shiny), and provides a
-[Shiny vignette](https://wlandau.github.io/crew/articles/shiny.html)
-with tutorial and sample code for this purpose.
+[`shiny`](https://cran.r-project.org/package=shiny).
+
+- Please refer to its [Asynchronous Shiny
+  Apps](https://wlandau.github.io/crew/articles/shiny.html) vignette,
+  which features a tutorial and sample code.
+
+### Use with Torch
+
+The custom serialization interface in {mirai} is accessed via the
+`serialization()` function.
+
+In the case of [`torch`](https://cran.r-project.org/package=torch), this
+would involve making the following call once at the start of your
+session:
+
+``` r
+serialization(refhook = list(torch:::torch_serialize, torch::torch_load))
+#> [ mirai ] serialization functions registered
+```
+
+- Note that `torch_serialize()` is available via `:::` since
+  [`torch`](https://cran.r-project.org/package=torch) v0.9.0, and will
+  be exported in v0.12.0.
+
+This allows tensors, including models, optimizers etc. to be used
+seamlessly across local and remote processes like any other R object.
+
+For more details, please refer to the relevant [vignette
+chapter](https://shikokuchuo.net/mirai/articles/mirai.html#serialization-custom-functions).
 
 ### Thanks
 
@@ -197,6 +247,9 @@ patterns.
 [Luke Tierney](https://github.com/ltierney/), R Core, for introducing
 R’s implementation of L’Ecuyer-CMRG streams, used to ensure statistical
 independence in parallel processing.
+
+[Daniel Falbel](https://github.com/dfalbel/), for discussion around an
+efficient solution to serialization and transmission of ‘torch’ tensors.
 
 [« Back to ToC](#table-of-contents)
 

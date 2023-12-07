@@ -10,18 +10,19 @@ nextstream(.compute = "default")
 nextget(x, .compute = "default")
 }
 \arguments{
-\item{.compute}{[default 'default'] character compute profile (each compute
-profile has its own set of daemons for connecting to different resources).}
+\item{.compute}{[default 'default'] character value for the compute profile
+to use (each compute profile has its own set of daemons for connecting to
+different resources).}
 
 \item{x}{character value of item to retrieve. One of 'pid' (dispatcher process
 ID), 'urls' (URLs dispatcher is listening at) or 'tls' (the stored client
 TLS configuration to be sent to daemons).}
 }
 \value{
-For \code{nextstream}: a length 7 integer vector, as given by \code{.Random.seed}
-    when the L'Ecuyer-CMRG RNG is in use (may be passed directly to the 'rs'
-    argument of \code{\link{daemon}}), or else NULL if a stream has not yet
-    been created.
+For \code{nextstream}: a length 7 integer vector, as given by
+    \code{.Random.seed} when the L'Ecuyer-CMRG RNG is in use (may be passed
+    directly to the 'rs' argument of \code{\link{daemon}}), or else NULL if a
+    stream has not yet been created.
 
 For \code{nextget}: the requested item, or else NULL if not present.
 }
@@ -37,10 +38,11 @@ These functions are exported for use by packages extending
     \CRANpkg{mirai} with alternative launchers of \code{\link{daemon}}
     processes.
 
-    For \code{nextstream}: This function should be called for its return value
-    when required. The function also has the side effect of automatically
-    advancing the stream stored within the compute profile. This ensures that
-    next time the function is called the correct value will be returned.
+    For \code{nextstream}: This function should be called for its return
+    value when required. The function also has the side effect of
+    automatically advancing the stream stored within the compute profile.
+    This ensures that next time the function is called the correct value will
+    be returned.
 }
 \examples{
 if (interactive()) {

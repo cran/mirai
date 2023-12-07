@@ -18,10 +18,10 @@
 #'
 #' Lightweight parallel code execution and distributed computing. Designed for
 #'     simplicity, a 'mirai' evaluates an R expression asynchronously, on local
-#'     or network resources, resolving automatically upon completion. Features
-#'     efficient task scheduling, fast inter-process communications, and
-#'     Transport Layer Security over TCP/IP for remote connections, courtesy of
-#'     'nanonext' and 'NNG' (Nanomsg Next Gen).
+#'     or network resources, resolving automatically upon completion. Efficient
+#'     scheduling over fast inter-process communications or secure TLS
+#'     connections over TCP/IP, built on 'nanonext' and 'NNG' (Nanomsg Next
+#'     Gen).
 #'
 #' @section Notes:
 #'
@@ -50,10 +50,11 @@
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
-#' @importFrom nanonext base64dec call_aio .context cv cv_value dial
-#'     is_error_value listen lock mclock msleep opt opt<- parse_url pipe_notify
-#'     random reap recv recv_aio_signal request request_signal send send_aio
-#'     socket stat stop_aio strcat tls_config unresolved .until wait write_cert
+#' @importFrom nanonext base64dec call_aio call_aio_ .context cv cv_value dial
+#'     is_error_value listen lock mclock msleep next_config opt opt<- parse_url
+#'     pipe_notify random reap recv recv_aio_signal request request_signal send
+#'     send_aio socket stat stop_aio strcat tls_config unresolved until wait
+#'     write_cert
 #' @importFrom parallel nextRNGStream stopCluster
 #' @importFrom stats rexp
 #'
@@ -84,7 +85,7 @@ NULL
   )
 
   registerParallelMethods()
-  if (requireNamespace("promises", quietly = TRUE)) registerPromisesMethods()
+  registerPromisesMethods(pkgname = "promises")
 
 }
 
@@ -107,44 +108,46 @@ registerParallelMethods <- function() {
 
 }
 
-registerPromisesMethods <- function() {
+registerPromisesMethods <- function(pkgname, pkgpath) {
 
-  ns <- .getNamespace("promises")
-  `[[<-`(ns[[".__S3MethodsTable__."]], "as.promise.mirai", as.promise.mirai)
-  regs <- rbind(ns[[".__NAMESPACE__."]][["S3methods"]],
-                c("as.promise", "mirai", "as.promise.mirai", NA_character_))
-  `[[<-`(ns[[".__NAMESPACE__."]], "S3methods", regs)
+  ns <- .getNamespace(pkgname)
+  if (is.null(ns)) {
+    hfun <- c(registerPromisesMethods, .userHooksEnv[["UserHook::promises::onLoad"]])
+    `[[<-`(.userHooksEnv, "UserHook::promises::onLoad", hfun)
+  } else {
+    `[[<-`(ns[[".__S3MethodsTable__."]], "as.promise.mirai", as.promise.mirai)
+    regs <- rbind(ns[[".__NAMESPACE__."]][["S3methods"]],
+                  c("as.promise", "mirai", "as.promise.mirai", NA_character_))
+    `[[<-`(ns[[".__NAMESPACE__."]], "S3methods", regs)
+  }
 
 }
 
 # nocov end
 
-. <- new.env(hash = FALSE)
-.. <- new.env(hash = FALSE)
+. <- new.env()
+.. <- new.env()
 .command <- NULL
 .urlscheme <- NULL
 
-.intmax <- 2147483647L
 .timelimit <- 5000L
+.intmax <- .Machine[["integer.max"]]
 .messages <- list2env(
   list(
     arglen = "'args' and/or 'url' must be of length 1 or the same length",
     cluster_inactive = "cluster is no longer active",
     correct_context = "must be called in the correct context e.g. as a function argument",
-    daemons_required = "requires daemons to be set",
     daemons_unset = "a numeric value for 'url' requires daemons to be set",
     dot_required = "'.' must be an element of the character vector(s) supplied to 'args'",
     missing_expression = "missing expression, perhaps wrap in {}?",
     missing_url = "at least one URL must be supplied for 'url' or 'n' must be at least 1",
-    n_one = "'n' must be 1 or greater if specified with 'url'",
+    n_one = "'n' must be 1 or greater",
     n_zero = "the number of daemons must be zero or greater",
-    nodes_failed = "one or more nodes failed... cluster stopped",
     numeric_n = "'n' must be numeric, did you mean to provide 'url'?",
-    requires_list = "'.args' must be specified as a list",
-    requires_local = "SSH tunnelling requires 'url' hostname to be 'localhost' or '127.0.0.1'",
+    requires_local = "SSH tunnelling requires 'url' hostname to be '127.0.0.1' or 'localhost'",
+    refhook_invalid = "'refhook' must be a list of 2 functions or NULL",
     single_url = "only one 'url' should be specified",
-    sync_dispatch = "initial sync with dispatcher timed out after 5s",
-    sync_timeout = "sync between host and dispatcher/daemon timed out after 5s",
+    sync_timeout = "initial sync with dispatcher timed out after 5s",
     url_spec = "numeric value for 'url' is out of bounds",
     wrong_dots = "'...' arguments should only be of integer, numeric or logical type"
   ),
