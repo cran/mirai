@@ -8,8 +8,8 @@ everywhere(.expr, ..., .args = list(), .compute = "default")
 }
 \arguments{
 \item{.expr}{an expression to evaluate asynchronously (of arbitrary length,
-wrapped in \{\} if necessary), \strong{or} a language object passed by
-\link{name}.}
+wrapped in \{ \} where necessary), \strong{or} a language object passed
+by \link{name}.}
 
 \item{...}{(optional) named arguments (name = value pairs) specifying
 objects referenced in '.expr'. Used in addition to, and taking precedence
@@ -30,17 +30,20 @@ Invisible NULL.
 \description{
 Evaluate an expression 'everywhere' on all connected daemons for the
     specified compute profile. Designed for performing setup operations
-    across daemons, resultant changes to the global environment, loaded
-    packages or options are persisted regardless of a daemon's 'cleanup'
-    setting.
+    across daemons or exporting common data, resultant changes to the global
+    environment, loaded packages or options are persisted regardless of a
+    daemon's 'cleanup' setting.
 }
 \examples{
 if (interactive()) {
 # Only run examples in interactive R sessions
 
 daemons(1)
+# export common data by super-assignment:
+everywhere(y <<- 3)
+# assign explicitly to global environment:
 everywhere(list2env(x, envir = .GlobalEnv), x = list(a = 1, b = 2))
-m <- mirai(a + b)
+m <- mirai(a + b - y == 0L)
 call_mirai(m)$data
 daemons(0)
 

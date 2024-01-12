@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<title>mirai - Plumber Integration</title>
+<style type="text/css">
+/**
+ * Prism.s theme ported from highlight.js's xcode style
+ */
+pre code {
+  padding: 1em;
+}
+.token.comment {
+  color: #007400;
+}
+.token.punctuation {
+  color: #999;
+}
+.token.tag,
+.token.selector {
+  color: #aa0d91;
+}
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol {
+  color: #1c00cf;
+}
+.token.property,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin {
+  color: #c41a16;
+}
+.token.inserted {
+  background-color: #ccffd8;
+}
+.token.deleted {
+  background-color: #ffebe9;
+}
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #9a6e3a;
+}
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #836c28;
+}
+.token.function,
+.token.class-name {
+  color: #DD4A68;
+}
+.token.regex,
+.token.important,
+.token.variable {
+  color: #5c2699;
+}
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+.token.italic {
+  font-style: italic;
+}
+</style>
+<style type="text/css">
+body {
+  font-family: sans-serif;
+  max-width: 800px;
+  margin: auto;
+  padding: 1em;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+body, .footnotes, code { font-size: .9em; }
+li li { font-size: .95em; }
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+pre, img { max-width: 100%; }
+pre, pre:hover {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+pre code {
+  display: block;
+  overflow-x: auto;
+}
+code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
+:not(pre) > code, code[class] { background-color: #F8F8F8; }
+code.language-undefined, pre > code:not([class]) {
+  background-color: inherit;
+  border: 1px solid #eee;
+}
+table {
+  margin: auto;
+  border-top: 1px solid #666;
+}
+table thead th { border-bottom: 1px solid #ddd; }
+th, td { padding: 5px; }
+thead, tfoot, tr:nth-child(even) { background: #eee; }
+blockquote {
+  color: #666;
+  margin: 0;
+  padding-left: 1em;
+  border-left: 0.5em solid #eee;
+}
+hr, .footnotes::before { border: 1px dashed #ddd; }
+.frontmatter { text-align: center; }
+#TOC .numbered li { list-style: none; }
+#TOC .numbered { padding-left: 0; }
+#TOC .numbered ul { padding-left: 1em; }
+table, .body h2 { border-bottom: 1px solid #666; }
+.body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
+.footnote-ref a::before { content: "["; }
+.footnote-ref a::after { content: "]"; }
+section.footnotes::before {
+  content: "";
+  display: block;
+  max-width: 20em;
+}
+
+@media print {
+  body {
+    font-size: 12pt;
+    max-width: 100%;
+  }
+  tr, img { page-break-inside: avoid; }
+}
+@media only screen and (min-width: 992px) {
+  pre { white-space: pre; }
+}
+</style>
+</head>
+<body>
+<div class="frontmatter">
+<div class="title"><h1>mirai - Plumber Integration</h1></div>
+<div class="author"><h2></h2></div>
+<div class="date"><h3></h3></div>
+</div>
+<div class="body">
+<h3 id="plumber-integration">Plumber Integration</h3>
+<p>{mirai} may be used as an asynchronous / distributed backend for <a href="https://cran.r-project.org/package=plumber">{plumber}</a> pipelines.</p>
+<p>Example usage is provided below for different types of endpoint.</p>
+<h4 id="example-get-endpoint">Example GET Endpoint</h4>
+<p>The plumber router code is run in a daemon process itself so that it does not block the interactive process.</p>
+<p>The /echo endpoint takes a GET request, sleeps for 1 second (simulating an expensive computation) and simply returns the ‘msg’ request header together with a timestamp and the process ID of the process it is run on.</p>
+<pre><code class="language-r">library(mirai)
+
+# important to supply SIGINT so the plumber server is interrupted and exits cleanly when torn down
+daemons(1L, dispatcher = FALSE, autoexit = tools::SIGINT)
+#&gt; [1] 1
+
+m &lt;- mirai({
+  library(plumber)
+  library(promises) # to provide the promise pipe
+  library(mirai)
+
+  # does not use dispatcher (suitable when all requests require similar compute)
+  daemons(4L, dispatcher = FALSE) # handles 4 requests simultaneously
+
+  pr() |&gt;
+    pr_get(
+      &quot;/echo&quot;,
+      function(req, res) {
+        mirai(
+          {
+            Sys.sleep(1L)
+            list(status = 200L, body = list(time = format(Sys.time()),
+                                            msg = req[[&quot;HEADERS&quot;]][[&quot;msg&quot;]],
+                                            pid = Sys.getpid()))
+          },
+          req = req
+        ) %...&gt;% (function(x) {
+          res$status &lt;- x$status
+          res$body &lt;- x$body
+        })
+      }
+    ) |&gt;
+    pr_run(host = &quot;127.0.0.1&quot;, port = 8985)
+})
+</code></pre>
+<p>The API can be queried using an async HTTP client such as <code>nanonext::ncurl_aio()</code>.</p>
+<p>Here, all 8 requests are submitted at once, but we note that that responses have differing timestamps as only 4 can be processed at any one time (limited by the number of daemons set).</p>
+<pre><code class="language-r">library(nanonext)
+res &lt;- lapply(1:8,
+              function(i) ncurl_aio(&quot;http://127.0.0.1:8985/echo&quot;,
+                                    headers = c(msg = as.character(i))))
+res &lt;- lapply(res, call_aio)
+for (r in res) print(r$data)
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:27\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[11868]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:27\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[11862]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:27\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[11860]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:27\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[11864]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:28\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[11864]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:28\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[11868]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:28\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[11860]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:28\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[11862]}&quot;
+
+daemons(0)
+#&gt; [1] 0
+</code></pre>
+<h4 id="example-post-endpoint">Example POST Endpoint</h4>
+<p>Below is a demonstration of the equivalent using a POST endpoint, accepting a JSON instruction sent as request data.</p>
+<p>It is important to note in this case that <code>req$postBody</code> should be accessed in the router process and passed in as an argument to the ‘mirai’ as this is retrieved using a connection that is not serializable.</p>
+<pre><code class="language-r">library(mirai)
+
+# important to supply SIGINT so the plumber server is interrupted and exits cleanly when torn down
+daemons(1L, dispatcher = FALSE, autoexit = tools::SIGINT)
+#&gt; [1] 1
+
+m &lt;- mirai({
+  library(plumber)
+  library(promises) # to provide the promise pipe
+  library(mirai)
+
+  # uses dispatcher (suitable for requests with differing compute lengths)
+  daemons(4L, dispatcher = TRUE) # handles 4 requests simultaneously
+
+  pr() |&gt;
+    pr_post(
+      &quot;/echo&quot;,
+      function(req, res) {
+        mirai(
+          {
+            Sys.sleep(1L) # simulate expensive computation
+            list(status = 200L,
+                 body = list(time = format(Sys.time()),
+                             msg = jsonlite::fromJSON(data)[[&quot;msg&quot;]],
+                             pid = Sys.getpid()))
+          },
+          data = req$postBody
+        ) %...&gt;% (function(x) {
+          res$status &lt;- x$status
+          res$body &lt;- x$body
+        })
+      }
+    ) |&gt;
+    pr_run(host = &quot;127.0.0.1&quot;, port = 8986)
+})
+</code></pre>
+<p>Querying the endpoint produces the same set of outputs as the previous example.</p>
+<pre><code class="language-r">library(nanonext)
+res &lt;- lapply(1:8,
+              function(i) ncurl_aio(&quot;http://127.0.0.1:8986/echo&quot;,
+                                    method = &quot;POST&quot;,
+                                    data = sprintf('{&quot;msg&quot;:&quot;%d&quot;}', i)))
+res &lt;- lapply(res, call_aio)
+for (r in res) print(r$data)
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:31\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[12137]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:31\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[12139]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:32\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[12137]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:31\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[12145]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:32\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[12145]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:31\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[12142]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:32\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[12142]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-01-11 18:00:32\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[12139]}&quot;
+
+daemons(0)
+#&gt; [1] 0
+</code></pre>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
+</body>
+</html>

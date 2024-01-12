@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2022-2024 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -56,7 +56,7 @@
 #'     send_aio socket stat stop_aio strcat tls_config unresolved until wait
 #'     write_cert
 #' @importFrom parallel nextRNGStream stopCluster
-#' @importFrom stats rexp
+#' @importFrom stats rsignrank
 #'
 #' @docType package
 #' @name mirai-package
@@ -119,6 +119,7 @@ registerPromisesMethods <- function(pkgname, pkgpath) {
     regs <- rbind(ns[[".__NAMESPACE__."]][["S3methods"]],
                   c("as.promise", "mirai", "as.promise.mirai", NA_character_))
     `[[<-`(ns[[".__NAMESPACE__."]], "S3methods", regs)
+    `[[<-`(., "later", .getNamespace("later")[["later"]])
   }
 
 }
@@ -130,9 +131,7 @@ registerPromisesMethods <- function(pkgname, pkgpath) {
 .command <- NULL
 .urlscheme <- NULL
 
-.timelimit <- 5000L
-.intmax <- .Machine[["integer.max"]]
-.messages <- list2env(
+._ <- list2env(
   list(
     arglen = "'args' and/or 'url' must be of length 1 or the same length",
     cluster_inactive = "cluster is no longer active",
@@ -153,6 +152,9 @@ registerPromisesMethods <- function(pkgname, pkgpath) {
   ),
   hash = TRUE
 )
+
+.intmax <- .Machine[["integer.max"]]
+.timelimit <- 5000L
 
 as.promise <- NULL
 recvData <- NULL

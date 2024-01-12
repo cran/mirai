@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2022-2024 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -112,22 +112,19 @@
 #'
 #'     By default \code{dispatcher = TRUE}. This launches a background process
 #'     running \code{\link{dispatcher}}. Dispatcher connects to daemons on
-#'     behalf of the host and queues tasks until a daemon is able to begin
-#'     immediate execution of that task, ensuring FIFO scheduling. Dispatcher
-#'     uses synchronisation primitives from \code{nanonext}, waiting rather than
-#'     polling for tasks, which is efficient both in terms of consuming no
-#'     resources while waiting, and also being fully synchronised with events
-#'     (having no latency).
+#'     behalf of the host and ensures FIFO scheduling of tasks. Dispatcher uses
+#'     synchronisation primitives from \pkg{nanonext}, waiting rather than
+#'     polling for tasks, which is both efficient (no resource usage) and fully
+#'     event-driven (having no latency).
 #'
 #'     By specifying \code{dispatcher = FALSE}, daemons connect to the host
 #'     directly rather than through dispatcher. The host sends tasks to
 #'     connected daemons immediately in an evenly-distributed fashion. However,
 #'     optimal scheduling is not guaranteed as the duration of tasks cannot be
-#'     known \emph{a priori}, such that tasks can be queued at a daemon behind
-#'     a long-running task while other daemons remain idle. Nevertheless, this
-#'     provides a resource-light approach suited to working with similar-length
-#'     tasks, or where concurrent tasks typically do not exceed available
-#'     daemons.
+#'     known \emph{a priori}, such that tasks can be queued at one daemon while
+#'     other daemons remain idle. Nevertheless, this provides a resource-light
+#'     approach suited to working with similar-length tasks, or where concurrent
+#'     tasks typically do not exceed available daemons.
 #'
 #' @section Distributed Computing:
 #'
@@ -167,8 +164,8 @@
 #'     numbers / paths. In this case it is optional to supply 'n' as this can
 #'     be inferred by the length of vector supplied.
 #'
-#'     Individual daemons then dial in to each of these host URLs, and at most
-#'     one daemon should be dialled into each URL at any given time.
+#'     Individual daemons then dial in to each of these host URLs. At most one
+#'     daemon can be dialled into each URL at any given time.
 #'
 #'     Dispatcher automatically adjusts to the number of daemons actually
 #'     connected. Hence it is possible to dynamically scale up or down the
@@ -203,9 +200,9 @@
 #'
 #'     \strong{local / remote} daemons may be set with a host URL and specifying
 #'     '.compute' as 'remote', which creates a new compute profile. Subsequent
-#'     mirai calls may then be sent for local computation by not specifying its
+#'     mirai calls may then be sent for local computation by not specifying the
 #'     '.compute' argument, or for remote computation to connected daemons by
-#'     specifying its '.compute' argument as 'remote'.
+#'     specifying the '.compute' argument as 'remote'.
 #'
 #'     \strong{cpu / gpu} some tasks may require access to different types of
 #'     daemon, such as those with GPUs. In this case, \code{daemons()} may be
@@ -216,26 +213,6 @@
 #'
 #'     Note: further actions such as resetting daemons via \code{daemons(0)}
 #'     should be carried out with the desired '.compute' argument specified.
-#'
-#' @section Everywhere:
-#'
-#'     \code{\link{everywhere}} evaluates an expression on all connected daemons
-#'     and persists the resultant state. This is designed for setting up the
-#'     evaluation environment, with particular packages loaded, or common
-#'     resources made available, etc.
-#'
-#' @section Timeouts:
-#'
-#'     Specifying the \code{.timeout} argument in \code{\link{mirai}} will
-#'     ensure that the 'mirai' always resolves.
-#'
-#'     However, the task may not have completed and still be ongoing in the
-#'     daemon process. In such situations, dispatcher ensures that queued tasks
-#'     are not assigned to the busy process, however overall performance may
-#'     still be degraded if they remain in use. If a process hangs and cannot be
-#'     restarted manually, \code{\link{saisei}} specifying \code{force = TRUE}
-#'     may be used to cancel the task and regenerate any particular URL for a
-#'     new \code{\link{daemon}} to connect to.
 #'
 #' @examples
 #' if (interactive()) {
@@ -265,19 +242,22 @@
 #' # Reset to zero
 #' daemons(0)
 #'
+#' }
+#'
+#' \dontrun{
 #' # Launch 2 daemons on remotes 'nodeone' and 'nodetwo' using SSH
 #' # connecting back directly to the host URL over a TLS connection:
-#' #
-#' # daemons(url = host_url(tls = TRUE),
-#' #         remote = ssh_config(c('ssh://nodeone', 'ssh://nodetwo')),
-#' #         dispatcher = FALSE)
+#'
+#' daemons(url = host_url(tls = TRUE),
+#'         remote = ssh_config(c('ssh://nodeone', 'ssh://nodetwo')),
+#'         dispatcher = FALSE)
 #'
 #' # Launch 4 daemons on the remote machine 10.75.32.90 using SSH tunnelling
 #' # over port 5555 ('url' hostname must be 'localhost' or '127.0.0.1'):
-#' #
-#' # daemons(n = 4,
-#' #         url = 'ws://localhost:5555',
-#' #         remote = ssh_config('ssh://10.75.32.90', tunnel = TRUE))
+#'
+#' daemons(n = 4,
+#'         url = 'ws://localhost:5555',
+#'         remote = ssh_config('ssh://10.75.32.90', tunnel = TRUE))
 #'
 #' }
 #'
@@ -299,14 +279,14 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
       cv <- cv()
       create_stream(n = n, seed = seed, envir = envir)
       if (dispatcher) {
-        n <- if (missing(n)) length(url) else if (is.numeric(n) && n >= 1L) as.integer(n) else stop(.messages[["n_one"]])
+        n <- if (missing(n)) length(url) else if (is.numeric(n) && n >= 1L) as.integer(n) else stop(._[["n_one"]])
         if (length(tls)) tls_config(server = tls, pass = pass)
-        urld <- auto_tokenized_url()
+        urld <- local_url()
         urlc <- strcat(urld, "c")
         sock <- req_socket(urld, resend = 0L)
         sockc <- req_socket(urlc, resend = 0L)
-        launch_and_sync_daemon(sock = sock, urld, parse_dots(...), url, n, urlc, tls = tls, pass = pass) || stop(.messages[["sync_timeout"]])
-        init_monitor(sockc = sockc, envir = envir) || stop(.messages[["sync_timeout"]])
+        launch_and_sync_daemon(sock = sock, urld, parse_dots(...), url, n, urlc, tls = tls, pass = pass) || stop(._[["sync_timeout"]])
+        init_monitor(sockc = sockc, envir = envir) || stop(._[["sync_timeout"]])
       } else {
         sock <- req_socket(url, tls = if (length(tls)) tls_config(server = tls, pass = pass), resend = resilience * .intmax)
         store_urls(sock = sock, envir = envir)
@@ -324,7 +304,7 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
 
     signal <- is.null(n)
     if (signal) n <- 0L
-    is.numeric(n) || stop(.messages[["numeric_n"]])
+    is.numeric(n) || stop(._[["numeric_n"]])
     n <- as.integer(n)
 
     if (n == 0L) {
@@ -337,18 +317,18 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
 
     } else if (is.null(envir)) {
 
-      n > 0L || stop(.messages[["n_zero"]])
+      n > 0L || stop(._[["n_zero"]])
       envir <- new.env(hash = FALSE, parent = ..)
-      urld <- auto_tokenized_url()
+      urld <- local_url()
       cv <- cv()
       create_stream(n = n, seed = seed, envir = envir)
       if (dispatcher) {
         sock <- req_socket(urld, resend = 0L)
         urlc <- strcat(urld, "c")
         sockc <- req_socket(urlc, resend = 0L)
-        launch_and_sync_daemon(sock = sock, urld, parse_dots(...), n, urlc, rs = envir[["stream"]]) || stop(.messages[["sync_timeout"]])
+        launch_and_sync_daemon(sock = sock, urld, parse_dots(...), n, urlc, rs = envir[["stream"]]) || stop(._[["sync_timeout"]])
         for (i in seq_len(n)) next_stream(envir)
-        init_monitor(sockc = sockc, envir = envir) || stop(.messages[["sync_timeout"]])
+        init_monitor(sockc = sockc, envir = envir) || stop(._[["sync_timeout"]])
       } else {
         sock <- req_socket(urld, resend = resilience * .intmax)
         if (is.null(seed)) {
@@ -440,17 +420,18 @@ status <- function(.compute = "default") {
 #' Registers custom serialization and unserialization functions for sending and
 #'     receiving external pointer reference objects.
 #'
-#' @param refhook \strong{either} a list of two functions: the signature for the
-#'     first must accept a list of external pointer type objects and return a
-#'     raw vector, e.g. \code{torch::torch_serialize}, and the second must
-#'     accept a raw vector and return a list of external pointer type objects,
-#'     e.g. \code{torch::torch_load},\cr \strong{or else} NULL to reset.
+#' @param refhook \strong{either} a list or pairlist of two functions: the
+#'     signature for the first must accept a list of external pointer type
+#'     objects and return a raw vector, e.g. \code{torch::torch_serialize}, and
+#'     the second must accept a raw vector and return a list of external pointer
+#'     type objects, e.g. \code{torch::torch_load},\cr \strong{or else} NULL to
+#'     reset.
 #'
-#' @return Invisibly, a list comprising the currently-registered 'refhook'
-#'     functions. If functions are successfully registered or reset, a message
-#'     is printed to the console.
+#' @return Invisibly, the pairlist of currently-registered 'refhook' functions.
+#'     A message is printed to the console when functions are successfully
+#'     registered or reset.
 #'
-#' @details Calling without any arguments returns a list of the
+#' @details Calling without any arguments returns the pairlist of
 #'     currently-registered 'refhook' functions.
 #'
 #'     This function may be called prior to or after setting daemons, with the
@@ -473,10 +454,10 @@ serialization <- function(refhook = list()) {
 
   if (register) {
     if (is.list(refhook) && length(refhook) == 2L && is.function(refhook[[1L]]) && is.function(refhook[[2L]]))
-      cat("[ mirai ] serialization functions registered\n", file = stdout()) else
+      cat("mirai serialization functions registered\n", file = stderr()) else
         if (is.null(refhook))
-          cat("[ mirai ] serialization functions cancelled\n", file = stdout()) else
-            stop(.messages[["refhook_invalid"]])
+          cat("mirai serialization functions cancelled\n", file = stderr()) else
+            stop(._[["refhook_invalid"]])
     register_everywhere(refhook)
   }
 
@@ -497,7 +478,7 @@ check_create_tls <- function(url, tls, envir) {
 }
 
 create_stream <- function(n, seed, envir) {
-  rexp(n = 1L)
+  rsignrank(1L, 1L)
   oseed <- .GlobalEnv[[".Random.seed"]]
   RNGkind("L'Ecuyer-CMRG")
   if (length(seed)) set.seed(seed)
@@ -505,9 +486,7 @@ create_stream <- function(n, seed, envir) {
   `[[<-`(.GlobalEnv, ".Random.seed", oseed)
 }
 
-auto_tokenized_url <- function() strcat(.urlscheme, random(12L))
-
-new_tokenized_url <- function(url) sprintf("%s/%s", url, random(12L))
+tokenized_url <- function(url) sprintf("%s/%s", url, random(12L))
 
 req_socket <- function(url, tls = NULL, resend = .intmax)
   `opt<-`(socket(protocol = "req", listen = url, tls = tls), "req:resend-time", resend)
@@ -516,7 +495,7 @@ parse_dots <- function(...)
   if (missing(...)) "" else {
     dots <- list(...)
     for (dot in dots)
-      is.numeric(dot) || is.logical(dot) || stop(.messages[["wrong_dots"]])
+      is.numeric(dot) || is.logical(dot) || stop(._[["wrong_dots"]])
     dnames <- names(dots)
     dots <- strcat(",", paste(dnames, dots, sep = "=", collapse = ","))
     "output" %in% dnames && return(`class<-`(dots, "output"))

@@ -28,7 +28,9 @@
 #'     port to connect to (and optionally for websockets, a path), e.g.
 #'     'tcp://hostname:5555' or 'ws://10.75.32.70:5555/path'.
 #' @param autoexit [default TRUE] logical value, whether the daemon should
-#'     exit automatically when its socket connection ends (see 'Persistence'
+#'     exit automatically when its socket connection ends. If a signal from the
+#'     \pkg{tools} package, e.g. \code{tools::SIGINT}, or an equivalent integer
+#'     value is supplied, this signal is additionally raised (see 'Persistence'
 #'     section below).
 #' @param cleanup [default TRUE] logical value, whether to perform cleanup of
 #'     the global environment and restore loaded packages and options to an
@@ -70,14 +72,20 @@
 #' @section Persistence:
 #'
 #'     The 'autoexit' argument governs persistence settings for the daemon. The
-#'     default TRUE ensures that it will exit cleanly under all circumstances
-#'     once its socket connection has ended.
+#'     default TRUE ensures that it will exit cleanly once its socket connection
+#'     has ended.
 #'
 #'     Setting to FALSE allows the daemon to persist indefinitely even when
 #'     there is no longer a socket connection. This allows a host session to end
 #'     and a new session to connect at the URL where the daemon is dialled in.
 #'     Daemons must be terminated with \code{daemons(NULL)} in this case, which
 #'     sends an exit signal to all connected daemons.
+#'
+#'     Supplying a signal from the \pkg{tools} package, e.g. \code{tools::SIGINT},
+#'     or an equivalent integer value, sets this signal to be raised when the
+#'     socket connection ends. As an example, supplying SIGINT allows a
+#'     potentially more immediate exit by interrupting any ongoing evaluation
+#'     rather than letting it complete.
 #'
 #'     Persistence also implies that dials are performed asynchronously, which
 #'     means retries are attempted (indefinitely) if not immediately successful.
@@ -107,7 +115,7 @@ daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
   cv <- cv()
   sock <- socket(protocol = "rep")
   on.exit(reap(sock))
-  autoexit && pipe_notify(sock, cv = cv, remove = TRUE, flag = TRUE)
+  autoexit && pipe_notify(sock, cv = cv, remove = TRUE, flag = as.integer(autoexit))
   if (length(tls)) tls <- tls_config(client = tls)
   dial_and_sync_socket(sock = sock, url = url, asyncdial = !autoexit, tls = tls)
 
@@ -124,7 +132,7 @@ daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
       close(devnull)
     }, add = TRUE)
   }
-  `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", ".Random.seed")
+  snapshot()
   count <- 0L
   start <- mclock()
 
@@ -204,3 +212,5 @@ perform_cleanup <- function(cleanup) {
   if (cleanup[3L]) options(.[["op"]])
   if (cleanup[4L]) gc(verbose = FALSE)
 }
+
+snapshot <- function() `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", names(.GlobalEnv))

@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2022-2024 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -24,8 +24,8 @@
 #'     once complete.
 #'
 #' @param .expr an expression to evaluate asynchronously (of arbitrary length,
-#'     wrapped in \{\} if necessary), \strong{or} a language object passed by
-#'     \link{name}.
+#'     wrapped in \{ \} where necessary), \strong{or} a language object passed
+#'     by \link{name}.
 #' @param ... (optional) named arguments (name = value pairs) specifying
 #'     objects referenced in '.expr'. Used in addition to, and taking precedence
 #'     over, any arguments specified via '.args'.
@@ -52,8 +52,7 @@
 #'     in control flow statements such as \code{while} or \code{if}.
 #'
 #'     Alternatively, to call (and wait for) the result, use \code{\link{call_mirai}}
-#'     on the returned mirai. This will block until the result is returned
-#'     (although interruptible with e.g. ctrl+c).
+#'     on the returned mirai. This will block until the result is returned.
 #'
 #'     The expression '.expr' will be evaluated in a separate R process in a
 #'     clean environment, which is not the global environment, consisting only
@@ -137,7 +136,7 @@
 #'
 mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "default") {
 
-  missing(.expr) && stop(.messages[["missing_expression"]])
+  missing(.expr) && stop(._[["missing_expression"]])
 
   expr <- substitute(.expr)
   arglist <- list(..., .expr = if (is.symbol(expr) && is.language(get0(as.character(expr), envir = sys.frame(-1L)))) .expr else expr)
@@ -154,7 +153,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
     aio <- request_signal(.context(envir[["sock"]]), data = data, cv = envir[["cv"]], send_mode = 3L, recv_mode = 1L, timeout = .timeout)
 
   } else {
-    url <- auto_tokenized_url()
+    url <- local_url()
     sock <- req_socket(url, resend = 0L)
     launch_daemon(url)
     aio <- request(.context(sock), data = data, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
@@ -170,9 +169,9 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 #' Evaluate an expression 'everywhere' on all connected daemons for the
 #'     specified compute profile. Designed for performing setup operations
-#'     across daemons, resultant changes to the global environment, loaded
-#'     packages or options are persisted regardless of a daemon's 'cleanup'
-#'     setting.
+#'     across daemons or exporting common data, resultant changes to the global
+#'     environment, loaded packages or options are persisted regardless of a
+#'     daemon's 'cleanup' setting.
 #'
 #' @inheritParams mirai
 #'
@@ -183,8 +182,11 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #' # Only run examples in interactive R sessions
 #'
 #' daemons(1)
+#' # export common data by super-assignment:
+#' everywhere(y <<- 3)
+#' # assign explicitly to global environment:
 #' everywhere(list2env(x, envir = .GlobalEnv), x = list(a = 1, b = 2))
-#' m <- mirai(a + b)
+#' m <- mirai(a + b - y == 0L)
 #' call_mirai(m)$data
 #' daemons(0)
 #'
@@ -421,7 +423,7 @@ is_error_value <- is_error_value
 #'
 print.mirai <- function(x, ...) {
 
-  cat("< mirai >\n - $data for evaluated result\n", file = stdout())
+  cat("< mirai | $data >\n", file = stdout())
   invisible(x)
 
 }
@@ -457,8 +459,6 @@ mk_mirai_error <- function(e) {
   cat(strcat(msg, "\n"), file = stderr());
   `class<-`(msg, c("miraiError", "errorValue", "try-error"))
 }
-
-snapshot <- function() `[[<-`(`[[<-`(`[[<-`(., 'vars', names(.GlobalEnv)), 'se', search()), 'op', .Options)
 
 .interrupt_error <- `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))
 .snapshot <- expression(mirai:::snapshot())

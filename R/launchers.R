@@ -148,7 +148,7 @@ launch_remote <- function(url, remote = remote_config(), ..., tls = NULL, .compu
         return(`class<-`(cmds, "miraiLaunchCmd"))
 
       } else {
-        stop(.messages[["arglen"]])
+        stop(._[["arglen"]])
       }
 
     }
@@ -250,28 +250,31 @@ remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript"
 #' @examples
 #' ssh_config(remotes = c("ssh://10.75.32.90:222", "ssh://nodename"), timeout = 10)
 #'
+#' \dontrun{
+#'
 #' # launch 2 daemons on the remote machines 10.75.32.90 and 10.75.32.91 using
 #' # SSH, connecting back directly to the host URL over a TLS connection:
-#' #
-#' # daemons(
-#' #   url = host_url(tls = TRUE),
-#' #   remote = ssh_config(
-#' #     remotes = c("ssh://10.75.32.90:222", "ssh://10.75.32.91:222"),
-#' #     timeout = 1
-#' #   )
-#' # )
+#'
+#' daemons(
+#'   url = host_url(tls = TRUE),
+#'   remote = ssh_config(
+#'     remotes = c("ssh://10.75.32.90:222", "ssh://10.75.32.91:222"),
+#'     timeout = 1
+#'   )
+#' )
 #'
 #' # launch 2 nodes on the remote machine 10.75.32.90 using SSH tunnelling over
 #' # port 5555 ('url' hostname must be 'localhost' or '127.0.0.1'):
-#' #
-#' # make_cluster(
-#' #   url = "tcp://localhost:5555",
-#' #   remote = ssh_config(
-#' #     remotes = c("ssh://10.75.32.90", "ssh://10.75.32.90"),
-#' #     timeout = 1,
-#' #     tunnel = TRUE
-#' #   )
-#' # )
+#'
+#' cl <- make_cluster(
+#'   url = "tcp://localhost:5555",
+#'   remote = ssh_config(
+#'     remotes = c("ssh://10.75.32.90", "ssh://10.75.32.90"),
+#'     timeout = 1,
+#'     tunnel = TRUE
+#'   )
+#' )
+#' }
 #'
 #' @rdname remote_config
 #' @export
@@ -283,7 +286,7 @@ ssh_config <- function(remotes, timeout = 5, tunnel = FALSE, command = "ssh", rs
   ports <- lapply(premotes, .subset2, "port")
 
   if (tunnel) {
-    url <- dynGet("url", ifnotfound = stop(.messages[["correct_context"]]))
+    url <- dynGet("url", ifnotfound = stop(._[["correct_context"]]))
     purl <- lapply(url, parse_check_local_url)
     plen <- length(purl)
   }
@@ -304,9 +307,9 @@ ssh_config <- function(remotes, timeout = 5, tunnel = FALSE, command = "ssh", rs
 
 }
 
-#' Host URL Constructor
+#' URL Constructors
 #'
-#' Automatically constructs a valid host URL (at which daemons may connect)
+#' \code{host_url} constructs a valid host URL (at which daemons may connect)
 #'     based on the computer's hostname. This may be supplied directly to the
 #'     'url' argument of \code{\link{daemons}}.
 #'
@@ -318,12 +321,17 @@ ssh_config <- function(remotes, timeout = 5, tunnel = FALSE, command = "ssh", rs
 #'     connections from the network addresses the daemons are connecting from.
 #'     '0' is a wildcard value that automatically assigns a free ephemeral port.
 #'
-#' @return A character string comprising a valid host URL.
+#' @return A character string comprising a valid URL.
 #'
-#' @details This implementation relies on using the host name of the computer
+#' @details \code{host_url} relies on using the host name of the computer
 #'     rather than an IP address and typically works on local networks, although
 #'     this is not always guaranteed. If unsuccessful, substitute an IPv4 or
 #'     IPv6 address in place of the hostname.
+#'
+#'     \code{local_url} generates a random URL for the platform's default
+#'     inter-process communications transport: abstract Unix domain sockets on
+#'     Linux, Unix domain sockets on MacOS, Solaris and other POSIX platforms,
+#'     and named pipes on Windows.
 #'
 #' @examples
 #' host_url()
@@ -341,6 +349,18 @@ host_url <- function(ws = FALSE, tls = FALSE, port = 0)
     as.character(port)
   )
 
+#' URL Constructors
+#'
+#' \code{local_url} constructs a random URL suitable for local daemons.
+#'
+#' @examples
+#' local_url()
+#'
+#' @rdname host_url
+#' @export
+#'
+local_url <- function() strcat(.urlscheme, random(12L))
+
 #' @export
 #'
 print.miraiLaunchCmd <- function(x, ...) {
@@ -355,15 +375,15 @@ print.miraiLaunchCmd <- function(x, ...) {
 
 find_dot <- function(args) {
   sel <- args == "."
-  any(sel) || stop(.messages[["dot_required"]])
+  any(sel) || stop(._[["dot_required"]])
   sel
 }
 
 process_url <- function(url, .compute) {
   if (is.numeric(url)) {
     vec <- ..[[.compute]][["urls"]]
-    is.null(vec) && stop(.messages[["daemons_unset"]])
-    all(url >= 1L, url <= length(vec)) || stop(.messages[["url_spec"]])
+    is.null(vec) && stop(._[["daemons_unset"]])
+    all(url >= 1L, url <= length(vec)) || stop(._[["url_spec"]])
     url <- vec[url]
   } else {
     lapply(url, parse_url)
@@ -373,6 +393,6 @@ process_url <- function(url, .compute) {
 
 parse_check_local_url <- function(url) {
   purl <- parse_url(url)
-  purl[["hostname"]] %in% c("localhost", "127.0.0.1") || stop(.messages[["requires_local"]])
+  purl[["hostname"]] %in% c("localhost", "127.0.0.1") || stop(._[["requires_local"]])
   purl
 }

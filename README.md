@@ -56,13 +56,12 @@ m <- mirai(
     res <- rnorm(x) + y ^ 2
     res / rev(res)
   },
-  x = 11,
+  x = 10,
   y = runif(1)
 )
 
 m
-#> < mirai >
-#>  - $data for evaluated result
+#> < mirai | $data >
 ```
 
 Above, all specified `name = value` pairs are passed through to the
@@ -88,9 +87,8 @@ result.
 
 ``` r
 m$data
-#>  [1]  -0.04026068  -1.92115491   0.17933997   0.69404292   0.01749486
-#>  [6]   1.00000000  57.15965086   1.44083309   5.57600189  -0.52052023
-#> [11] -24.83812992
+#>  [1] -2.4019171  1.5201849  1.9796594 -1.1776160  1.7105682  0.5846011
+#>  [7] -0.8491733  0.5051374  0.6578147 -0.4163341
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -98,136 +96,82 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data
-#>  [1]  -0.04026068  -1.92115491   0.17933997   0.69404292   0.01749486
-#>  [6]   1.00000000  57.15965086   1.44083309   5.57600189  -0.52052023
-#> [11] -24.83812992
+#>  [1] -2.4019171  1.5201849  1.9796594 -1.1776160  1.7105682  0.5846011
+#>  [7] -0.8491733  0.5051374  0.6578147 -0.4163341
 ```
 
-### Vignette
+### Daemons
 
-See the [mirai
+Daemons are persistent background processes created to receive ‘mirai’
+requests.
+
+They may be deployed for:
+
+[local](https://shikokuchuo.net/mirai/articles/mirai.html#daemons-local-persistent-processes)
+parallel processing, or
+
+[remote](https://shikokuchuo.net/mirai/articles/mirai.html#distributed-computing-remote-daemons)
+network distributed computing.
+
+[Launchers](https://shikokuchuo.net/mirai/articles/mirai.html#distributed-computing-launching-daemons)
+allow daemons to be started both on the local machine and across the
+network via SSH etc.
+
+[Secure TLS
+connections](https://shikokuchuo.net/mirai/articles/mirai.html#distributed-computing-tls-secure-connections)
+can be automatically-configured on-the-fly for remote daemon
+connections.
+
+Refer to the [{mirai}
 vignette](https://shikokuchuo.net/mirai/articles/mirai.html) for full
-package functionality.
-
-Key topics include:
-
-- Example use cases
-
-- Local daemons - persistent background processes
-
-- Distributed computing - remote daemons
-
-- Secure TLS connections
-
-- Serialization - registering custom functions
-
-This may be accessed within R by:
+package functionality. This may be accessed within R by:
 
 ``` r
 vignette("mirai", package = "mirai")
 ```
 
-### Use with Parallel and Foreach
+### Integrations
 
-{mirai} provides an alternative communications backend for R’s base
-‘parallel’ package.
+The following core integrations are documented, with usage examples in
+the linked vignettes:
 
-``` r
-cl <- make_cluster(4)
-cl
-#> < miraiCluster >
-#>  - cluster ID: `0`
-#>  - nodes: 4
-#>  - active: TRUE
-```
+[{parallel}](https://shikokuchuo.net/mirai/articles/parallel.html) -
+provides an alternative communications backend for R, implementing a
+low-level feature request by R-Core at R Project Sprint 2023.
 
-`make_cluster()` creates a ‘miraiCluster’, a cluster fully compatible
-with all ‘parallel’ functions such as:
+[{promises}](https://shikokuchuo.net/mirai/articles/promises.html) -
+‘mirai’ may be used interchangeably with ‘promises’ by using the promise
+pipe `%...>%` or the `as.promise()` method.
 
-- `parallel::clusterApply()`
-- `parallel::parLapply()`
-- `parallel::parLapplyLB()`
+[{plumber}](https://shikokuchuo.net/mirai/articles/plumber.html) -
+serves as an asynchronous / distributed backend, scaling applications
+via the use of promises.
 
-A ‘miraiCluster’ may also be registered for use with the
-[`foreach`](https://cran.r-project.org/package=foreach) package by
-[`doParallel`](https://cran.r-project.org/package=doParallel).
+[{shiny}](https://shikokuchuo.net/mirai/articles/shiny.html) - serves as
+an asynchronous / distributed backend, plugging directly into the
+reactive framework without the need for promises.
 
-This functionality fulfils a request from R-Core at R Project Sprint
-2023.
+[{torch}](https://shikokuchuo.net/mirai/articles/torch.html) - the
+custom serialization interface allows tensors and complex objects such
+as models and optimizers to be used seamlessly across parallel
+processes.
 
-### Use with Crew and Targets
+### Powering Crew and Targets High Performance Computing
 
-The [`crew`](https://cran.r-project.org/package=crew) package is a
-distributed worker-launcher extending {mirai} to different distributed
-computing platforms, from traditional clusters to cloud services.
-
-[`crew.cluster`](https://cran.r-project.org/package=crew.cluster) is a
-plug-in that enables mirai-based workflows on traditional
-high-performance computing clusters using:
-
-- LFS
-- PBS/TORQUE
-- SGE
-- SLURM
-
-[`targets`](https://cran.r-project.org/package=targets), a Make-like
+[{targets}](https://cran.r-project.org/package=targets), a Make-like
 pipeline tool for statistics and data science, has integrated and
-adopted [`crew`](https://cran.r-project.org/package=crew) as its default
-recommended high-performance computing backend.
+adopted {crew} as its default high-performance computing backend.
 
-### Use with Shiny and Plumber
+[{crew}](https://cran.r-project.org/package=crew) is a distributed
+worker-launcher extending {mirai} to different distributed computing
+platforms, from traditional clusters to cloud services.
 
-{mirai} serves as a backend for enterprise asynchronous
-[`shiny`](https://cran.r-project.org/package=shiny) or
-[`plumber`](https://cran.r-project.org/package=plumber) applications.
+[{crew.cluster}](https://cran.r-project.org/package=crew.cluster)
+enables mirai-based workflows on traditional high-performance computing
+clusters using LFS, PBS/TORQUE, SGE and SLURM.
 
-A ‘mirai’ may be used interchangeably with a ‘promise’ by using the the
-promise pipe `%...>%`, or explictly by `promises::as.promise()`,
-allowing side-effects to be performed upon asynchronous resolution of a
-‘mirai’.
-
-The following example outputs “hello” to the console after one second
-when the ‘mirai’ resolves.
-
-``` r
-library(promises)
-
-p <- mirai({Sys.sleep(1); "hello"}) %...>% cat()
-p
-#> <Promise [pending]>
-```
-
-Alternatively, [`crew`](https://cran.r-project.org/package=crew)
-provides an interface that facilitates deploying {mirai} for
-[`shiny`](https://cran.r-project.org/package=shiny).
-
-- Please refer to its [Asynchronous Shiny
-  Apps](https://wlandau.github.io/crew/articles/shiny.html) vignette,
-  which features a tutorial and sample code.
-
-### Use with Torch
-
-The custom serialization interface in {mirai} is accessed via the
-`serialization()` function.
-
-In the case of [`torch`](https://cran.r-project.org/package=torch), this
-would involve making the following call once at the start of your
-session:
-
-``` r
-serialization(refhook = list(torch:::torch_serialize, torch::torch_load))
-#> [ mirai ] serialization functions registered
-```
-
-- Note that `torch_serialize()` is available via `:::` since
-  [`torch`](https://cran.r-project.org/package=torch) v0.9.0, and will
-  be exported in v0.12.0.
-
-This allows tensors, including models, optimizers etc. to be used
-seamlessly across local and remote processes like any other R object.
-
-For more details, please refer to the relevant [vignette
-chapter](https://shikokuchuo.net/mirai/articles/mirai.html#serialization-custom-functions).
+[{crew.aws.batch}](https://cran.r-project.org/package=crew.aws.batch)
+extends {mirai} to cloud computing using AWS Batch.
 
 ### Thanks
 
@@ -236,20 +180,18 @@ We would like to thank in particular:
 [William Landau](https://github.com/wlandau/), for being instrumental in
 shaping development of the package, from initiating the original request
 for persistent daemons, through to orchestrating robustness testing for
-the high performance computing requirements of
-[`crew`](https://cran.r-project.org/package=crew) and
-[`targets`](https://cran.r-project.org/package=targets).
+the high performance computing requirements of {crew} and {targets}.
 
 [Henrik Bengtsson](https://github.com/HenrikBengtsson/), for valuable
 and incisive insights leading to the interface accepting broader usage
 patterns.
 
-[Luke Tierney](https://github.com/ltierney/), R Core, for introducing
+[Luke Tierney](https://github.com/ltierney/), R Core, for discussion on
 R’s implementation of L’Ecuyer-CMRG streams, used to ensure statistical
 independence in parallel processing.
 
 [Daniel Falbel](https://github.com/dfalbel/), for discussion around an
-efficient solution to serialization and transmission of ‘torch’ tensors.
+efficient solution to serialization and transmission of {torch} tensors.
 
 [« Back to ToC](#table-of-contents)
 

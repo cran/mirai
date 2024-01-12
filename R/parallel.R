@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2023-2024 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -97,11 +97,11 @@
 make_cluster <- function(n, url = NULL, remote = NULL, ...) {
 
   id <- sprintf("`%d`", length(..))
+  cv2 <- cv()
 
   if (is.character(url)) {
 
-    length(url) == 1L || stop(.messages[["single_url"]])
-    cv2 <- cv()
+    length(url) == 1L || stop(._[["single_url"]])
     daemons(url = url, remote = remote, dispatcher = FALSE, resilience = FALSE, cleanup = FALSE, ..., .compute = id)
 
     if (length(remote)) {
@@ -109,15 +109,14 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
       n <- if (is.list(args)) length(args) else 1L
     } else {
       if (missing(n)) n <- 1L
-      is.numeric(n) || stop(.messages[["numeric_n"]])
+      is.numeric(n) || stop(._[["numeric_n"]])
       cat("Shell commands for deployment on nodes:\n\n", file = stdout())
       print(launch_remote(rep(..[[id]][["urls"]], n), .compute = id))
     }
 
   } else {
-    is.numeric(n) || stop(.messages[["numeric_n"]])
-    n >= 1L || stop(.messages[["n_one"]])
-    cv2 <- cv()
+    is.numeric(n) || stop(._[["numeric_n"]])
+    n >= 1L || stop(._[["n_one"]])
     daemons(n = n, dispatcher = FALSE, resilience = FALSE, cleanup = FALSE, ..., .compute = id)
   }
 
@@ -155,16 +154,14 @@ sendData.miraiNode <- function(node, data) {
 
   id <- attr(node, "id")
   envir <- ..[[id]]
-  length(envir) || stop(.messages[["cluster_inactive"]])
+  length(envir) || stop(._[["cluster_inactive"]])
 
   value <- data[["data"]]
   tagged <- !is.null(value[["tag"]])
-  tagged && { envir[["swapped"]] || cv_swap(envir, TRUE) } || { envir[["swapped"]] && cv_swap(envir, FALSE) }
+  tagged && (envir[["swapped"]] || cv_swap(envir, TRUE)) || (envir[["swapped"]] && cv_swap(envir, FALSE))
 
   m <- mirai(do.call(node, data, quote = TRUE), node = value[["fun"]], data = value[["args"]], .compute = id)
-
   if (tagged) assign("tag", value[["tag"]], m)
-
   `[[<-`(node, "mirai", m)
 
 }
@@ -191,7 +188,7 @@ recvOneData.miraiCluster <- function(cl) {
 print.miraiCluster <- function(x, ...) {
 
   id <- attr(.subset2(x, 1L), "id")
-  cat(sprintf("< miraiCluster >\n - cluster ID: %s\n - nodes: %d\n - active: %s\n", id, length(x), as.logical(length(..[[id]]))), file = stdout())
+  cat(sprintf("< miraiCluster | ID: %s nodes: %d active: %s >\n", id, length(x), as.logical(length(..[[id]]))), file = stdout())
   invisible(x)
 
 }
@@ -200,7 +197,7 @@ print.miraiCluster <- function(x, ...) {
 #'
 print.miraiNode <- function(x, ...) {
 
-  cat(sprintf("< miraiNode >\n - node: %d\n - cluster ID: %s\n", attr(x, "node"), attr(x, "id")), file = stdout())
+  cat(sprintf("< miraiNode | node: %d cluster ID: %s >\n", attr(x, "node"), attr(x, "id")), file = stdout())
   invisible(x)
 
 }

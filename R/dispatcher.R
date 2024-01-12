@@ -75,7 +75,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
                        monitor = NULL) {
 
   n <- if (is.numeric(n)) as.integer(n) else length(url)
-  n > 0L || stop(.messages[["missing_url"]])
+  n > 0L || stop(._[["missing_url"]])
 
   cv <- cv()
   sock <- socket(protocol = "rep")
@@ -101,14 +101,14 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
   }
 
   envir <- new.env(hash = FALSE)
-  if (length(rs)) `[[<-`(envir, "stream", as.integer(rs))
+  if (is.numeric(rs)) `[[<-`(envir, "stream", as.integer(rs))
 
   for (i in seq_n) {
     burl <- if (auto) .urlscheme else
       if (vectorised) url[i] else
         if (is.null(ports)) sprintf("%s/%d", url, i) else
           sub(ports[1L], ports[i], url, fixed = TRUE)
-    nurl <- if (auto) auto_tokenized_url() else if (token) new_tokenized_url(burl) else burl
+    nurl <- if (auto) local_url() else if (token) tokenized_url(burl) else burl
     ncv <- cv()
     nsock <- req_socket(NULL)
     pipe_notify(nsock, cv = ncv, cv2 = cv, add = TRUE, remove = TRUE)
@@ -142,7 +142,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
     on.exit(reap(sockc), add = TRUE, after = FALSE)
     pipe_notify(sockc, cv = cv, remove = TRUE, flag = TRUE)
     dial_and_sync_socket(sock = sockc, url = monitor, asyncdial = asyncdial)
-    recv(sockc, mode = 6L, block = .timelimit) && stop(.messages[["sync_timeout"]])
+    recv(sockc, mode = 6L, block = .timelimit) && stop(._[["sync_timeout"]])
     saio <- send_aio(sockc, c(Sys.getpid(), servernames), mode = 2L)
     cmessage <- recv_aio_signal(sockc, cv = cv, mode = 5L)
   }
@@ -167,7 +167,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
           if (i > 0L && !activevec[[i]]) {
             reap(attr(servers[[i]], "listener")[[1L]])
             attr(servers[[i]], "listener") <- NULL
-            data <- servernames[i] <- if (auto) auto_tokenized_url() else new_tokenized_url(basenames[i])
+            data <- servernames[i] <- if (auto) local_url() else tokenized_url(basenames[i])
             instance[i] <- -abs(instance[i])
             listen(servers[[i]], url = data, tls = tls, error = TRUE)
 
@@ -177,7 +177,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
             servers[[i]] <- nsock <- req_socket(NULL)
             pipe_notify(nsock, cv = active[[i]], cv2 = cv, add = TRUE, remove = TRUE)
             lock(nsock, cv = active[[i]])
-            data <- servernames[i] <- if (auto) auto_tokenized_url() else new_tokenized_url(basenames[i])
+            data <- servernames[i] <- if (auto) local_url() else tokenized_url(basenames[i])
             instance[i] <- -abs(instance[i])
             listen(nsock, url = data, tls = tls, error = TRUE)
 
@@ -252,6 +252,19 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
 #'     returned as an errorValue 7 'Object closed'. This may be used to cancel a
 #'     task that consistently hangs or crashes to prevent it from failing
 #'     repeatedly when new daemons connect.
+#'
+#' @section Timeouts:
+#'
+#'     Specifying the '.timeout' argument to \code{\link{mirai}} ensures that
+#'     the 'mirai' always resolves. However, the task may not have completed and
+#'     still be ongoing in the daemon process. In such situations, dispatcher
+#'     ensures that queued tasks are not assigned to the busy process, however
+#'     overall performance may still be degraded if they remain in use.
+#'
+#'     If a process hangs and cannot be restarted otherwise, \code{saisei}
+#'     specifying \code{force = TRUE} may be used to cancel the task and
+#'     regenerate any particular URL for a new \code{\link{daemon}} to connect
+#'     to.
 #'
 #' @examples
 #' if (interactive()) {

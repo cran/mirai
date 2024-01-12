@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<title>mirai - Torch Integration</title>
+<style type="text/css">
+/**
+ * Prism.s theme ported from highlight.js's xcode style
+ */
+pre code {
+  padding: 1em;
+}
+.token.comment {
+  color: #007400;
+}
+.token.punctuation {
+  color: #999;
+}
+.token.tag,
+.token.selector {
+  color: #aa0d91;
+}
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol {
+  color: #1c00cf;
+}
+.token.property,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin {
+  color: #c41a16;
+}
+.token.inserted {
+  background-color: #ccffd8;
+}
+.token.deleted {
+  background-color: #ffebe9;
+}
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #9a6e3a;
+}
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #836c28;
+}
+.token.function,
+.token.class-name {
+  color: #DD4A68;
+}
+.token.regex,
+.token.important,
+.token.variable {
+  color: #5c2699;
+}
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+.token.italic {
+  font-style: italic;
+}
+</style>
+<style type="text/css">
+body {
+  font-family: sans-serif;
+  max-width: 800px;
+  margin: auto;
+  padding: 1em;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+body, .footnotes, code { font-size: .9em; }
+li li { font-size: .95em; }
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+pre, img { max-width: 100%; }
+pre, pre:hover {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+pre code {
+  display: block;
+  overflow-x: auto;
+}
+code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
+:not(pre) > code, code[class] { background-color: #F8F8F8; }
+code.language-undefined, pre > code:not([class]) {
+  background-color: inherit;
+  border: 1px solid #eee;
+}
+table {
+  margin: auto;
+  border-top: 1px solid #666;
+}
+table thead th { border-bottom: 1px solid #ddd; }
+th, td { padding: 5px; }
+thead, tfoot, tr:nth-child(even) { background: #eee; }
+blockquote {
+  color: #666;
+  margin: 0;
+  padding-left: 1em;
+  border-left: 0.5em solid #eee;
+}
+hr, .footnotes::before { border: 1px dashed #ddd; }
+.frontmatter { text-align: center; }
+#TOC .numbered li { list-style: none; }
+#TOC .numbered { padding-left: 0; }
+#TOC .numbered ul { padding-left: 1em; }
+table, .body h2 { border-bottom: 1px solid #666; }
+.body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
+.footnote-ref a::before { content: "["; }
+.footnote-ref a::after { content: "]"; }
+section.footnotes::before {
+  content: "";
+  display: block;
+  max-width: 20em;
+}
+
+@media print {
+  body {
+    font-size: 12pt;
+    max-width: 100%;
+  }
+  tr, img { page-break-inside: avoid; }
+}
+@media only screen and (min-width: 992px) {
+  pre { white-space: pre; }
+}
+</style>
+</head>
+<body>
+<div class="frontmatter">
+<div class="title"><h1>mirai - Torch Integration</h1></div>
+<div class="author"><h2></h2></div>
+<div class="date"><h3></h3></div>
+</div>
+<div class="body">
+<h3 id="torch-integration">Torch Integration</h3>
+<p>Custom serialization functions may be registered to handle external pointer type reference objects.</p>
+<p>This allows tensors from the <a href="https://cran.r-project.org/package=torch">{torch}</a> package to be used seamlessly in ‘mirai’ computations.</p>
+<h4 id="setup-steps">Setup Steps</h4>
+<ol>
+<li>
+<p>Register the serialization and unserialization functions as a list supplied to <code>serialization()</code>.</p>
+</li>
+<li>
+<p>Set up dameons - this may be done before or after setting <code>serialization()</code>.</p>
+</li>
+<li>
+<p>Use <code>everywhere()</code> to make the {torch} package available on all dameons (for convenience, optional).</p>
+</li>
+</ol>
+<pre><code class="language-r">library(mirai)
+library(torch)
+
+serialization(refhook = list(torch:::torch_serialize, torch::torch_load))
+daemons(1)
+#&gt; [1] 1
+everywhere(library(torch))
+</code></pre>
+<h4 id="example-usage">Example Usage</h4>
+<p>The below example creates a convolutional neural network using <code>torch::nn_module()</code>.</p>
+<p>A set of model parameters is also specified.</p>
+<p>The model specification and parameters are then passed to and initialized within a ‘mirai’.</p>
+<pre><code class="language-r">model &lt;- nn_module(
+  initialize = function(in_size, out_size) {
+    self$conv1 &lt;- nn_conv2d(in_size, out_size, 5)
+    self$conv2 &lt;- nn_conv2d(in_size, out_size, 5)
+  },
+  forward = function(x) {
+    x &lt;- self$conv1(x)
+    x &lt;- nnf_relu(x)
+    x &lt;- self$conv2(x)
+    x &lt;- nnf_relu(x)
+    x
+  }
+)
+
+params &lt;- list(in_size = 1, out_size = 20)
+
+m &lt;- mirai(do.call(model, params), .args = list(model, params))
+
+call_mirai(m)$data
+#&gt; An `nn_module` containing 1,040 parameters.
+#&gt; 
+#&gt; ── Modules ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+#&gt; • conv1: &lt;nn_conv2d&gt; #520 parameters
+#&gt; • conv2: &lt;nn_conv2d&gt; #520 parameters
+</code></pre>
+<p>The returned model is an object containing many tensor elements.</p>
+<pre><code class="language-r">m$data$parameters$conv1.weight
+#&gt; torch_tensor
+#&gt; (1,1,.,.) = 
+#&gt;   0.0383  0.1520  0.1109  0.0119 -0.1000
+#&gt;   0.0859 -0.1157  0.0960  0.1383  0.0737
+#&gt;   0.0155  0.1152 -0.1734  0.1927 -0.0850
+#&gt;   0.1287  0.0048 -0.1009  0.1470  0.0258
+#&gt;   0.1092  0.0588  0.0504 -0.0591  0.1244
+#&gt; 
+#&gt; (2,1,.,.) = 
+#&gt;  -0.0541  0.0569  0.1552 -0.1217  0.0598
+#&gt;   0.1246 -0.0290 -0.0351  0.0297  0.1209
+#&gt;   0.0211  0.1039 -0.1791 -0.0348 -0.0183
+#&gt;  -0.1237 -0.1135 -0.1998 -0.1210  0.1453
+#&gt;   0.1361 -0.1181 -0.0830 -0.1544 -0.0032
+#&gt; 
+#&gt; (3,1,.,.) = 
+#&gt;  -0.1499  0.0196  0.1844 -0.0930 -0.1070
+#&gt;   0.0126 -0.0639 -0.0543 -0.1243  0.1572
+#&gt;  -0.1456  0.1143  0.1234  0.0045  0.0432
+#&gt;  -0.0010  0.0277 -0.1796  0.1019 -0.1668
+#&gt;  -0.1633 -0.0722 -0.1908 -0.0810 -0.1464
+#&gt; 
+#&gt; (4,1,.,.) = 
+#&gt;   0.0554 -0.0543  0.1105  0.1958 -0.1307
+#&gt;   0.0055 -0.0285  0.0316 -0.0255 -0.1464
+#&gt;  -0.1972  0.1867  0.1503 -0.0229 -0.1025
+#&gt;   0.1923  0.1258 -0.1582  0.1873  0.1510
+#&gt;  -0.1501  0.0139 -0.0719 -0.1983 -0.0373
+#&gt; 
+#&gt; (5,1,.,.) = 
+#&gt;  -0.0986 -0.1050 -0.0045  0.1681 -0.1684
+#&gt; ... [the output was truncated (use n=-1 to disable)]
+#&gt; [ CPUFloatType{20,1,5,5} ][ requires_grad = TRUE ]
+</code></pre>
+<p>It is usual for model parameters to then be passed to an optimiser.</p>
+<p>This can also be initialized within a ‘mirai’ process.</p>
+<pre><code class="language-r">optim &lt;- mirai(optim_rmsprop(params = params), params = m$data$parameters)
+
+call_mirai(optim)$data
+#&gt; &lt;optim_rmsprop&gt;
+#&gt;   Inherits from: &lt;torch_optimizer&gt;
+#&gt;   Public:
+#&gt;     add_param_group: function (param_group) 
+#&gt;     clone: function (deep = FALSE) 
+#&gt;     defaults: list
+#&gt;     initialize: function (params, lr = 0.01, alpha = 0.99, eps = 1e-08, weight_decay = 0, 
+#&gt;     load_state_dict: function (state_dict, ..., .refer_to_state_dict = FALSE) 
+#&gt;     param_groups: list
+#&gt;     state: State, R6
+#&gt;     state_dict: function () 
+#&gt;     step: function (closure = NULL) 
+#&gt;     zero_grad: function () 
+#&gt;   Private:
+#&gt;     step_helper: function (closure, loop_fun)
+
+daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p>Above, tensors and complex objects containing tensors were passed seamlessly between host and daemon processes, in the same way as any other R object.</p>
+<p>The custom serialization in {mirai} leverages R’s own native ‘refhook’ mechanism to allow such completely transparent usage.</p>
+<p>It is designed to be fast and efficient, minimising data copies and using the serialization methods from the ‘torch’ package directly.</p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
+</body>
+</html>
