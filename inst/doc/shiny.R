@@ -11,6 +11,8 @@ knitr::opts_chunk$set(
 #  library(ggplot2)
 #  library(aRtsy)
 #  
+#  # function definitions
+#  
 #  run_task <- function() {
 #    Sys.sleep(5L)
 #    list(
@@ -47,14 +49,15 @@ knitr::opts_chunk$set(
 #    output$status <- renderText(reactive_status())
 #    poll_for_results <- reactiveVal(FALSE)
 #  
-#    # mirai setup - 5 local daemons with dispatcher
-#    daemons(5L)
+#    # automatically shutdown daemons when app exits
 #    onStop(function() daemons(0L))
+#  
+#    # create empty mirai queue
 #    q <- list()
 #  
 #    # button to submit a task
 #    observeEvent(input$task, {
-#      q[[length(q) + 1L]] <<- mirai(run_task(), run_task = run_task)
+#      q[[length(q) + 1L]] <<- mirai(run_task())
 #      poll_for_results(TRUE)
 #    })
 #  
@@ -74,7 +77,15 @@ knitr::opts_chunk$set(
 #    })
 #  }
 #  
-#  shinyApp(ui = ui, server = server)
+#  # mirai setup - 5 local daemons with dispatcher
+#  # switch off cleanup as not necessary (each task is self-contained)
+#  daemons(5L, cleanup = FALSE)
+#  
+#  # pre-load function on each daemon for efficiency
+#  everywhere(run_task <<- run_task, .args = list(run_task))
+#  
+#  app <- shinyApp(ui = ui, server = server)
+#  runApp(app)
 
 ## ----shinypromises, eval=FALSE------------------------------------------------
 #  library(shiny)

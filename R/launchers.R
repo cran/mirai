@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2023-2024 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -80,12 +80,16 @@ launch_local <- function(url, ..., tls = NULL, .compute = "default") {
 
   envir <- ..[[.compute]]
   dots <- parse_dots(...)
+  output <- attr(dots, "output")
   if (is.null(tls)) tls <- envir[["tls"]]
   url <- process_url(url, .compute = .compute)
-  for (u in url)
-    if (length(envir[["stream"]]))
-      launch_daemon(u, dots, next_stream(envir), tls = tls) else
-        launch_daemon(u, dots, tls = tls)
+  if (is.null(envir[["stream"]])) {
+    for (u in url)
+      launch_daemon(wa2(u, dots, tls), output)
+  } else {
+    for (u in url)
+      launch_daemon(wa3(u, dots, next_stream(envir), tls), output)
+  }
 
 }
 
@@ -138,9 +142,8 @@ launch_remote <- function(url, remote = remote_config(), ..., tls = NULL, .compu
         arglen <- length(args)
         cmds <- character(arglen)
         for (i in seq_along(args))
-          cmds[i] <- sprintf("%s -e %s", rscript, if (length(envir[["stream"]]))
-            write_args(list(url[min(i, ulen)], dots, next_stream(envir)), tls = tls) else
-              write_args(list(url[min(i, ulen)], dots), tls = tls))
+          cmds[i] <- sprintf("%s -e %s", rscript, if (is.null(envir[["stream"]]))
+            wa2(url[min(i, ulen)], dots, tls) else wa3(url[min(i, ulen)], dots, next_stream(envir), tls))
 
         for (i in seq_along(args))
           system2(command = command, args = `[<-`(args[[i]], find_dot(args[[i]]), shQuote(cmds[i])), wait = FALSE)
@@ -156,9 +159,8 @@ launch_remote <- function(url, remote = remote_config(), ..., tls = NULL, .compu
 
   cmds <- character(ulen)
   for (i in seq_along(url))
-    cmds[i] <- sprintf("%s -e %s", rscript, if (length(envir[["stream"]]))
-      write_args(list(url[i], dots, next_stream(envir)), tls = tls) else
-        write_args(list(url[i], dots), tls = tls))
+    cmds[i] <- sprintf("%s -e %s", rscript, if (is.null(envir[["stream"]]))
+      wa2(url[i], dots, tls) else wa3(url[i], dots, next_stream(envir), tls))
 
   if (length(command))
     for (cmd in cmds)
@@ -211,7 +213,8 @@ remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript"
 #' @param remotes the character URL or vector of URLs to SSH into, using the
 #'     'ssh://' scheme and including the port open for SSH connections (defaults
 #'     to 22 if not specified), e.g. 'ssh://10.75.32.90:22' or 'ssh://nodename'.
-#' @param timeout [default 5] maximum time allowed for connection setup in seconds.
+#' @param timeout [default 10] maximum time allowed for connection setup in
+#'     seconds.
 #' @param tunnel [default FALSE] logical value whether to use SSH reverse
 #'     tunnelling. If TRUE, a tunnel is created between the same ports (as
 #'     specified in 'url') on the local and remote machines. Setting to TRUE
@@ -248,7 +251,7 @@ remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript"
 #'     respective machines.
 #'
 #' @examples
-#' ssh_config(remotes = c("ssh://10.75.32.90:222", "ssh://nodename"), timeout = 10)
+#' ssh_config(remotes = c("ssh://10.75.32.90:222", "ssh://nodename"), timeout = 5)
 #'
 #' \dontrun{
 #'
@@ -279,7 +282,7 @@ remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript"
 #' @rdname remote_config
 #' @export
 #'
-ssh_config <- function(remotes, timeout = 5, tunnel = FALSE, command = "ssh", rscript = "Rscript") {
+ssh_config <- function(remotes, timeout = 10, tunnel = FALSE, command = "ssh", rscript = "Rscript") {
 
   premotes <- lapply(remotes, parse_url)
   hostnames <- lapply(premotes, .subset2, "hostname")
@@ -393,6 +396,6 @@ process_url <- function(url, .compute) {
 
 parse_check_local_url <- function(url) {
   purl <- parse_url(url)
-  purl[["hostname"]] %in% c("localhost", "127.0.0.1") || stop(._[["requires_local"]])
+  purl[["hostname"]] == "127.0.0.1" || purl[["hostname"]] == "localhost" || stop(._[["requires_local"]])
   purl
 }

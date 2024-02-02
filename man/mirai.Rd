@@ -15,18 +15,16 @@ by \link{name}.}
 objects referenced in '.expr'. Used in addition to, and taking precedence
 over, any arguments specified via '.args'.}
 
-\item{.args}{(optional) \strong{either} a list of objects to be passed by
+\item{.args}{(optional) \strong{either} a list of objects passed by
 \link{name} (found in the current scope), \strong{or else} a list of
-name = value pairs, as in '...'. If an object other than a list is
-supplied, it will be coerced to a list.}
+name = value pairs, as in '...'.}
 
 \item{.timeout}{[default NULL] for no timeout, or an integer value in
 milliseconds. A mirai will resolve to an 'errorValue' 5 (timed out) if
 evaluation exceeds this limit.}
 
 \item{.compute}{[default 'default'] character value for the compute profile
-to use (each compute profile has its own set of daemons for connecting to
-different resources).}
+to use (each compute profile has its own independent set of daemons).}
 }
 \value{
 A 'mirai' object.

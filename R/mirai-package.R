@@ -38,30 +38,18 @@
 #'
 #' \code{vignette("mirai", package = "mirai")}
 #'
-#' @section Links:
-#'
-#'     \CRANpkg{mirai} website: \url{https://shikokuchuo.net/mirai/}
-#'
-#'     \CRANpkg{nanonext} website: \url{https://shikokuchuo.net/nanonext/}
-#'
-#'     NNG website: \url{https://nng.nanomsg.org/}
-#'
 #' @encoding UTF-8
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
-#' @importFrom nanonext base64dec call_aio call_aio_ .context cv cv_value dial
+#' @importFrom nanonext call_aio call_aio_ .context cv cv_value dial
 #'     is_error_value listen lock mclock msleep next_config opt opt<- parse_url
 #'     pipe_notify random reap recv recv_aio_signal request request_signal send
-#'     send_aio socket stat stop_aio strcat tls_config unresolved until wait
-#'     write_cert
+#'     socket stat stop_aio strcat tls_config unresolved until wait write_cert
 #' @importFrom parallel nextRNGStream stopCluster
-#' @importFrom stats rsignrank
+#' @importFrom stats rexp
 #'
-#' @docType package
-#' @name mirai-package
-#'
-NULL
+"_PACKAGE"
 
 # nocov start
 # tested implicitly
@@ -146,7 +134,7 @@ registerPromisesMethods <- function(pkgname, pkgpath) {
     requires_local = "SSH tunnelling requires 'url' hostname to be '127.0.0.1' or 'localhost'",
     refhook_invalid = "'refhook' must be a list of 2 functions or NULL",
     single_url = "only one 'url' should be specified",
-    sync_timeout = "initial sync with dispatcher timed out after 5s",
+    sync_timeout = "initial sync with dispatcher timed out after 10s",
     url_spec = "numeric value for 'url' is out of bounds",
     wrong_dots = "'...' arguments should only be of integer, numeric or logical type"
   ),
@@ -154,7 +142,8 @@ registerPromisesMethods <- function(pkgname, pkgpath) {
 )
 
 .intmax <- .Machine[["integer.max"]]
-.timelimit <- 5000L
+.limit_short <- 5000L
+.limit_long <- 10000L
 
 as.promise <- NULL
 recvData <- NULL

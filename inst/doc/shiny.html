@@ -147,13 +147,15 @@ section.footnotes::before {
 <div class="body">
 <h3 id="shiny-integration">Shiny Integration</h3>
 <h4 id="shiny-example-usage">Shiny Example Usage</h4>
-<p>{mirai} may be used as an asynchronous / distributed backend to scale <a href="https://cran.r-project.org/package=shiny">{shiny}</a> applications and plugs directly into the reactive framework, without the need to use promises. Because of this, it is especially suited to large-scale enterprise applications.</p>
-<p>The following example has a button to submit tasks, which will be processed by one of 5 daemons, outputting a pretty spiral pattern upon completion.</p>
-<p>You will find that if you submit more than 5 tasks, the chart updates 5 at a time, limited by the number of daemons set (the parallel-processing capacity of the application).</p>
+<p>{mirai} may be used as an asynchronous / distributed backend to scale <a href="https://cran.r-project.org/package=shiny">{shiny}</a> applications and plugs directly into the reactive framework, without the need to use promises.</p>
+<p>Depending on the options suppled to <code>daemons()</code>, tasks may be distributed across local background processes or multiple networked servers in an efficient and performant manner.</p>
+<p>The following example has a button to submit tasks, which will be processed by one of 5 daemons, outputting a pretty spiral pattern upon completion. If more than 5 tasks are submitted at once, the chart updates 5 at a time, limited by the number of available daemons.</p>
 <pre><code class="language-r">library(mirai)
 library(shiny)
 library(ggplot2)
 library(aRtsy)
+
+# function definitions
 
 run_task &lt;- function() {
   Sys.sleep(5L)
@@ -191,14 +193,15 @@ server &lt;- function(input, output, session) {
   output$status &lt;- renderText(reactive_status())
   poll_for_results &lt;- reactiveVal(FALSE)
 
-  # mirai setup - 5 local daemons with dispatcher
-  daemons(5L)
+  # automatically shutdown daemons when app exits
   onStop(function() daemons(0L))
+  
+  # create empty mirai queue
   q &lt;- list()
 
   # button to submit a task
   observeEvent(input$task, {
-    q[[length(q) + 1L]] &lt;&lt;- mirai(run_task(), run_task = run_task)
+    q[[length(q) + 1L]] &lt;&lt;- mirai(run_task())
     poll_for_results(TRUE)
   })
 
@@ -218,7 +221,15 @@ server &lt;- function(input, output, session) {
   })
 }
 
-shinyApp(ui = ui, server = server)
+# mirai setup - 5 local daemons with dispatcher
+# switch off cleanup as not necessary (each task is self-contained)
+daemons(5L, cleanup = FALSE)
+
+# pre-load function on each daemon for efficiency
+everywhere(run_task &lt;&lt;- run_task, .args = list(run_task))
+
+app &lt;- shinyApp(ui = ui, server = server)
+runApp(app)
 </code></pre>
 <p><em>Thanks to Daniel Woodie and William Landau for providing the original example on which this is based. Please see <a href="https://wlandau.github.io/crew/articles/shiny.html">https://wlandau.github.io/crew/articles/shiny.html</a> which also has examples of the fantastic artwork produced.</em></p>
 <h4 id="example-using-promises">Example Using Promises</h4>

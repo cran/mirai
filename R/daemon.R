@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2022-2024 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -40,7 +40,7 @@
 #'     stderr if TRUE, or else discard if FALSE. Specify as TRUE in the '...'
 #'     argument to \code{\link{daemons}} or \code{\link{launch_local}} to provide
 #'     redirection of output to the host process (applicable only for local
-#'     daemons when not using dispatcher).
+#'     daemons).
 #' @param maxtasks [default Inf] the maximum number of tasks to execute (task
 #'     limit) before exiting.
 #' @param idletime [default Inf] maximum idle time, since completion of the last
@@ -75,17 +75,17 @@
 #'     default TRUE ensures that it will exit cleanly once its socket connection
 #'     has ended.
 #'
+#'     Instead of TRUE, supplying a signal from the \pkg{tools} package, e.g.
+#'     \code{tools::SIGINT}, or an equivalent integer value, sets the signal to
+#'     be raised when the socket connection ends. As an example, supplying
+#'     SIGINT allows a potentially more immediate exit by interrupting any
+#'     ongoing evaluation rather than letting it complete.
+#'
 #'     Setting to FALSE allows the daemon to persist indefinitely even when
 #'     there is no longer a socket connection. This allows a host session to end
 #'     and a new session to connect at the URL where the daemon is dialled in.
 #'     Daemons must be terminated with \code{daemons(NULL)} in this case, which
-#'     sends an exit signal to all connected daemons.
-#'
-#'     Supplying a signal from the \pkg{tools} package, e.g. \code{tools::SIGINT},
-#'     or an equivalent integer value, sets this signal to be raised when the
-#'     socket connection ends. As an example, supplying SIGINT allows a
-#'     potentially more immediate exit by interrupting any ongoing evaluation
-#'     rather than letting it complete.
+#'     sends explicit exit instructions to all connected daemons.
 #'
 #'     Persistence also implies that dials are performed asynchronously, which
 #'     means retries are attempted (indefinitely) if not immediately successful.
@@ -155,13 +155,13 @@ daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
 
     (count >= maxtasks || count > timerstart && mclock() - start >= walltime) && {
       next_config(mark = TRUE)
-      send(ctx, data = data, mode = 3L)
+      send(ctx, data = data, mode = 3L, block = TRUE)
       aio <- recv_aio_signal(ctx, cv = cv, mode = 8L)
       wait(cv)
       break
     }
 
-    send(ctx, data = data, mode = 3L)
+    send(ctx, data = data, mode = 3L, block = TRUE)
     perform_cleanup(cleanup)
     if (count <= timerstart) start <- mclock()
 
@@ -171,7 +171,8 @@ daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
 
 #' dot Daemon
 #'
-#' Implements an ephemeral executor for the remote process.
+#' Ephemeral executor for the remote process. User code must not call this.
+#'     Consider \code{daemon(maxtasks = 1L)} instead.
 #'
 #' @inheritParams daemon
 #'
@@ -183,7 +184,6 @@ daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
 .daemon <- function(url) {
 
   sock <- socket(protocol = "rep", dial = url, autostart = NA)
-  on.exit(reap(sock))
   ._mirai_. <- recv(sock, mode = 1L, block = TRUE)
   data <- tryCatch(eval(expr = ._mirai_.[[".expr"]], envir = ._mirai_., enclos = NULL),
                    error = mk_mirai_error, interrupt = mk_interrupt_error)

@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2023-2024 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -18,8 +18,8 @@
 
 #' Dispatcher
 #'
-#' Dispatches tasks from a host to multiple daemons for processing, using a FIFO
-#'     scheduling rule, queuing tasks as required. Daemon / dispatcher settings
+#' Dispatches tasks from a host to daemons for processing, using FIFO
+#'     scheduling, queuing tasks as required. Daemon / dispatcher settings
 #'     may be controlled by \code{\link{daemons}} and this function should not
 #'     need to be invoked directly.
 #'
@@ -92,6 +92,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
   active <- servers <- queue <- vector(mode = "list", length = n)
   if (auto) {
     dots <- parse_dots(...)
+    output <- attr(dots, "output")
   } else {
     baseurl <- parse_url(url)
     ports <- get_ports(baseurl = baseurl, n = n)
@@ -125,7 +126,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
       }
     }
 
-    auto && launch_daemon(nurl, dots, next_stream(envir))
+    auto && launch_daemon(wa3(nurl, dots, next_stream(envir)), output)
 
     basenames[i] <- burl
     servernames[i] <- listurl
@@ -138,12 +139,11 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
 
   ctrchannel <- is.character(monitor)
   if (ctrchannel) {
-    sockc <- socket(protocol = "rep")
+    sockc <- socket(protocol = "pair")
     on.exit(reap(sockc), add = TRUE, after = FALSE)
     pipe_notify(sockc, cv = cv, remove = TRUE, flag = TRUE)
     dial_and_sync_socket(sock = sockc, url = monitor, asyncdial = asyncdial)
-    recv(sockc, mode = 6L, block = .timelimit) && stop(._[["sync_timeout"]])
-    saio <- send_aio(sockc, c(Sys.getpid(), servernames), mode = 2L)
+    send(sockc, c(Sys.getpid(), servernames), mode = 2L)
     cmessage <- recv_aio_signal(sockc, cv = cv, mode = 5L)
   }
 
@@ -188,7 +188,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
         } else {
           data <- as.integer(c(seq_n, activevec, instance, assigned, complete))
         }
-        saio <- send_aio(sockc, data = data, mode = 2L)
+        send(sockc, data = data, mode = 2L)
         cmessage <- recv_aio_signal(sockc, cv = cv, mode = 5L)
         next
       }
@@ -197,10 +197,10 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
         if (length(queue[[i]]) > 2L && !unresolved(queue[[i]][["req"]])) {
           req <- .subset2(queue[[i]][["req"]], "value")
           if (is.object(req)) req <- serialize(req, NULL)
-          send(queue[[i]][["ctx"]], data = req, mode = 2L)
+          send(queue[[i]][["ctx"]], data = req, mode = 2L, block = TRUE)
           q <- queue[[i]][["daemon"]]
           if (req[3L]) {
-            send(queue[[i]][["rctx"]], NULL, mode = 2L)
+            send(queue[[i]][["rctx"]], NULL, mode = 2L, block = TRUE)
             reap(queue[[i]][["rctx"]])
           } else {
             serverfree[q] <- TRUE
@@ -310,7 +310,8 @@ get_and_reset_env <- function(x) {
 }
 
 get_tls <- function(baseurl, tls, pass) {
-  if (substr(baseurl[["scheme"]], 1L, 3L) %in% c("wss", "tls") && is.null(tls)) {
+  sch <- substr(baseurl[["scheme"]], 1L, 3L)
+  if ((sch == "wss" || sch == "tls") && is.null(tls)) {
     tls <- get_and_reset_env("MIRAI_TEMP_FIELD1")
     if (length(tls)) tls <- c(tls, get_and_reset_env("MIRAI_TEMP_FIELD2"))
   }
@@ -323,8 +324,8 @@ get_tls <- function(baseurl, tls, pass) {
 sub_real_port <- function(port, url) sub("(?<=:)0(?![^/])", port, url, perl = TRUE)
 
 query_dispatcher <- function(sock, command, mode) {
-  send(sock, data = command, mode = 2L, block = .timelimit)
-  recv(sock, mode = mode, block = .timelimit + .timelimit)
+  send(sock, data = command, mode = 2L)
+  recv(sock, mode = mode, block = .limit_short)
 }
 
 create_req <- function(ctx, cv)

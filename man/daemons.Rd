@@ -69,8 +69,7 @@ is encrypted with a password) For security, should be provided through a
 function that returns this value, rather than directly.}
 
 \item{.compute}{[default 'default'] character value for the compute profile
-to use (each compute profile has its own set of daemons for connecting to
-different resources).}
+to use (each compute profile has its own independent set of daemons).}
 }
 \value{
 Depending on the arguments supplied:
@@ -107,7 +106,7 @@ Use \code{daemons(0)} to reset daemon connections:
     processing a task, it will exit as soon as the task is complete.
 
     To reset persistent daemons started with \code{autoexit = FALSE}, use
-    \code{daemons(NULL)} instead, which also sends exit signals to all
+    \code{daemons(NULL)} instead, which also sends exit instructions to all
     connected daemons prior to resetting.
 
     For historical reasons, \code{daemons()} with no arguments returns the
