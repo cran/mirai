@@ -27,11 +27,12 @@
 #'     wrapped in \{ \} where necessary), \strong{or} a language object passed
 #'     by \link{name}.
 #' @param ... (optional) named arguments (name = value pairs) specifying
-#'     objects referenced in '.expr'. Used in addition to, and taking precedence
-#'     over, any arguments specified via '.args'.
+#'     objects referenced in '.expr'. These are placed in the global environment
+#'     of the evaluation process, unlike those supplied to '.args' below.
 #' @param .args (optional) \strong{either} a list of objects passed by
 #'     \link{name} (found in the current scope), \strong{or else} a list of
-#'     name = value pairs, as in '...'.
+#'     name = value pairs, as in '...'. These remain local to the evaluation
+#'     environment.
 #' @param .timeout [default NULL] for no timeout, or an integer value in
 #'     milliseconds. A mirai will resolve to an 'errorValue' 5 (timed out) if
 #'     evaluation exceeds this limit.
@@ -49,22 +50,27 @@
 #'     'mirai' has yet to resolve and FALSE otherwise. This is suitable for use
 #'     in control flow statements such as \code{while} or \code{if}.
 #'
-#'     Alternatively, to call (and wait for) the result, use \code{\link{call_mirai}}
-#'     on the returned mirai. This will block until the result is returned.
+#'     Alternatively, to call (and wait for) the result, use
+#'     \code{\link{call_mirai}} on the returned mirai. This will block until the
+#'     result is returned.
 #'
 #'     The expression '.expr' will be evaluated in a separate R process in a
-#'     clean environment, which is not the global environment, consisting only
-#'     of the named objects passed as '...' and/or the list supplied to '.args'.
+#'     clean environment (not the global environment), consisting only of the
+#'     objects in the list supplied to '.args', with the named objects passed as
+#'     '...' assigned to the global environment of that process.
+#'
+#'     Specify '.compute' to send the mirai using a specific compute profile (if
+#'     previously created by \code{\link{daemons}}), otherwise leave as 'default'.
+#'
+#' @section Errors:
 #'
 #'     If an error occurs in evaluation, the error message is returned as a
-#'     character string of class 'miraiError' and 'errorValue'.
+#'     character string of class 'miraiError' and 'errorValue' (the stack trace
+#'     is available at \code{$stack.trace} on the error object).
 #'     \code{\link{is_mirai_error}} may be used to test for this.
 #'
 #'     \code{\link{is_error_value}} tests for all error conditions including
 #'     'mirai' errors, interrupts, and timeouts.
-#'
-#'     Specify '.compute' to send the mirai using a specific compute profile (if
-#'     previously created by \code{\link{daemons}}), otherwise leave as 'default'.
 #'
 #' @examples
 #' if (interactive()) {
@@ -106,19 +112,11 @@
 #' call_mirai(m)[["data"]]
 #' unlink(file)
 #'
-#' # specifying global variables using list2env(envir = .GlobalEnv) in '.expr'
+#' # evaluating scripts using source() in '.expr'
 #' n <- 10L
 #' file <- tempfile()
 #' cat("r <- rnorm(n)", file = file)
-#' globals <- list(file = file, n = n)
-#' m <- mirai(
-#'   {
-#'     list2env(globals, envir = .GlobalEnv)
-#'     source(file)
-#'     r
-#'   },
-#'   globals = globals
-#' )
+#' m <- mirai({source(file); r}, file = file, n = n)
 #' call_mirai(m)[["data"]]
 #' unlink(file)
 #'
@@ -137,7 +135,9 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
   missing(.expr) && stop(._[["missing_expression"]])
 
   expr <- substitute(.expr)
-  arglist <- list(..., .expr = if (is.symbol(expr) && is.language(.expr)) .expr else expr)
+  globals <- list(...)
+  all(nzchar(names(globals))) || stop(._[["named_args"]])
+  arglist <- list(._mirai_globals_. = globals, .expr = if (is.symbol(expr) && is.language(.expr)) .expr else expr)
   if (length(.args))
     arglist <- c(if (is.null(names(.args))) `names<-`(.args, as.character(substitute(.args)[-1L])) else .args, arglist)
   data <- list2env(arglist, envir = NULL, parent = .GlobalEnv)
@@ -172,10 +172,10 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #' # Only run examples in interactive R sessions
 #'
 #' daemons(1)
-#' # export common data by super-assignment:
+#' # export common data by a super-assignment expression:
 #' everywhere(y <<- 3)
-#' # assign explicitly to global environment:
-#' everywhere(list2env(x, envir = .GlobalEnv), x = list(a = 1, b = 2))
+#' # '...' variables are assigned to the global environment:
+#' everywhere({}, a = 1, b = 2)
 #' m <- mirai(a + b - y == 0L)
 #' call_mirai(m)$data
 #' daemons(0)
@@ -227,15 +227,10 @@ everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
 #' @details This function will wait for the async operation to complete if still
 #'     in progress (blocking).
 #'
-#'     If an error occurs in evaluation, the error message is returned as a
-#'     character string of class 'miraiError' and 'errorValue'.
-#'     \code{\link{is_mirai_error}} may be used to test for this.
-#'
-#'     \code{\link{is_error_value}} tests for all error conditions including
-#'     mirai errors, interrupts, and timeouts.
-#'
 #'     The mirai updates itself in place, so to access the value of a mirai
 #'     \code{x} directly, use \code{call_mirai(x)$data}.
+#'
+#' @inheritSection mirai Errors
 #'
 #' @section Alternatively:
 #'
@@ -374,7 +369,8 @@ is_mirai <- function(x) inherits(x, "mirai")
 #'
 #' @details Is the object a 'miraiError'. When execution in a mirai process
 #'     fails, the error message is returned as a character string of class
-#'     'miraiError' and 'errorValue'.
+#'     'miraiError' and 'errorValue'. The stack trace is available at
+#'     \code{$stack.trace} on the error object.
 #'
 #'     Is the object a 'miraiInterrupt'. When an ongoing mirai is sent a user
 #'     interrupt, the mirai will resolve to an empty character string classed as
@@ -393,6 +389,7 @@ is_mirai <- function(x) inherits(x, "mirai")
 #' is_mirai_error(m$data)
 #' is_mirai_interrupt(m$data)
 #' is_error_value(m$data)
+#' m$data$stack.trace
 #'
 #' m2 <- mirai(Sys.sleep(1L), .timeout = 100)
 #' call_mirai(m2)
@@ -429,10 +426,20 @@ print.mirai <- function(x, ...) {
 #'
 print.miraiError <- function(x, ...) {
 
-  cat(sprintf("'miraiError' chr %s\n", x), file = stdout())
+  cat(strcat("'miraiError' chr ", x), file = stdout())
   invisible(x)
 
 }
+
+#' @export
+#'
+`$.miraiError` <- function(x, name)
+  attr(x, name, exact = FALSE)
+
+#' @export
+#'
+.DollarNames.miraiError <- function(x, pattern = "")
+  grep(pattern, "stack.trace", value = TRUE, fixed = TRUE)
 
 #' @export
 #'
@@ -451,18 +458,39 @@ ephemeral_daemon <- function(url) {
   sock
 }
 
-mk_interrupt_error <- function(e) .interrupt_error
+deparse_safe <- function(x) if (length(x))
+  deparse(x, width.cutoff = 500L, backtick = TRUE, control = NULL, nlines = 1L)
 
-mk_mirai_error <- function(e) {
-  x <- .subset2(e, "call")
-  call <- if (length(x)) deparse(x, width.cutoff = 500L, backtick = TRUE, control = NULL, nlines = 1L)
-  msg <- if (is.null(call) || call == "eval(expr = ._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = NULL)")
-    strcat("Error: ", .subset2(e, "message")) else
-      sprintf("Error in %s: %s", call, .subset2(e, "message"))
-  cat(strcat(msg, "\n"), file = stderr());
-  `class<-`(msg, c("miraiError", "errorValue", "try-error"))
+deparse_call <- function(call) {
+  srcref <- attr(call, "srcref")
+  if (is.null(srcref)) deparse_safe(call) else
+    as.character(srcref)
 }
 
-.interrupt_error <- `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))
+mk_interrupt_error <- function()
+  `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))
+
+mk_mirai_error <- function(e, sc) {
+  call <- deparse_safe(.subset2(e, "call"))
+  msg <- if (is.null(call) || call == "eval(expr = ._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = NULL)")
+    sprintf("Error: %s\n", .subset2(e, "message")) else
+      sprintf("Error in %s: %s\n", call, .subset2(e, "message"))
+  cat(msg, file = stderr())
+  idx <- which(
+    as.logical(
+      lapply(
+        sc,
+        identical,
+        quote(eval(expr = ._mirai_.[[".expr"]], envir = ._mirai_., enclos = NULL))
+      )
+    )
+  )
+  sc <- sc[(length(sc) - 1L):(idx + 1L)]
+  if (sc[[1L]][[1L]] == ".handleSimpleError")
+    sc <- sc[-1L]
+  sc <- lapply(sc, deparse_call)
+  `class<-`(`attr<-`(msg, "stack.trace", sc), c("miraiError", "errorValue", "try-error"))
+}
+
 .snapshot <- expression(mirai:::snapshot())
 .timedelay <- expression(nanonext::msleep(500L))

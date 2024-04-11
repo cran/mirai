@@ -18,10 +18,10 @@
 #'
 #' Lightweight parallel code execution and distributed computing. Designed for
 #'     simplicity, a 'mirai' evaluates an R expression asynchronously, on local
-#'     or network resources, resolving automatically upon completion. Efficient
-#'     scheduling over fast inter-process communications or secure TLS
-#'     connections over TCP/IP, built on 'nanonext' and 'NNG' (Nanomsg Next
-#'     Gen).
+#'     or network resources, resolving automatically upon completion. State of
+#'     the art networking and concurrency via 'nanonext' and 'NNG' (Nanomsg Next
+#'     Gen) offers reliable and efficient scheduling over fast inter-process
+#'     communications or TCP/IP secured by TLS.
 #'
 #' @section Notes:
 #'
@@ -46,8 +46,9 @@
 #'     is_error_value listen lock mclock msleep next_config opt opt<- parse_url
 #'     pipe_notify random reap recv recv_aio_signal request request_signal send
 #'     socket stat stop_aio strcat tls_config unresolved until wait write_cert
-#' @importFrom parallel nextRNGStream stopCluster
+#' @importFrom parallel nextRNGStream
 #' @importFrom stats rexp
+#' @importFrom utils .DollarNames
 #'
 "_PACKAGE"
 
@@ -72,44 +73,6 @@
     }
   )
 
-  registerParallelMethods()
-  registerPromisesMethods(pkgname = "promises")
-
-}
-
-registerParallelMethods <- function() {
-
-  ns <- .getNamespace("parallel")
-  `[[<-`(
-    `[[<-`(
-      `[[<-`(
-        ns[[".__S3MethodsTable__."]],
-        "recvData.miraiNode", recvData.miraiNode
-      ), "sendData.miraiNode", sendData.miraiNode
-    ), "recvOneData.miraiCluster", recvOneData.miraiCluster
-  )
-  regs <- rbind(ns[[".__NAMESPACE__."]][["S3methods"]],
-                c("recvData", "miraiNode", "recvData.miraiNode", NA_character_),
-                c("sendData", "miraiNode", "sendData.miraiNode", NA_character_),
-                c("recvOneData", "miraiCluster", "recvOneData.miraiCluster", NA_character_))
-  `[[<-`(ns[[".__NAMESPACE__."]], "S3methods", regs)
-
-}
-
-registerPromisesMethods <- function(pkgname, pkgpath) {
-
-  ns <- .getNamespace(pkgname)
-  if (is.null(ns)) {
-    hfun <- c(registerPromisesMethods, .userHooksEnv[["UserHook::promises::onLoad"]])
-    `[[<-`(.userHooksEnv, "UserHook::promises::onLoad", hfun)
-  } else {
-    `[[<-`(ns[[".__S3MethodsTable__."]], "as.promise.mirai", as.promise.mirai)
-    regs <- rbind(ns[[".__NAMESPACE__."]][["S3methods"]],
-                  c("as.promise", "mirai", "as.promise.mirai", NA_character_))
-    `[[<-`(ns[[".__NAMESPACE__."]], "S3methods", regs)
-    `[[<-`(., "later", .getNamespace("later")[["later"]])
-  }
-
 }
 
 # nocov end
@@ -128,9 +91,11 @@ registerPromisesMethods <- function(pkgname, pkgpath) {
     dot_required = "'.' must be an element of the character vector(s) supplied to 'args'",
     missing_expression = "missing expression, perhaps wrap in {}?",
     missing_url = "at least one URL must be supplied for 'url' or 'n' must be at least 1",
+    named_args = "all '...' arguments must be named",
     n_one = "'n' must be 1 or greater",
     n_zero = "the number of daemons must be zero or greater",
     numeric_n = "'n' must be numeric, did you mean to provide 'url'?",
+    register_cluster = "this function requires R version 4.4 or newer",
     requires_local = "SSH tunnelling requires 'url' hostname to be '127.0.0.1' or 'localhost'",
     refhook_invalid = "'refhook' must be a list of 2 functions or NULL",
     single_url = "only one 'url' should be specified",
@@ -144,8 +109,3 @@ registerPromisesMethods <- function(pkgname, pkgpath) {
 .intmax <- .Machine[["integer.max"]]
 .limit_short <- 5000L
 .limit_long <- 10000L
-
-as.promise <- NULL
-recvData <- NULL
-recvOneData <- NULL
-sendData <- NULL

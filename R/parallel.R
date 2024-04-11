@@ -122,10 +122,7 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
 
   `[[<-`(`[[<-`(..[[id]], "cv2", cv2), "swapped", FALSE)
 
-  cl <- vector(mode = "list", length = n)
-  for (i in seq_along(cl))
-    cl[[i]] <- `attributes<-`(new.env(hash = FALSE, parent = emptyenv()), list(class = "miraiNode", node = i, id = id))
-
+  cl <- lapply(seq_len(n), create_node, id = id)
   `attributes<-`(cl, list(class = c("miraiCluster", "cluster"), id = id))
 
 }
@@ -142,13 +139,11 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
 stop_cluster <- function(cl)
   daemons(0L, .compute = attr(cl, "id")) || return(invisible())
 
-#' @method stopCluster miraiCluster
-#' @export
+#' @exportS3Method parallel::stopCluster
 #'
 stopCluster.miraiCluster <- stop_cluster
 
-#' @method sendData miraiNode
-#' @export
+#' @exportS3Method parallel::sendData
 #'
 sendData.miraiNode <- function(node, data) {
 
@@ -166,13 +161,11 @@ sendData.miraiNode <- function(node, data) {
 
 }
 
-#' @method recvData miraiNode
-#' @export
+#' @exportS3Method parallel::recvData
 #'
 recvData.miraiNode <- function(node) call_aio(.subset2(node, "mirai"))
 
-#' @method recvOneData miraiCluster
-#' @export
+#' @exportS3Method parallel::recvOneData
 #'
 recvOneData.miraiCluster <- function(cl) {
 
@@ -202,7 +195,40 @@ print.miraiNode <- function(x, ...) {
 
 }
 
+#' Register Mirai Cluster
+#'
+#' Registers 'miraiCluster' with the \pkg{parallel} package as cluster type
+#'     'MIRAI' and (optionally) makes it the default cluster type.
+#'
+#' @param default [default TRUE] logical value whether to also register
+#'     'miraiCluster' as the default cluster type.
+#'
+#' @return Invisible NULL
+#'
+#' @examples
+#' tryCatch(
+#'
+#' mirai::register_cluster()
+#'
+#' , error = identity)
+#'
+#' @export
+#'
+register_cluster <- function(default = TRUE) {
+
+  register <- .getNamespace("parallel")[["registerClusterType"]]
+  is.null(register) && stop(._[["register_cluster"]])
+  register("MIRAI", make_cluster, make.default = isTRUE(default))
+
+}
+
 # internals --------------------------------------------------------------------
+
+create_node <- function(node, id)
+  `attributes<-`(
+    new.env(hash = FALSE, parent = emptyenv()),
+    list(class = "miraiNode", node = node, id = id)
+  )
 
 cv_swap <- function(envir, state) {
   cv <- envir[["cv"]]

@@ -242,6 +242,16 @@
 #' # Reset to zero
 #' daemons(0)
 #'
+#' # Use with() to evaluate with daemons for the duration of the expression
+#' with(
+#'   daemons(2),
+#'   {
+#'     m1 <- mirai(Sys.getpid())
+#'     m2 <- mirai(Sys.getpid())
+#'     cat(call_mirai(m1)$data, call_mirai(m2)$data, "\n")
+#'   }
+#' )
+#'
 #' }
 #'
 #' \dontrun{
@@ -286,7 +296,7 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
         urld <- local_url()
         urlc <- strcat(urld, "c")
         sock <- req_socket(urld, resend = 0L)
-        sockc <- socket(protocol = "pair", listen = urlc)
+        sockc <- req_socket(urlc, resend = 0L)
         launch_and_sync_daemon(sock, wa5(urld, dots, n, urlc, url), output, tls, pass) || stop(._[["sync_timeout"]])
         init_monitor(sockc = sockc, envir = envir)
       } else {
@@ -329,13 +339,13 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
       if (dispatcher) {
         sock <- req_socket(urld, resend = 0L)
         urlc <- strcat(urld, "c")
-        sockc <- socket(protocol = "pair", listen = urlc)
+        sockc <- req_socket(urlc, resend = 0L)
         launch_and_sync_daemon(sock, wa4(urld, dots, envir[["stream"]], n, urlc), output) || stop(._[["sync_timeout"]])
         for (i in seq_len(n)) next_stream(envir)
         init_monitor(sockc = sockc, envir = envir)
       } else {
         sock <- req_socket(urld, resend = resilience * .intmax)
-        if (is.null(seed)) {
+        if (is.null(seed) && resilience) {
           for (i in seq_len(n))
             launch_daemon(wa3(urld, dots, next_stream(envir)), output)
         } else {
@@ -350,7 +360,54 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
 
   }
 
-  if (is.null(envir)) 0L else if (envir[["n"]]) envir[["n"]] else envir[["urls"]]
+  if (is.null(envir)) 0L else `class<-`(
+    if (envir[["n"]]) envir[["n"]] else envir[["urls"]],
+    c("miraiDaemons", .compute)
+  )
+
+}
+
+#' @export
+#'
+print.miraiDaemons <- function(x, ...) print(unclass(x))
+
+#' With Mirai Daemons
+#'
+#' Evaluate an expression with daemons that last for the duration of the
+#'     expression.
+#'
+#' @param data a call to \code{\link{daemons}}.
+#' @param expr an expression to evaluate.
+#' @param ... not used.
+#'
+#' @return The return value of 'expr'.
+#'
+#' @details This function is an S3 method for the generic \code{with} for
+#'     class 'miraiDaemons'.
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' with(
+#'   daemons(2),
+#'   {
+#'     m1 <- mirai(Sys.getpid())
+#'     m2 <- mirai(Sys.getpid())
+#'     cat(call_mirai(m1)$data, call_mirai(m2)$data, "\n")
+#'   }
+#' )
+#'
+#' status()
+#'
+#' }
+#'
+#' @export
+#'
+with.miraiDaemons <- function(data, expr, ...) {
+
+  on.exit(daemons(0L, .compute = class(data)[2L]))
+  expr
 
 }
 
@@ -425,11 +482,18 @@ status <- function(.compute = "default") {
 #'     receiving external pointer reference objects.
 #'
 #' @param refhook \strong{either} a list or pairlist of two functions: the
-#'     signature for the first must accept a list of external pointer type
-#'     objects and return a raw vector, e.g. \code{torch::torch_serialize}, and
-#'     the second must accept a raw vector and return a list of external pointer
-#'     type objects, e.g. \code{torch::torch_load},\cr \strong{or else} NULL to
-#'     reset.
+#'     signature for the first must accept a reference object inheriting from
+#'     'class' (or a list of such objects) and return a raw vector, and the
+#'     second must accept a raw vector and return reference objects (or a list
+#'     of such objects), \cr \strong{or else} NULL to reset.
+#' @param class [default ""] a character string representing the class of object
+#'     that these serialization function will be applied to, e.g. 'ArrowTabular'
+#'     or 'torch_tensor'.
+#' @param vec [default FALSE] the serialization functions accept and return
+#'     reference object individually e.g. \code{arrow::write_to_raw} and
+#'     \code{arrow::read_ipc_stream}. If TRUE, the serialization functions are
+#'     vectorized and accept and return a list of reference objects, e.g.
+#'     \code{torch::torch_serialize} and \code{torch::torch_load}.
 #'
 #' @return Invisibly, the pairlist of currently-registered 'refhook' functions.
 #'     A message is printed to the console when functions are successfully
@@ -451,10 +515,10 @@ status <- function(.compute = "default") {
 #'
 #' @export
 #'
-serialization <- function(refhook = list()) {
+serialization <- function(refhook = list(), class = "", vec = FALSE) {
 
   register <- !missing(refhook)
-  cfg <- next_config(refhook = refhook)
+  cfg <- next_config(refhook = refhook, class = class, vec = vec)
 
   if (register) {
     if (is.list(refhook) && length(refhook) == 2L && is.function(refhook[[1L]]) && is.function(refhook[[2L]]))
@@ -462,7 +526,8 @@ serialization <- function(refhook = list()) {
         if (is.null(refhook))
           cat("mirai serialization functions cancelled\n", file = stderr()) else
             stop(._[["refhook_invalid"]])
-    register_everywhere(refhook)
+    `[[<-`(., "refhook", list(refhook, class, vec))
+    register_everywhere(refhook = refhook, class = class, vec = vec)
   }
 
   invisible(cfg)
@@ -555,7 +620,7 @@ launch_and_sync_daemon <- function(sock, args, output, tls = NULL, pass = NULL) 
 }
 
 init_monitor <- function(sockc, envir) {
-  res <- recv(sockc, mode = 2L, block = .limit_long)
+  res <- query_dispatcher(sockc, command = FALSE, mode = 2L, block = .limit_long)
   is.object(res) && stop(._[["sync_timeout"]])
   `[[<-`(`[[<-`(`[[<-`(envir, "sockc", sockc), "urls", res[-1L]), "pid", as.integer(res[1L]))
 }
@@ -583,11 +648,13 @@ query_status <- function(envir) {
                            dimnames = list(envir[["urls"]], c("i", "online", "instance", "assigned", "complete"))))
 }
 
-register_everywhere <- function(refhook)
+register_everywhere <- function(refhook, class, vec)
   for (.compute in names(..))
-    everywhere(mirai::serialization(refhook), refhook = refhook, .compute = .compute)
+    everywhere(mirai::serialization(refhook = refhook, class = class, vec = vec),
+               refhook = refhook, class = class, vec = vec, .compute = .compute)
 
-serialization_refhook <- function(refhook = next_config())
-  if (length(refhook[[1L]])) register_everywhere(refhook)
+serialization_refhook <- function(refhook = .[["refhook"]])
+  if (length(refhook[[1L]]))
+    register_everywhere(refhook = refhook[[1L]], class = refhook[[2L]], vec = refhook[[3L]])
 
 ._scm_. <- as.raw(c(0x07, 0x00, 0x00, 0x00, 0x42, 0x0a, 0x03, 0x00, 0x00, 0x00, 0x02, 0x03, 0x04, 0x00, 0x00, 0x05, 0x03, 0x00, 0x05, 0x00, 0x00, 0x00, 0x55, 0x54, 0x46, 0x2d, 0x38, 0xfc, 0x00, 0x00, 0x00))

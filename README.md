@@ -7,25 +7,26 @@
 
 [![CRAN
 status](https://www.r-pkg.org/badges/version/mirai?color=112d4e)](https://CRAN.R-project.org/package=mirai)
-[![mirai status
-badge](https://shikokuchuo.r-universe.dev/badges/mirai?color=24a60e)](https://shikokuchuo.r-universe.dev/mirai)
+[![R-universe
+status](https://shikokuchuo.r-universe.dev/badges/mirai?color=ddcacc)](https://shikokuchuo.r-universe.dev/mirai)
 [![R-CMD-check](https://github.com/shikokuchuo/mirai/workflows/R-CMD-check/badge.svg)](https://github.com/shikokuchuo/mirai/actions)
 [![codecov](https://codecov.io/gh/shikokuchuo/mirai/graph/badge.svg)](https://app.codecov.io/gh/shikokuchuo/mirai)
 [![DOI](https://zenodo.org/badge/459341940.svg)](https://zenodo.org/badge/latestdoi/459341940)
 <!-- badges: end -->
 
-Minimalist async evaluation framework for R. <br /><br /> Lightweight
-parallel code execution and distributed computing. <br /><br /> Designed
-for simplicity, a ‘mirai’ evaluates an R expression asynchronously, on
-local or network resources, resolving automatically upon completion.
-<br /><br /> `mirai()` returns a ‘mirai’ object immediately. ‘mirai’
-(未来 みらい) is Japanese for ‘future’. <br /><br /> Efficient
-scheduling over fast inter-process communications or secure TLS
-connections over TCP/IP, built on ‘nanonext’ and ‘NNG’ (Nanomsg Next
-Gen). <br /><br /> {mirai} has a tiny pure R code base, relying solely
-on [`nanonext`](https://doi.org/10.5281/zenodo.7903429), a
-high-performance binding for the ‘NNG’ (Nanomsg Next Gen) C library with
-zero package dependencies. <br /><br />
+### みらい
+
+<br /> ( 未来 ) <br /><br /> Minimalist Async Evaluation Framework for R
+<br /><br /> Lightweight parallel code execution and distributed
+computing. <br /><br /> `mirai()` returns a ‘mirai’ object immediately.
+Designed for simplicity, a ‘mirai’ evaluates an R expression
+asynchronously, on local or network resources, resolving automatically
+upon completion. <br /><br /> State of the art networking and
+concurrency via [nanonext](https://doi.org/10.5281/zenodo.7903429)
+offers reliable and efficient scheduling over fast inter-process
+communications or TCP/IP secured by TLS. <br /><br />
+
+> *mirai パッケージを試してみたところ、かなり速くて驚きました*
 
 ### Installation
 
@@ -35,7 +36,7 @@ Install the latest release from CRAN:
 install.packages("mirai")
 ```
 
-or the development version from rOpenSci R-universe:
+Or the development version from R-universe:
 
 ``` r
 install.packages("mirai", repos = "https://shikokuchuo.r-universe.dev")
@@ -87,8 +88,8 @@ result.
 
 ``` r
 m$data
-#>  [1]   6.34034300  -0.04935289 -16.62688852 -21.83976726   0.32279128
-#>  [6]   3.09797711  -0.04578803  -0.06014354 -20.26223825   0.15772017
+#>  [1]  1.8451625 -0.2165991 -1.2117962  0.4428216  1.3387124  0.7469864
+#>  [7]  2.2582459 -0.8252213 -4.6168235  0.5419577
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -96,8 +97,8 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data
-#>  [1]   6.34034300  -0.04935289 -16.62688852 -21.83976726   0.32279128
-#>  [6]   3.09797711  -0.04578803  -0.06014354 -20.26223825   0.15772017
+#>  [1]  1.8451625 -0.2165991 -1.2117962  0.4428216  1.3387124  0.7469864
+#>  [7]  2.2582459 -0.8252213 -4.6168235  0.5419577
 ```
 
 ### Daemons
@@ -107,10 +108,10 @@ requests.
 
 They may be deployed for:
 
-[local](https://shikokuchuo.net/mirai/articles/mirai.html#daemons-local-persistent-processes)
-parallel processing, or
+[Local](https://shikokuchuo.net/mirai/articles/mirai.html#daemons-local-persistent-processes)
+parallel processing; or
 
-[remote](https://shikokuchuo.net/mirai/articles/mirai.html#distributed-computing-remote-daemons)
+[Remote](https://shikokuchuo.net/mirai/articles/mirai.html#distributed-computing-remote-daemons)
 network distributed computing.
 
 [Launchers](https://shikokuchuo.net/mirai/articles/mirai.html#distributed-computing-launching-daemons)
@@ -135,80 +136,78 @@ vignette("mirai", package = "mirai")
 The following core integrations are documented, with usage examples in
 the linked vignettes:
 
-[{parallel}](https://shikokuchuo.net/mirai/articles/parallel.html) -
+[`parallel`](https://shikokuchuo.net/mirai/articles/parallel.html) -
 provides an alternative communications backend for R, implementing a
 low-level feature request by R-Core at R Project Sprint 2023.
 
-[{promises}](https://shikokuchuo.net/mirai/articles/promises.html) -
+[`promises`](https://shikokuchuo.net/mirai/articles/promises.html) -
 ‘mirai’ may be used interchangeably with ‘promises’ by using the promise
 pipe `%...>%` or the `as.promise()` method.
 
-[{plumber}](https://shikokuchuo.net/mirai/articles/plumber.html) -
+[`plumber`](https://shikokuchuo.net/mirai/articles/plumber.html) -
 serves as an asynchronous / distributed backend, scaling applications
 via the use of promises.
 
-[{shiny}](https://shikokuchuo.net/mirai/articles/shiny.html) - serves as
+[`shiny`](https://shikokuchuo.net/mirai/articles/shiny.html) - serves as
 an asynchronous / distributed backend, plugging directly into the
-reactive framework without the need for promises.
+reactive framework or accepted anywhere that takes a ‘promise’.
 
-[{torch}](https://shikokuchuo.net/mirai/articles/torch.html) - the
+[`torch`](https://shikokuchuo.net/mirai/articles/torch.html) - the
 custom serialization interface allows tensors and complex objects such
 as models and optimizers to be used seamlessly across parallel
 processes.
 
 ### Powering Crew and Targets High Performance Computing
 
-[{targets}](https://cran.r-project.org/package=targets), a Make-like
-pipeline tool for statistics and data science, has integrated and
-adopted {crew} as its default high-performance computing backend.
+[`targets`](https://docs.ropensci.org/targets/), a Make-like pipeline
+tool for statistics and data science, has integrated and adopted `crew`
+as its default high-performance computing backend.
 
-[{crew}](https://cran.r-project.org/package=crew) is a distributed
-worker-launcher extending {mirai} to different distributed computing
+[`crew`](https://wlandau.github.io/crew/) is a distributed
+worker-launcher extending `mirai` to different distributed computing
 platforms, from traditional clusters to cloud services.
 
-[{crew.cluster}](https://cran.r-project.org/package=crew.cluster)
-enables mirai-based workflows on traditional high-performance computing
-clusters using LFS, PBS/TORQUE, SGE and SLURM.
+[`crew.cluster`](https://wlandau.github.io/crew.cluster/) enables
+mirai-based workflows on traditional high-performance computing clusters
+using LFS, PBS/TORQUE, SGE and SLURM.
 
-[{crew.aws.batch}](https://cran.r-project.org/package=crew.aws.batch)
-extends {mirai} to cloud computing using AWS Batch.
+[`crew.aws.batch`](https://wlandau.github.io/crew.aws.batch/) extends
+`mirai` to cloud computing using AWS Batch.
 
 ### Thanks
 
 We would like to thank in particular:
 
-[William Landau](https://github.com/wlandau/), for being instrumental in
+[Will Landau](https://github.com/wlandau/), for being instrumental in
 shaping development of the package, from initiating the original request
 for persistent daemons, through to orchestrating robustness testing for
-the high performance computing requirements of {crew} and {targets}.
+the high performance computing requirements of `crew` and `targets`.
 
-[Henrik Bengtsson](https://github.com/HenrikBengtsson/), for valuable
-and incisive insights leading to the interface accepting broader usage
-patterns.
+[Joe Cheng](https://github.com/jcheng5/), for optimising the `promises`
+method to make `mirai` work seamlessly within Shiny, and guidance for
+implementing error stack traces.
 
 [Luke Tierney](https://github.com/ltierney/), R Core, for discussion on
 R’s implementation of L’Ecuyer-CMRG streams, used to ensure statistical
-independence in parallel processing.
+independence in parallel processing, and collaboration in ‘providing an
+alternative communications backend for R’.
+
+[Henrik Bengtsson](https://github.com/HenrikBengtsson/), for valuable
+insights leading to the interface accepting broader usage patterns.
 
 [Daniel Falbel](https://github.com/dfalbel/), for discussion around an
-efficient solution to serialization and transmission of {torch} tensors.
-
-[« Back to ToC](#table-of-contents)
+efficient solution to serialization and transmission of `torch` tensors.
 
 ### Links
 
-mirai website: <https://shikokuchuo.net/mirai/><br /> mirai on CRAN:
-<https://cran.r-project.org/package=mirai>
+◈ mirai R package: <https://shikokuchuo.net/mirai/>
 
-Listed in CRAN Task View: <br /> - High Performance Computing:
+mirai is listed in CRAN Task View: <br /> - High Performance Computing:
 <https://cran.r-project.org/view=HighPerformanceComputing>
 
-nanonext website: <https://shikokuchuo.net/nanonext/><br /> nanonext on
-CRAN: <https://cran.r-project.org/package=nanonext>
+◈ nanonext R package: <https://shikokuchuo.net/nanonext/>
 
 NNG website: <https://nng.nanomsg.org/><br />
-
-[« Back to ToC](#table-of-contents)
 
 –
 

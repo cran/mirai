@@ -157,6 +157,7 @@ section.footnotes::before {
 <li><a href="#distributed-computing-tls-secure-connections">Distributed Computing: TLS Secure Connections</a></li>
 <li><a href="#compute-profiles">Compute Profiles</a></li>
 <li><a href="#errors-interrupts-and-timeouts">Errors, Interrupts and Timeouts</a></li>
+<li><a href="#serialization">Serialization</a></li>
 </ol>
 <h3 id="example-1-compute-intensive-operations">Example 1: Compute-intensive Operations</h3>
 <p>Use case: minimise execution times by performing long-running tasks concurrently in separate processes.</p>
@@ -184,11 +185,11 @@ m
 </code></pre>
 <p>Upon completion, the ‘mirai’ resolves automatically to the evaluated result.</p>
 <pre><code class="language-r">m$data |&gt; str()
-#&gt;  num [1:100000000] 0.403 1.447 1.004 0.364 1.525 ...
+#&gt;  num [1:100000000] -2.68 0.139 0.886 -0.482 0.118 ...
 </code></pre>
 <p>Alternatively, explicitly call and wait for the result using <code>call_mirai()</code>.</p>
 <pre><code class="language-r">call_mirai(m)$data |&gt; str()
-#&gt;  num [1:100000000] 0.403 1.447 1.004 0.364 1.525 ...
+#&gt;  num [1:100000000] -2.68 0.139 0.886 -0.482 0.118 ...
 </code></pre>
 <p>For easy programmatic use of <code>mirai()</code>, ‘.expr’ accepts a pre-constructed language object, and also a list of named arguments passed via ‘.args’. So, the following would be equivalent to the above:</p>
 <pre><code class="language-r">expr &lt;- quote({
@@ -201,7 +202,7 @@ args &lt;- list(m = runif(1), n = 1e8)
 m &lt;- mirai(.expr = expr, .args = args)
 
 call_mirai(m)$data |&gt; str()
-#&gt;  num [1:100000000] 3.105 -0.931 0.943 3.262 0.151 ...
+#&gt;  num [1:100000000] -1.038 6.588 11.445 0.617 -3.078 ...
 </code></pre>
 <p><a href="#table-of-contents">« Back to ToC</a></p>
 <h3 id="example-2-i-o-bound-operations">Example 2: I/O-bound Operations</h3>
@@ -259,10 +260,11 @@ for (i in 1:10) {
 #&gt; iteration 1 successful
 #&gt; iteration 2 successful
 #&gt; iteration 3 successful
+#&gt; Error: random error
+#&gt; 
 #&gt; iteration 4 successful
 #&gt; iteration 5 successful
 #&gt; iteration 6 successful
-#&gt; Error: random error
 #&gt; iteration 7 successful
 #&gt; iteration 8 successful
 #&gt; iteration 9 successful
@@ -286,12 +288,12 @@ for (i in 1:10) {
 #&gt; 
 #&gt; $daemons
 #&gt;                                     i online instance assigned complete
-#&gt; abstract://08b4b97238bde0689bc9514b 1      1        1        0        0
-#&gt; abstract://63a8dca236eb13ad5303cdae 2      1        1        0        0
-#&gt; abstract://64a11588f7f48743a45c7bcc 3      1        1        0        0
-#&gt; abstract://f6e2b2f97f506bb617820921 4      1        1        0        0
-#&gt; abstract://73bfd5425ff5b62788bad26f 5      1        1        0        0
-#&gt; abstract://688211a2852bbecf432754e9 6      1        1        0        0
+#&gt; abstract://05eb1672dc7a072adc828ee5 1      1        1        0        0
+#&gt; abstract://e133d32015e04b140adbf934 2      1        1        0        0
+#&gt; abstract://f3e06991621650974544ddb8 3      1        1        0        0
+#&gt; abstract://ccd54d9f613c1a80f28ae3f2 4      1        1        0        0
+#&gt; abstract://8bc4624744121f1fd6599293 5      1        1        0        0
+#&gt; abstract://3efcb42340d189f68d23d921 6      1        1        0        0
 </code></pre>
 <p>The default <code>dispatcher = TRUE</code> creates a <code>dispatcher()</code> background process that connects to individual daemon processes on the local machine. This ensures that tasks are dispatched efficiently on a first-in first-out (FIFO) basis to daemons for processing. Tasks are queued at the dispatcher and sent to a daemon as soon as it can accept the task for immediate execution.</p>
 <p>Dispatcher uses synchronisation primitives from <a href="https://doi.org/10.5281/zenodo.7903429"><code>nanonext</code></a>, waiting upon rather than polling for tasks, which is efficient both in terms of consuming no resources while waiting, and also being fully synchronised with events (having no latency).</p>
@@ -310,7 +312,7 @@ for (i in 1:10) {
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://8a07989c110b62dab5b65a4a&quot;
+#&gt; [1] &quot;abstract://a6c6313a3dcf7f4c06b57381&quot;
 </code></pre>
 <p>This implementation sends tasks immediately, and ensures that tasks are evenly-distributed amongst daemons. This means that optimal scheduling is not guaranteed as the duration of tasks cannot be known <em>a priori</em>. As an example, tasks could be queued at a daemon behind a long-running task, whilst other daemons are idle having already completed their tasks.</p>
 <p>The advantage of this approach is that it is low-level and does not require an additional dispatcher process. It is well-suited to working with similar-length tasks, or where the number of concurrent tasks typically does not exceed available daemons.</p>
@@ -369,7 +371,7 @@ for (i in 1:10) {
 <h4 id="connecting-to-remote-daemons-directly">Connecting to Remote Daemons Directly</h4>
 <p>By specifying <code>dispatcher = FALSE</code>, remote daemons connect directly to the host process. The host listens at a single URL, and distributes tasks to all connected daemons.</p>
 <pre><code class="language-r">daemons(url = host_url(), dispatcher = FALSE)
-#&gt; [1] &quot;tcp://hostname:36117&quot;
+#&gt; [1] &quot;tcp://hostname:42493&quot;
 </code></pre>
 <p>Note that above, calling <code>host_url()</code> without a port value uses the default of ‘0’. This is a wildcard value that will automatically cause a free ephemeral port to be assigned. The actual assigned port is provided in the return value of the call, or it may be queried at any time via <code>status()</code>.</p>
 <p>The number of daemons connecting to the host URL is not limited and network resources may be added or removed at any time, with tasks automatically distributed to all connected daemons.</p>
@@ -379,7 +381,7 @@ for (i in 1:10) {
 #&gt; [1] 0
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;tcp://hostname:36117&quot;
+#&gt; [1] &quot;tcp://hostname:42493&quot;
 </code></pre>
 <p>To reset all connections and revert to default behaviour:</p>
 <pre><code class="language-r">daemons(0)
@@ -426,10 +428,10 @@ for (i in 1:10) {
 
 launch_remote(1:2)
 #&gt; [1]
-#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:43115',rs=c(10407,-512668947,-1821112118,19352515,924029480,-1421864439,1967253046))&quot;
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:45599',rs=c(10407,446889922,-1689933733,-2001768480,-854919583,-1230292818,833304919))&quot;
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:38413',rs=c(10407,1394391231,-727687268,-591259728,-971773911,72728696,-575275953))&quot;
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:42319',rs=c(10407,-1215190515,-235129500,2038791958,-1541298427,-767345579,1037423818))&quot;
 
 daemons(0)
 #&gt; [1] 0
@@ -447,37 +449,37 @@ daemons(0)
 <p>The generated self-signed certificate is available via <code>launch_remote()</code>. This function conveniently constructs the full shell command to launch a daemon, including the correctly specified ‘tls’ argument to <code>daemon()</code>.</p>
 <pre><code class="language-r">launch_remote(1)
 #&gt; [1]
-#&gt; Rscript -e &quot;mirai::daemon('wss://hostname:38377/1',tls=c('-----BEGIN CERTIFICATE-----
+#&gt; Rscript -e &quot;mirai::daemon('wss://hostname:33491/1',tls=c('-----BEGIN CERTIFICATE-----
 #&gt; MIIFNzCCAx+gAwIBAgIBATANBgkqhkiG9w0BAQsFADAzMREwDwYDVQQDDAhrdW1h
 #&gt; bW90bzERMA8GA1UECgwITmFub25leHQxCzAJBgNVBAYTAkpQMB4XDTAxMDEwMTAw
 #&gt; MDAwMFoXDTMwMTIzMTIzNTk1OVowMzERMA8GA1UEAwwIa3VtYW1vdG8xETAPBgNV
 #&gt; BAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDCCAiIwDQYJKoZIhvcNAQEBBQADggIP
-#&gt; ADCCAgoCggIBALGoWelheZ9mzpBV73aaH8a6ugnsYLXANCNpRBQCz5oDjNP2D6W4
-#&gt; t8aUXh6hSwC/VSB67DfTOeFHrni+1HlBlTdg8nJy/pKFMYD1MgAtIc/KKYt8oiWU
-#&gt; eqoQ+XLZlAFPentM0yaWZCGqLDhqJ8+zY59XSsWr3VIOsgTY9lrcdYnE/HxlfTIp
-#&gt; +bpkykANP981fuPCY4GMddo119BzY4b4IultA8o44C/uK/jUFN/Yq7CUYXb9cgt3
-#&gt; 80qNfAhYHDCB6ATZP+i5zCzClOAhQ0NXLdlF10yXqC2NuE84bP2wCDbxP5tIKo4q
-#&gt; g+6tUUWSM9s9yvEnnmH8CWLGaRj8oKqzWWcPJTXFux+2zXHiR48tVSuOBzZ03au0
-#&gt; ee3xY8RiXmvWnpDC9vPH7hwc9NZuCdaFwggx9MGQNRbhGsYGQCqtXwjd/3/Ebt2+
-#&gt; ZsvuOQOtoSPS54Ji9/z4WMI4De6CgcYOdqiT/izAW8TfhA+jijAX2UXQgInsoi4h
-#&gt; hMPhcF+mv/AzDtVPYn16ZcuDtEX5hZR532fmuc8gmArkkQ/ZWduoRNZ0rw6ESwhP
-#&gt; lP7QbPDhkrNjRIdt3bGst+J/BzZNveJQmgBarRanN2RCgIF8nGn6NT7X3urITn2g
-#&gt; 27IFWHh2m0bs1OVPCdtx6WmaxPhOhNCKo7c6q+UockZkP7CtzD66/SmBAgMBAAGj
-#&gt; VjBUMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFLpumbCa69wKwNnAfVuh
-#&gt; tN+m7wjHMB8GA1UdIwQYMBaAFLpumbCa69wKwNnAfVuhtN+m7wjHMA0GCSqGSIb3
-#&gt; DQEBCwUAA4ICAQBwSMRJQxw0Xn3nZc950qTy6aWhL9UuFU3K6gvLdR+DTTtS3XKd
-#&gt; K2cJUiFa99RGNH8QO0gzKb5jB/wNm6eLK2sw2wytb0KXy13fQ/IlEv02lP5PtyQ9
-#&gt; acQv9DeUE9Q1GOkYd1j/lNqJmd3Ka3dK555rfJiF+s8czMpZBCHueZHpqJ3EQFI2
-#&gt; gdtvkpSDWAPe6AjkKpJtO3IJ89VCWZAoj2k6dpkJUokytW6vI+5IpELJZn4voNQz
-#&gt; QtK3Z+Z9XOHg3nYE9B8n2GwYOE+mtU4utIA7+bn3NY5SKE58DY/Ub46EQYhuakYS
-#&gt; sls7DTJsmu4/Ff8rvWiS9cLA94CIap3/EmI51rkzZCjwCBIpLaFMwJkcCr7yfFlI
-#&gt; afvurXOdtOrzpwKTWJ+DHVvJUr/4QfjQWM36xRTqewuJo09PMMe8BUBEj9grxx5B
-#&gt; WId5pRs//nSQ1//FQ+D0x6kd4yIGqdSa7UYF2Q7OVPqugoEmPO8d0GeYBtbEsfdw
-#&gt; IhKTHS1lRE6P/TJLCMX9CZaCipeR1PTWsvfFxyQi+tWfF6pUOS1eZKHqXwNzfchy
-#&gt; 7IXahUfi52tUHb0/3Zvs6bAVO9VnkkhiYy4FeA57uo1kpxyHV0DMPcdcRwT8n78o
-#&gt; qZAcVptJiXXtMReinMYxhIHncdCrgXuTirmgqV4McBhEPpbnOFyWBMIiqA==
+#&gt; ADCCAgoCggIBAMb8rlDPEilBWwo049G6SQRTeDWtvB8KBHvn/0RGU/S36/UI5xZd
+#&gt; 5zDWTDZ4ixYtCNDBKt8OqEmJlOSIQme7p+7EIIw398E5QtY6VF+vn2NqzCQ2qvZt
+#&gt; YTLPUkCaM4jIi7q72iu7KbMjtUcTeK2/XdD04meFeViixcPBOdx3MgYZHIiRR/1T
+#&gt; S6QYcrzK432MpBrX/mFeuMZsh/d5J+dmsvZdyAaeda2Q9YgJZSu6CMi0dezC+gOZ
+#&gt; vvkdAsoP2LOu/0/C/uauQKJKVa/0H7TJyNdOzyqTd5LhAst4mYYWffUk5QJHZbXv
+#&gt; TApSBq7GRnZIxdmV+SJezY0P41ACwDIz1DSgH6gbaNhEs6AUoN9SkEjAr/Mwo45b
+#&gt; QJ5rZ/57oRHIDQ1XYWro6LfrIUqz4nX+qXE9OdZAQARtRiAgPhAVl5sF8VAkdCOh
+#&gt; UF0lvlVKnI9LW5XQEB3mKEo1nfnKD7n6RNW1X0iLQZqekYSQJDc1Vco5fWYK50tO
+#&gt; CROFfa72CMsb17kRTiLVUCmoD/VdA4rkwhfTe5UmhnQ3B3RPhFPSCDKQ93/VcYjh
+#&gt; UuePvvPXMWrGEnI4gT7MxMAkVOmni7F2CDAQBq5TMCYv+B9iKXSusSNk0c9Uhf15
+#&gt; qde0D9O3+6VR0PHocX56Hg2DMTIuttioq2OvTXSSNEQQAMNyUe/MA1L7AgMBAAGj
+#&gt; VjBUMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFDeng666fTM2A6H/ty0V
+#&gt; IHaXh8UrMB8GA1UdIwQYMBaAFDeng666fTM2A6H/ty0VIHaXh8UrMA0GCSqGSIb3
+#&gt; DQEBCwUAA4ICAQAmrZAEgNlGhbdF+I4M7PS+yTAZ7j96aWBG2uEORhZzPmS02J9y
+#&gt; J6Ux8pBKFLrfg34s+wF+WvJhHlz9xr0aeTm+XUOMwl5v5lorNBhE4c/GSsWXHc9h
+#&gt; ThjedVruHRq5/KQ27rQ8uAk3bnWiaKTnDDE5Ac9Vo7g/rqRicLBUn2w3HQYC43FZ
+#&gt; BfJWepIM5VU7muLjdlo+447jfbjc5iq1e2cdEqz0GBgZ5UOx+DqEpia49yuxaKia
+#&gt; JmdNjeWBfMGcM1V7+9av4YQXTEXBRmK7wCyz6uvL70nmEw9Grs7NzlLBPW3iMBCU
+#&gt; BDxAntwSzhlwJKAkhp07nh7g/qyP0+ExvJtfErxfn6X8funJ8ihBO9m1VGX2iVHt
+#&gt; KXja6fec4iwco3xaeaxVCHQWTF5Pp3c5evBP75GWOl4CJZbN9/X6UjDFiOUNb+ZS
+#&gt; PFaK58vgDfv9kNScrYp3caTSNU0bb4V8JyUM5jWMDz6XCeLA796fDZe8mUiCYHgz
+#&gt; 7/Es6krqyxsb7eig9ZPYr7/VfsbsIMejDA3j/Un3UjPnnD96k/e2jHALADHzqjyK
+#&gt; IfT0oQdVDQae2JkxuJbjpk1JtOQQaoEfSfI7tvDUypMJ4tg8kbPYSpeJbXJ0H/xA
+#&gt; hz/EwB06SmJRirkaNVNwb38tqICv9tVQeoG8DCbhFPm9iYaQAS401u7vOw==
 #&gt; -----END CERTIFICATE-----
-#&gt; ',''),rs=c(10407,-1949455173,305385664,98036161,-1903821682,-341019721,-290458484))&quot;
+#&gt; ',''),rs=c(10407,-1323640950,117087107,-334024984,1792694217,-15302410,-360201473))&quot;
 </code></pre>
 <p>The printed value may be deployed directly on a remote machine.</p>
 <p><a href="#table-of-contents">« Back to ToC</a></p>
@@ -494,7 +496,7 @@ daemons(0)
 <li>Provide the generated CSR to the CA for it to sign a new TLS certificate.</li>
 </ol>
 <ul>
-<li>The common name (CN) of the certificate must be identical to the hostname or IP address actually used for the connection as it is verified, and will fail if not the same.</li>
+<li>The common name (CN) of the certificate must be identical to the hostname or IP address actually used for the connection. As this is verified, it will fail if not the same.</li>
 <li>The received certificate should comprise a block of cipher text between the markers <code>-----BEGIN CERTIFICATE-----</code> and <code>-----END CERTIFICATE-----</code>. Make sure to request the certificate in the PEM format. If only available in other formats, the TLS library used should usually provide conversion utilities.</li>
 <li>Check also that the private key is a block of cipher text between the markers <code>-----BEGIN PRIVATE KEY-----</code> and <code>-----END PRIVATE KEY-----</code>.</li>
 </ul>
@@ -540,23 +542,86 @@ is_mirai_error(m2$data)
 is_error_value(m2$data)
 #&gt; [1] TRUE
 </code></pre>
+<p>A full stack trace of evaluation within the mirai is recorded and accessible at <code>$stack.trace</code> on the error object.</p>
+<pre><code class="language-r">f &lt;- function(x) if (x &gt; 0) stop(&quot;positive&quot;)
+m3 &lt;- mirai({f(-1); f(1)}, f = f)
+call_mirai(m3)$data
+#&gt; 'miraiError' chr Error in f(1): positive
+
+m3$data$stack.trace
+#&gt; [[1]]
+#&gt; [1] &quot;function(x) if (x &gt; 0) stop(\&quot;positive\&quot;)&quot;
+#&gt; 
+#&gt; [[2]]
+#&gt; [1] &quot;f(1)&quot;
+</code></pre>
 <p>If a daemon instance is sent a user interrupt, the mirai will resolve to an empty character string of class ‘miraiInterrupt’ and ‘errorValue’. <code>is_mirai_interrupt()</code> may be used to test for such interrupts.</p>
 <pre><code class="language-r">is_mirai_interrupt(m2$data)
 #&gt; [1] FALSE
 </code></pre>
 <p>If execution of a mirai surpasses the timeout set via the ‘.timeout’ argument, the mirai will resolve to an ‘errorValue’. This can, amongst other things, guard against mirai processes that have the potential to hang and never return.</p>
-<pre><code class="language-r">m3 &lt;- mirai(nanonext::msleep(1000), .timeout = 500)
-call_mirai(m3)$data
+<pre><code class="language-r">m4 &lt;- mirai(nanonext::msleep(1000), .timeout = 500)
+call_mirai(m4)$data
 #&gt; 'errorValue' int 5 | Timed out
 
-is_mirai_error(m3$data)
+is_mirai_error(m4$data)
 #&gt; [1] FALSE
-is_mirai_interrupt(m3$data)
+is_mirai_interrupt(m4$data)
 #&gt; [1] FALSE
-is_error_value(m3$data)
+is_error_value(m4$data)
 #&gt; [1] TRUE
 </code></pre>
 <p><code>is_error_value()</code> tests for all mirai execution errors, user interrupts and timeouts.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="serialization">Serialization</h3>
+<p>Native R serialization is used for sending data between host and daemons. Some R objects by their nature cannot be serialized, such as those accessed via an external pointer. In these cases, performing ‘mirai’ operations on them would normally error.</p>
+<p>Using the <a href="https://arrow.apache.org/docs/r/"><code>arrow</code></a> package as an example:</p>
+<pre><code class="language-r">library(arrow, warn.conflicts = FALSE)
+daemons(2)
+#&gt; [1] 2
+everywhere(library(arrow))
+
+x &lt;- as_arrow_table(iris)
+
+m &lt;- mirai(list(a = head(x), b = &quot;some text&quot;), x = x)
+call_mirai(m)$data
+#&gt; 'miraiError' chr Error: Invalid &lt;Table&gt;, external pointer to null
+</code></pre>
+<p>However it is possible to register custom serialization and unserialization functions as ‘refhooks’ or hooks into R’s native serialization mechanism for reference objects.</p>
+<p>It is only required to specify them once upfront, as a list of functions. The argument ‘class’ must also be specified to activate them and restrict their use to this class of object only.</p>
+<pre><code class="language-r">serialization(
+  refhook = list(
+    arrow::write_to_raw,
+    function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)
+  ),
+  class = &quot;ArrowTabular&quot;
+)
+
+m &lt;- mirai(list(a = head(x), b = &quot;some text&quot;), x = x)
+call_mirai(m)$data
+#&gt; $a
+#&gt; Table
+#&gt; 6 rows x 5 columns
+#&gt; $Sepal.Length &lt;double&gt;
+#&gt; $Sepal.Width &lt;double&gt;
+#&gt; $Petal.Length &lt;double&gt;
+#&gt; $Petal.Width &lt;double&gt;
+#&gt; $Species &lt;dictionary&lt;values=string, indices=int8&gt;&gt;
+#&gt; 
+#&gt; See $metadata for additional Schema metadata
+#&gt; 
+#&gt; $b
+#&gt; [1] &quot;some text&quot;
+
+daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p>It can be seen that this time, the arrow table is seamlessly handled in the ‘mirai’ process. This is the case even when the object is deeply nested inside lists or other structures.</p>
+<p>To change registered serialization functions, just call <code>serialization()</code> again supplying the new functions, or else to cancel them entirely:</p>
+<pre><code class="language-r">serialization(NULL)
+</code></pre>
+<p>The ‘vec’ argument to <code>serialization()</code> may be specified as <code>TRUE</code> if the serialization functions are vectorized and take lists of objects, as is the case for <a href="https://mlverse.github.io/safetensors/"><code>safetensors</code></a>, used for serialization in <a href="https://torch.mlverse.org/"><code>torch</code></a>.</p>
+<p>Please refer to the <a href="https://shikokuchuo.net/mirai/articles/torch.html">torch vignette</a> for further examples.</p>
 <p><a href="#table-of-contents">« Back to ToC</a></p>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>

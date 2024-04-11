@@ -5,6 +5,43 @@ knitr::opts_chunk$set(
   out.width = "100%"
 )
 
+## ----shinyextended, eval=FALSE------------------------------------------------
+#  library(shiny)
+#  library(bslib)
+#  library(mirai)
+#  
+#  ui <- page_fluid(
+#    p("The time is ", textOutput("current_time", inline = TRUE)),
+#    hr(),
+#    numericInput("n", "Sample size (n)", 100),
+#    numericInput("delay", "Seconds to take for plot", 5),
+#    input_task_button("btn", "Plot normal distribution"),
+#    plotOutput("plot")
+#  )
+#  
+#  server <- function(input, output, session) {
+#    output$current_time <- renderText({
+#      invalidateLater(1000)
+#      format(Sys.time(), "%H:%M:%S %p")
+#    })
+#  
+#    extended_task <- ExtendedTask$new(
+#      function(x, y) mirai({Sys.sleep(y); rnorm(x)}, .args = list(x, y))
+#    ) |> bind_task_button("btn")
+#  
+#    observeEvent(input$btn, {
+#      extended_task$invoke(input$n, input$delay)
+#    })
+#  
+#    output$plot <- renderPlot({
+#      str(extended_task$result())
+#      hist(extended_task$result())
+#    })
+#  }
+#  
+#  # run extended tasks using 2 daemons
+#  with(daemons(2), shinyApp(ui, server))
+
 ## ----shiny, eval=FALSE--------------------------------------------------------
 #  library(mirai)
 #  library(shiny)
@@ -49,15 +86,12 @@ knitr::opts_chunk$set(
 #    output$status <- renderText(reactive_status())
 #    poll_for_results <- reactiveVal(FALSE)
 #  
-#    # automatically shutdown daemons when app exits
-#    onStop(function() daemons(0L))
-#  
 #    # create empty mirai queue
 #    q <- list()
 #  
 #    # button to submit a task
 #    observeEvent(input$task, {
-#      q[[length(q) + 1L]] <<- mirai(run_task())
+#      q[[length(q) + 1L]] <<- mirai(run_task(), run_task = run_task)
 #      poll_for_results(TRUE)
 #    })
 #  
@@ -77,47 +111,8 @@ knitr::opts_chunk$set(
 #    })
 #  }
 #  
-#  # mirai setup - 5 local daemons with dispatcher
-#  # switch off cleanup as not necessary (each task is self-contained)
-#  daemons(5L, cleanup = FALSE)
-#  
-#  # pre-load function on each daemon for efficiency
-#  everywhere(run_task <<- run_task, .args = list(run_task))
-#  
 #  app <- shinyApp(ui = ui, server = server)
-#  runApp(app)
-
-## ----shinypromises, eval=FALSE------------------------------------------------
-#  library(shiny)
-#  library(promises) # for promise pipe
 #  
-#  daemons(4L) # handle 4 simulateneous computes
-#  
-#  ui <- fluidPage(
-#    fluidRow(
-#      plotOutput("one"),
-#      plotOutput("two"),
-#    ),
-#    fluidRow(
-#      plotOutput("three"),
-#      plotOutput("four"),
-#    )
-#  )
-#  
-#  make_plot <- function(time) {
-#    Sys.sleep(time)
-#    runif(10)
-#  }
-#  
-#  args <- list(make_plot = make_plot, time = 2)
-#  
-#  server <- function(input, output, session) {
-#    output$one <- renderPlot(mirai(make_plot(time), .args = args) %...>% plot())
-#    output$two <- renderPlot(mirai(make_plot(time), .args = args) %...>% plot())
-#    output$three <- renderPlot(mirai(make_plot(time), .args = args) %...>% plot())
-#    output$four <- renderPlot(mirai(make_plot(time), .args = args) %...>% plot())
-#    session$onSessionEnded(stopApp)
-#  }
-#  
-#  shinyApp(ui = ui, server = server)
+#  # mirai setup - 5 local daemons with dispatcher
+#  with(daemons(5L), runApp(app))
 

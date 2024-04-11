@@ -182,7 +182,7 @@ parallel::parLapply(cl, iris, mean)
 #&gt; [1] 4
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://dbfed51655e80d0b27a24cc6&quot;
+#&gt; [1] &quot;abstract://bfdadd07dfad88c3149c2c97&quot;
 
 stop_cluster(cl)
 </code></pre>
@@ -191,12 +191,53 @@ stop_cluster(cl)
 #&gt; Shell commands for deployment on nodes:
 #&gt; 
 #&gt; [1]
-#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:42471',rs=c(10407,1544508607,-732721164,-718427547,-1315073054,-812390917,-1575491328))&quot;
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:40081',rs=c(10407,-712929287,487124838,-1548361041,936929572,516359637,-964658030))&quot;
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:42471',rs=c(10407,1287587055,-2075729006,752482380,-1547133862,-1770470198,1209753632))&quot;
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:40081',rs=c(10407,716174157,753336392,1540784125,1343950952,-477221459,1025440810))&quot;
 
 stop_cluster(cl)
+</code></pre>
+<p>Starting with R 4.4, the <code>parallel</code> package has implemented a new function <code>registerClusterType()</code> for registering alternative communications backends.</p>
+<p>The function <code>mirai::register_cluster()</code> is a wrapper around this function to register ‘miraiCluster’ as a cluster type and also set it as the default. This only needs only to be inserted once at the top of a script and all subsequent calls to <code>parallel::makeCluster()</code> will default to ‘miraiCluster’.</p>
+<pre><code class="language-r">library(parallel)
+
+mirai::register_cluster()
+
+cl &lt;- makeCluster(2)
+cl
+#&gt; &lt; miraiCluster | ID: `2` nodes: 2 active: TRUE &gt;
+
+stopCluster(cl)
+</code></pre>
+<h3 id="foreach-integration">Foreach Integration</h3>
+<p>A ‘miraiCluster’ may also be registered by <a href="https://cran.r-project.org/package=doParallel"><code>doParallel</code></a> for use with the <a href="https://cran.r-project.org/package=foreach"><code>foreach</code></a> package.</p>
+<p>Running some parallel examples for the <code>foreach()</code> function:</p>
+<pre><code class="language-r">library(foreach)
+library(iterators)
+
+cl &lt;- make_cluster(4)
+doParallel::registerDoParallel(cl)
+
+# normalize the rows of a matrix
+m &lt;- matrix(rnorm(9), 3, 3)
+foreach(i = 1:nrow(m), .combine = rbind) %dopar%
+  (m[i, ] / mean(m[i, ]))
+#&gt;               [,1]        [,2]      [,3]
+#&gt; result.1  4.127729   3.3741203 -4.501849
+#&gt; result.2 -2.495306   0.9463084  4.548998
+#&gt; result.3 17.117011 -11.4476759 -2.669335
+
+# simple parallel matrix multiply
+a &lt;- matrix(1:16, 4, 4)
+b &lt;- t(a)
+foreach(b = iter(b, by='col'), .combine = cbind) %dopar%
+  (a %*% b)
+#&gt;      [,1] [,2] [,3] [,4]
+#&gt; [1,]  276  304  332  360
+#&gt; [2,]  304  336  368  400
+#&gt; [3,]  332  368  404  440
+#&gt; [4,]  360  400  440  480
 </code></pre>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>

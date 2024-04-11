@@ -146,7 +146,7 @@ section.footnotes::before {
 </div>
 <div class="body">
 <h3 id="plumber-integration">Plumber Integration</h3>
-<p>{mirai} may be used as an asynchronous / distributed backend for <a href="https://cran.r-project.org/package=plumber">{plumber}</a> pipelines.</p>
+<p><code>mirai</code> may be used as an asynchronous / distributed backend for <a href="https://www.rplumber.io/"><code>plumber</code></a> pipelines.</p>
 <p>Example usage is provided below for different types of endpoint.</p>
 <h4 id="example-get-endpoint">Example GET Endpoint</h4>
 <p>The plumber router code is run in a daemon process itself so that it does not block the interactive process.</p>
@@ -194,14 +194,14 @@ res &lt;- lapply(1:8,
                                     headers = c(msg = as.character(i))))
 res &lt;- lapply(res, call_aio)
 for (r in res) print(r$data)
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:51\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[262447]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:51\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[262443]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:51\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[262441]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:52\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[262447]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:51\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[262439]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:52\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[262443]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:52\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[262441]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:52\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[262439]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:30\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[19652]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:30\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[19657]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:30\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[19660]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:30\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[19654]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:31\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[19652]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:31\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[19657]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:31\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[19660]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:31\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[19654]}&quot;
 
 daemons(0)
 #&gt; [1] 0
@@ -253,14 +253,14 @@ res &lt;- lapply(1:8,
                                     data = sprintf('{&quot;msg&quot;:&quot;%d&quot;}', i)))
 res &lt;- lapply(res, call_aio)
 for (r in res) print(r$data)
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:56\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[262723]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:56\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[262720]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:56\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[262726]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:56\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[262718]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:57\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[262723]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:57\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[262720]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:57\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[262726]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-02-01 16:43:57\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[262718]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:35\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[19931]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:35\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[19937]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:35\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[19929]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:35\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[19934]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:36\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[19929]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:36\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[19931]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:36\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[19937]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:36\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[19934]}&quot;
 
 daemons(0)
 #&gt; [1] 0

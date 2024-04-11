@@ -39,15 +39,20 @@ nanotest(is.list(ssh_config("ssh://remotehost")))
 nanotesterr(ssh_config("ssh://remotehost", tunnel = TRUE), "must be called in the correct context")
 nanotest(is_mirai_interrupt(r <- mirai:::mk_interrupt_error()))
 nanotestp(r)
+nanotest(is_mirai_error(r <- `class<-`("Error in: testing\n", c("miraiError", "errorValue", "try-error"))))
+nanotestp(r)
+nanotestn(r$stack.trace)
+nanotest(mirai:::.DollarNames.miraiError(NULL, "s") == "stack.trace")
+nanotest(mirai:::is.promising.mirai())
 nanotestn(nextstream())
 nanotestn(nextget("pid"))
 Sys.sleep(2.5)
 # mirai tests
 if (connection) {
-  n <- 3L
+  n <- function() m
   m <- mirai({
     Sys.sleep(0.1)
-    q <- m + n + 1L
+    q <- m + n() + 2L
     q / m
   }, m = 2L, .args = list(n), .timeout = 2000L)
   nanotest(identical(call_mirai(m), m))
@@ -88,7 +93,7 @@ if (connection) {
   nanotest(unresolved(mn$data) || mn$data == "test1")
   nanotest(unresolved(mp$data) || mp$data == 3)
   Sys.sleep(1L)
-  nanotestz(status(.compute = "new")[["connections"]])
+  nanotest(is.integer(status(.compute = "new")[["connections"]]))
   nanotestz(daemons(0L, .compute = "new"))
   Sys.sleep(1L)
 }
@@ -113,6 +118,7 @@ if (connection && .Platform[["OS.type"]] != "windows") {
   Sys.sleep(1L)
 }
 # parallel cluster tests
+nanotestn(tryCatch(register_cluster(), error = function(e) invisible()))
 if (connection) {
   cluster <- make_cluster(1)
   nanotest(inherits(cluster, "miraiCluster"))

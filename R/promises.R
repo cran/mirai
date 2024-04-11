@@ -16,6 +16,19 @@
 
 # mirai.promises ---------------------------------------------------------------
 
+# Joe Cheng (3 Apr 2024):
+#
+# We are going through some effort here to ensure that any error we raise here
+# has "deep stacks" preserved while run in a Shiny app. For this to happen, we
+# either need to raise the error while the `as.promise.mirai` call is still on
+# the call stack, or, we are within an `onFulfilled` or `onRejected` callback
+# from a `promises::then` call (assuming that `then()` was called while
+# `as.promise.mirai` was still on the call stack).
+#
+# The only way we would violate those rules is by raising the error from
+# within a `later::later` callback. So this code is factored to isolate that
+# `later::later` code
+
 #' Make Mirai Promise
 #'
 #' Creates a 'promise' from a 'mirai'.
@@ -47,16 +60,29 @@
 #'
 #' }
 #'
-#' @method as.promise mirai
-#' @export
+#' @exportS3Method promises::as.promise
 #'
-as.promise.mirai <- function(x)
-  promises::promise(
-    function(resolve, reject) {
-      query <- function()
-        if (unresolved(x))
-          .[["later"]](query, delay = 0.1) else
-            if (is_error_value(value <- .subset2(x, "value"))) reject(value) else resolve(value)
-      query()
-    }
+as.promise.mirai <- function(x) {
+
+  force(x)
+  promises::then(
+    promise = promises::promise(
+      function(resolve, reject) {
+        query <- function()
+          if (unresolved(x))
+            later::later(query, delay = 0.1) else
+              resolve(.subset2(x, "value"))
+        query()
+      }
+    ),
+    onFulfilled = function(value)
+      if (is_error_value(value) && !is_mirai_interrupt(value))
+        stop(value) else
+          value
   )
+
+}
+
+#' @exportS3Method promises::is.promising
+#'
+is.promising.mirai <- function(x) TRUE

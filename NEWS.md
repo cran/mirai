@@ -1,3 +1,24 @@
+# mirai 0.13.2
+
+* `mirai()` and `everywhere()` behaviour changed such that '...' args are now assigned to the global environment of the daemon process.
+* Adds `with()` method for mirai daemons, allowing for example: `with(daemons(4), {expr})`, where the daemons last for the duration of 'expr'.
+* Adds `register_cluster()` for registering 'miraiCluster' as a parallel Cluster type (requires R >= 4.4).
+* Adds `is.promising()` method for 'mirai' for the promises package.
+* A 'miraiError' now includes the full call stack, which may be accessed at `$stack.trace`, and includes the trailing line break for consistency with 'as.character.error()'.
+* mirai promises now preserve deep stacks when a 'miraiError' occurs within a Shiny app (thanks @jcheng5 #104).
+* Simplified registration for 'parallel' and 'promises' methods (thanks @jcheng5 #103).
+* Fixes to promises error handling and Shiny vignette (thanks @jcheng5 #98 #99).
+* Requires R >= 3.6.
+
+# mirai 0.13.1
+
+* Fixes regression in mirai 0.12.1, which introduced the potential for unintentional low level errors to emerge when querying dispatcher (thanks @dsweber2 for reporting in downstream {targets}).
+
+# mirai 0.13.0
+
+* `serialization` adds arguments 'class' and 'vec' for custom serialisation of all reference object types.
+* Requires nanonext >= 0.13.3.
+
 # mirai 0.12.1
 
 * Dispatcher initial sync timeout widened to 10s to allow for launching large numbers of daemons.
