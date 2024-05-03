@@ -8,66 +8,86 @@ mirai(.expr, ..., .args = list(), .timeout = NULL, .compute = "default")
 }
 \arguments{
 \item{.expr}{an expression to evaluate asynchronously (of arbitrary length,
-wrapped in \{ \} where necessary), \strong{or} a language object passed
-by \link{name}.}
+wrapped in \{ \} where necessary), \strong{or else} a pre-constructed
+language object.}
 
-\item{...}{(optional) named arguments (name = value pairs) specifying
-objects referenced in '.expr'. These are placed in the global environment
-of the evaluation process, unlike those supplied to '.args' below.}
+\item{...}{(optional) \strong{either} named arguments (name = value pairs)
+specifying objects referenced, but not defined, in \sQuote{.expr},
+\strong{or} an environment containing such objects. See
+\sQuote{evaluation} section below.}
 
-\item{.args}{(optional) \strong{either} a list of objects passed by
-\link{name} (found in the current scope), \strong{or else} a list of
-name = value pairs, as in '...'. These remain local to the evaluation
-environment.}
+\item{.args}{(optional) \strong{either} a named list specifying objects
+referenced, but not defined, in \sQuote{.expr}, \strong{or} an
+environment containing such objects. These objects will remain local to
+the evaluation environment as opposed to those supplied in \sQuote{...}
+above - see \sQuote{evaluation} section below.}
 
 \item{.timeout}{[default NULL] for no timeout, or an integer value in
-milliseconds. A mirai will resolve to an 'errorValue' 5 (timed out) if
-evaluation exceeds this limit.}
+milliseconds. A mirai will resolve to an \sQuote{errorValue} 5 (timed
+out) if evaluation exceeds this limit.}
 
 \item{.compute}{[default 'default'] character value for the compute profile
 to use (each compute profile has its own independent set of daemons).}
 }
 \value{
-A 'mirai' object.
+A \sQuote{mirai} object.
 }
 \description{
 Evaluate an expression asynchronously in a new background R process or
     persistent daemon (local or remote). This function will return
-    immediately with a 'mirai', which will resolve to the evaluated result
-    once complete.
+    immediately with a \sQuote{mirai}, which will resolve to the evaluated
+    result once complete.
 }
 \details{
-This function will return a 'mirai' object immediately.
+This function will return a \sQuote{mirai} object immediately.
 
     The value of a mirai may be accessed at any time at \code{$data}, and
-    if yet to resolve, an 'unresolved' logical NA will be returned instead.
+    if yet to resolve, an \sQuote{unresolved} logical NA will be returned
+    instead.
 
     \code{\link{unresolved}} may be used on a mirai, returning TRUE if a
-    'mirai' has yet to resolve and FALSE otherwise. This is suitable for use
-    in control flow statements such as \code{while} or \code{if}.
+    \sQuote{mirai} has yet to resolve and FALSE otherwise. This is suitable
+    for use in control flow statements such as \code{while} or \code{if}.
 
     Alternatively, to call (and wait for) the result, use
-    \code{\link{call_mirai}} on the returned mirai. This will block until the
-    result is returned.
+    \code{\link{call_mirai}} on the returned \sQuote{mirai}. This will block
+    until the result is returned.
 
-    The expression '.expr' will be evaluated in a separate R process in a
-    clean environment (not the global environment), consisting only of the
-    objects in the list supplied to '.args', with the named objects passed as
-    '...' assigned to the global environment of that process.
-
-    Specify '.compute' to send the mirai using a specific compute profile (if
-    previously created by \code{\link{daemons}}), otherwise leave as 'default'.
+    Specify \sQuote{.compute} to send the mirai using a specific compute
+    profile (if previously created by \code{\link{daemons}}), otherwise leave
+    as \sQuote{default}.
 }
+\section{Evaluation}{
+
+
+    The expression \sQuote{.expr} will be evaluated in a separate R process
+    in a clean environment (not the global environment), consisting only of
+    the objects in the list or environment supplied to \sQuote{.args}, with
+    the named objects passed as \sQuote{...} (from the environment if one was
+    supplied) assigned to the global environment of that process.
+
+    For evaluation to occur \emph{as if} in your global environment, supply
+    objects to \sQuote{...} rather than \sQuote{.args}. For stricter scoping,
+    use \sQuote{.args}, which limits, for example, where variables not
+    explicitly passed as arguments to functions are found.
+
+    As evaluation occurs in a clean environment, all undefined objects must
+    be supplied though \sQuote{...} and/or \sQuote{.args}, including
+    self-defined functions. Functions from a package should use namespaced
+    calls such as \code{mirai::mirai()}, or else the package should be loaded
+    beforehand as part of \sQuote{.expr}.
+}
+
 \section{Errors}{
 
 
     If an error occurs in evaluation, the error message is returned as a
-    character string of class 'miraiError' and 'errorValue' (the stack trace
-    is available at \code{$stack.trace} on the error object).
-    \code{\link{is_mirai_error}} may be used to test for this.
+    character string of class \sQuote{miraiError} and \sQuote{errorValue}
+    (the stack trace is available at \code{$stack.trace} on the error
+    object). \code{\link{is_mirai_error}} may be used to test for this.
 
     \code{\link{is_error_value}} tests for all error conditions including
-    'mirai' errors, interrupts, and timeouts.
+    \sQuote{mirai} errors, interrupts, and timeouts.
 }
 
 \examples{
@@ -82,10 +102,10 @@ m$data
 Sys.sleep(0.2)
 m$data
 
-# passing existing objects by name via '.args'
+# passing the calling environment to '...'
 df1 <- data.frame(a = 1, b = 2)
 df2 <- data.frame(a = 3, b = 1)
-m <- mirai(as.matrix(rbind(df1, df2)), .args = list(df1, df2), .timeout = 1000)
+m <- mirai(as.matrix(rbind(df1, df2)), environment(), .timeout = 1000)
 call_mirai(m)$data
 
 # using unresolved()
@@ -102,19 +122,19 @@ while (unresolved(m)) {
 }
 str(m$data)
 
-# evaluating scripts using source(local = TRUE) in '.expr'
-n <- 10L
-file <- tempfile()
-cat("r <- rnorm(n)", file = file)
-m <- mirai({source(file, local = TRUE); r}, .args = list(file, n))
-call_mirai(m)[["data"]]
-unlink(file)
-
 # evaluating scripts using source() in '.expr'
 n <- 10L
 file <- tempfile()
 cat("r <- rnorm(n)", file = file)
 m <- mirai({source(file); r}, file = file, n = n)
+call_mirai(m)[["data"]]
+unlink(file)
+
+# use source(local = TRUE) when passing in local variables via '.args'
+n <- 10L
+file <- tempfile()
+cat("r <- rnorm(n)", file = file)
+m <- mirai({source(file, local = TRUE); r}, .args = list(file = file, n = n))
 call_mirai(m)[["data"]]
 unlink(file)
 

@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 #    hr(),
 #    numericInput("n", "Sample size (n)", 100),
 #    numericInput("delay", "Seconds to take for plot", 5),
-#    input_task_button("btn", "Plot normal distribution"),
+#    input_task_button("btn", "Plot uniform distribution"),
 #    plotOutput("plot")
 #  )
 #  
@@ -26,21 +26,124 @@ knitr::opts_chunk$set(
 #    })
 #  
 #    extended_task <- ExtendedTask$new(
-#      function(x, y) mirai({Sys.sleep(y); rnorm(x)}, .args = list(x, y))
+#      function(x, y) mirai({Sys.sleep(y); runif(x)}, environment())
 #    ) |> bind_task_button("btn")
 #  
-#    observeEvent(input$btn, {
-#      extended_task$invoke(input$n, input$delay)
-#    })
+#    observeEvent(input$btn, extended_task$invoke(input$n, input$delay))
 #  
-#    output$plot <- renderPlot({
-#      str(extended_task$result())
-#      hist(extended_task$result())
+#    output$plot <- renderPlot(hist(extended_task$result()))
+#  
+#  }
+#  
+#  app <- shinyApp(ui = ui, server = server)
+#  
+#  # run app using 2 local daemons
+#  with(daemons(2), runApp(app))
+
+## ----shinystep1, eval=FALSE---------------------------------------------------
+#  input_task_button("btn", "Plot uniform distribution")
+
+## ----shinystep2, eval=FALSE---------------------------------------------------
+#  extended_task <- ExtendedTask$new(
+#      function(x, y) mirai({Sys.sleep(y); runif(x)}, environment())
+#    ) |> bind_task_button("btn")
+
+## ----shinystep3, eval=FALSE---------------------------------------------------
+#  observeEvent(input$btn, extended_task$invoke(input$n, input$delay))
+
+## ----shinystep4, eval=FALSE---------------------------------------------------
+#  output$plot <- renderPlot(hist(extended_task$result()))
+
+## ----shinyextend2, eval=FALSE-------------------------------------------------
+#  library(shiny)
+#  library(mirai)
+#  library(bslib)
+#  library(ggplot2)
+#  library(aRtsy)
+#  
+#  # function definitions
+#  
+#  run_task <- function(calc_time) {
+#    Sys.sleep(calc_time)
+#    list(
+#      colors = aRtsy::colorPalette(name = "random", n = 3),
+#      angle = runif(n = 1, min = - 2 * pi, max = 2 * pi),
+#      size = 1,
+#      p = 1
+#    )
+#  }
+#  
+#  plot_result <- function(result) {
+#    do.call(what = canvas_phyllotaxis, args = result)
+#  }
+#  
+#  # modules for individual plots
+#  
+#  plotUI <- function(id, calc_time) {
+#    ns <- NS(id)
+#    card(
+#      strong(paste0("Plot (calc time = ", calc_time, " secs)")),
+#      input_task_button(ns("resample"), "Resample"),
+#      plotOutput(ns("plot"), height="400px", width="400px")
+#    )
+#  }
+#  
+#  plotServer <- function(id, calc_time) {
+#    force(id)
+#    force(calc_time)
+#    moduleServer(
+#      id,
+#      function(input, output, session) {
+#        extended_task <- ExtendedTask$new(
+#          function(...) mirai(run(x), ...)
+#        ) |> bind_task_button("resample")
+#  
+#        observeEvent(input$resample,
+#                     extended_task$invoke(x = calc_time, run = run_task))
+#  
+#        output$plot <- renderPlot(plot_result(extended_task$result()))
+#  
+#      }
+#    )
+#  }
+#  
+#  # ui and server
+#  
+#  ui <- page_sidebar(fillable = FALSE,
+#    sidebar = sidebar(
+#      numericInput("calc_time", "Calculation time (secs)", 5),
+#      actionButton("add", "Add", class="btn-primary"),
+#    ),
+#    layout_column_wrap(id = "results", width = "400px", fillable = FALSE)
+#  )
+#  
+#  server <- function(input, output, session) {
+#  
+#    observeEvent(input$add, {
+#      id <- nanonext::random(4)
+#      insertUI("#results", where = "beforeEnd", ui = plotUI(id, input$calc_time))
+#      plotServer(id, input$calc_time)
 #    })
 #  }
 #  
-#  # run extended tasks using 2 daemons
-#  with(daemons(2), shinyApp(ui, server))
+#  app <- shinyApp(ui, server)
+#  
+#  # run app using 3 local daemons
+#  with(daemons(3), runApp(app))
+
+## ----shinystep21, eval=FALSE--------------------------------------------------
+#  input_task_button(ns("resample"), "Resample")
+
+## ----shinystep22, eval=FALSE--------------------------------------------------
+#  extended_task <- ExtendedTask$new(
+#    function(x, run = run_task) mirai(run(x), environment())
+#  ) |> bind_task_button("resample")
+
+## ----shinystep23, eval=FALSE--------------------------------------------------
+#  observeEvent(input$resample, extended_task$invoke(calc_time))
+
+## ----shinystep24, eval=FALSE--------------------------------------------------
+#  output$plot <- renderPlot(plot_result(extended_task$result()))
 
 ## ----shiny, eval=FALSE--------------------------------------------------------
 #  library(mirai)
@@ -51,7 +154,7 @@ knitr::opts_chunk$set(
 #  # function definitions
 #  
 #  run_task <- function() {
-#    Sys.sleep(5L)
+#    Sys.sleep(5)
 #    list(
 #      colors = aRtsy::colorPalette(name = "random", n = 3),
 #      angle = runif(n = 1, min = - 2 * pi, max = 2 * pi),
@@ -68,7 +171,8 @@ knitr::opts_chunk$set(
 #    if (tasks == 0L) {
 #      "All tasks completed."
 #    } else {
-#      sprintf("%d task%s in progress at %s", tasks, if (tasks > 1L) "s" else "", format.POSIXct(Sys.time()))
+#      sprintf("%d task%s in progress at %s",
+#              tasks, if (tasks > 1L) "s" else "", format.POSIXct(Sys.time()))
 #    }
 #  }
 #  
@@ -113,6 +217,6 @@ knitr::opts_chunk$set(
 #  
 #  app <- shinyApp(ui = ui, server = server)
 #  
-#  # mirai setup - 5 local daemons with dispatcher
-#  with(daemons(5L), runApp(app))
+#  # run app using 3 local daemons
+#  with(daemons(3), runApp(app))
 

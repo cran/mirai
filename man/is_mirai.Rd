@@ -10,17 +10,18 @@ is_mirai(x)
 \item{x}{an object.}
 }
 \value{
-Logical TRUE if 'x' is of class 'mirai', FALSE otherwise.
+Logical TRUE if \sQuote{x} is of class \sQuote{mirai}, FALSE
+    otherwise.
 }
 \description{
-Is the object a 'mirai'.
+Is the object a \sQuote{mirai}.
 }
 \examples{
 if (interactive()) {
 # Only run examples in interactive R sessions
 
 df <- data.frame()
-m <- mirai(as.matrix(df), .args = list(df))
+m <- mirai(as.matrix(df), df = df)
 is_mirai(m)
 is_mirai(df)
 

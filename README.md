@@ -88,8 +88,8 @@ result.
 
 ``` r
 m$data
-#>  [1]  1.8451625 -0.2165991 -1.2117962  0.4428216  1.3387124  0.7469864
-#>  [7]  2.2582459 -0.8252213 -4.6168235  0.5419577
+#>  [1] -0.2819560 -0.5967914  0.6349296  2.5009639 -3.9728956 -0.2517056
+#>  [7]  0.3998458  1.5749779 -1.6756273 -3.5466531
 ```
 
 Alternatively, explicitly call and wait for the result using
@@ -97,8 +97,8 @@ Alternatively, explicitly call and wait for the result using
 
 ``` r
 call_mirai(m)$data
-#>  [1]  1.8451625 -0.2165991 -1.2117962  0.4428216  1.3387124  0.7469864
-#>  [7]  2.2582459 -0.8252213 -4.6168235  0.5419577
+#>  [1] -0.2819560 -0.5967914  0.6349296  2.5009639 -3.9728956 -0.2517056
+#>  [7]  0.3998458  1.5749779 -1.6756273 -3.5466531
 ```
 
 ### Daemons
@@ -136,9 +136,16 @@ vignette("mirai", package = "mirai")
 The following core integrations are documented, with usage examples in
 the linked vignettes:
 
+[`arrow`](https://shikokuchuo.net/mirai/articles/databases.html) - the
+custom serialization interface allows queries using the Apache Arrow
+format to be handled seamlessly over database connections hosted in
+daemon processes.
+
 [`parallel`](https://shikokuchuo.net/mirai/articles/parallel.html) -
 provides an alternative communications backend for R, implementing a
-low-level feature request by R-Core at R Project Sprint 2023.
+low-level feature request by R-Core at R Project Sprint 2023. Also
+includes examples of using `foreach`, which is supported via
+`doParallel`.
 
 [`promises`](https://shikokuchuo.net/mirai/articles/promises.html) -
 ‘mirai’ may be used interchangeably with ‘promises’ by using the promise
@@ -184,19 +191,23 @@ for persistent daemons, through to orchestrating robustness testing for
 the high performance computing requirements of `crew` and `targets`.
 
 [Joe Cheng](https://github.com/jcheng5/), for optimising the `promises`
-method to make `mirai` work seamlessly within Shiny, and guidance for
-implementing error stack traces.
+method to make `mirai` work seamlessly within Shiny, and prototyping
+non-polling promises, which is implemented across `nanonext` and
+`mirai`.
 
 [Luke Tierney](https://github.com/ltierney/), R Core, for discussion on
-R’s implementation of L’Ecuyer-CMRG streams, used to ensure statistical
-independence in parallel processing, and collaboration in ‘providing an
-alternative communications backend for R’.
+L’Ecuyer-CMRG streams, used to ensure statistical independence in
+parallel processing, and making it possible for `mirai` to be the first
+‘alternative communications backend for R’.
 
 [Henrik Bengtsson](https://github.com/HenrikBengtsson/), for valuable
 insights leading to the interface accepting broader usage patterns.
 
 [Daniel Falbel](https://github.com/dfalbel/), for discussion around an
 efficient solution to serialization and transmission of `torch` tensors.
+
+[Kirill Müller](https://github.com/krlmlr/), for discussion on using
+‘daemons’ to host Arrow database connections.
 
 ### Links
 

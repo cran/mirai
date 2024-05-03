@@ -1,3 +1,22 @@
+# mirai 1.0.0
+
+* Implements completely event-driven (non-polling) promises (thanks @jcheng5 for prototyping).
+  + This is an innovation which allows higher responsiveness and massive scalability for 'mirai' promises.
+* Behavioural changes to `mirai()` and `everywhere()`:
+  + (breaking change) no longer permits an unnamed list to be supplied to '.args'.
+  + allows an environment e.g. `environment()` to be supplied to '.args' or as the only element of '...'.
+  + allows evaluation of a symbol in the 'mirai' environment, e.g. `mirai(x, x = 1)`.
+* `ssh_config()` improvements:
+  + new argument 'host' allows specifying the localhost URL and port to create a standalone configuration object.
+  + order of arguments 'tunnel' and 'timeout' reversed.
+* `stop_mirai()` now resolves to an 'errorValue' 20 (operation canceled) in the case the asynchronous task was still ongoing (thanks @jcheng5 #110).
+* Rejected promises now show the complete error code and message in the case of an 'errorValue'.
+* A 'miraiError' reverts to not including a trailing line break (as prior to mirai 0.13.2).
+* Non-dispatcher local daemons now synchronize with host in all cases (prevents use before all have connected).
+* `[` method for 'miraiCluster' no longer produces a 'miraiCluster' object (thanks @HenrikBengtsson #83).
+* Faster startup time as the `parallel` package is now only loaded when first used.
+* Requires `nanonext` >= 1.0.0.
+
 # mirai 0.13.2
 
 * `mirai()` and `everywhere()` behaviour changed such that '...' args are now assigned to the global environment of the daemon process.

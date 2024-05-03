@@ -6,7 +6,7 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r, include = FALSE}
+```{r, include=FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -14,8 +14,6 @@ knitr::opts_chunk$set(
 )
 ```
 ### Table of Contents
-
-<a href="https://shikokuchuo.net/mirai/" alt="mirai"><img src="../man/figures/logo.png" alt="mirai logo" align="right" width="120"/></a>
 
 1. [Example 1: Compute-intensive Operations](#example-1-compute-intensive-operations)
 2. [Example 2: I/O-bound Operations](#example-2-io-bound-operations)
@@ -93,14 +91,18 @@ High-frequency real-time data cannot be written to file/database synchronously w
 
 Cache data in memory and use `mirai()` to perform periodic write operations concurrently in a separate process.
 
-Below, '.args' is used to pass a list of objects already present in the calling environment to the mirai by name. This is an alternative use of '.args', and may be combined with `...` to also pass in `name = value` pairs.
+Below, '.args' is used to pass `environment()`, which is the calling environment. This provides a convenient method of passing in existing objects.
+
+```{r cleanglobalenv, include=FALSE}
+rm(list = ls())
+```
 ```{r exec2}
 library(mirai)
 
 x <- rnorm(1e6)
 file <- tempfile()
 
-m <- mirai(write.csv(x, file = file), .args = list(x, file))
+m <- mirai(write.csv(x, file = file), .args = environment())
 ```
 A 'mirai' object is returned immediately.
 
@@ -141,10 +143,10 @@ run_iteration <- function(i) {
 
 for (i in 1:10) {
 
-  m <- mirai(run_iteration(i), .args = list(run_iteration, i))
+  m <- mirai(run_iteration(i), environment())
   while (is_error_value(call_mirai(m)$data)) {
     cat(m$data)
-    m <- mirai(run_iteration(i), .args = list(run_iteration, i))
+    m <- mirai(run_iteration(i), environment())
   }
   cat(m$data)
 
@@ -432,11 +434,11 @@ call_mirai(m3)$data
 m3$data$stack.trace
 ```
 
-If a daemon instance is sent a user interrupt, the mirai will resolve to an empty character string of class 'miraiInterrupt' and 'errorValue'. `is_mirai_interrupt()` may be used to test for such interrupts.
+If a daemon instance is sent a user interrupt, the mirai will resolve to an object of class 'miraiInterrupt' and 'errorValue'. `is_mirai_interrupt()` may be used to test for such interrupts.
 ```{r interruptexample}
 is_mirai_interrupt(m2$data)
 ```
-If execution of a mirai surpasses the timeout set via the '.timeout' argument, the mirai will resolve to an 'errorValue'. This can, amongst other things, guard against mirai processes that have the potential to hang and never return.
+If execution of a mirai surpasses the timeout set via the '.timeout' argument, the mirai will resolve to an 'errorValue' of 5L (timed out). This can, amongst other things, guard against mirai processes that have the potential to hang and never return.
 ```{r timeouts}
 m4 <- mirai(nanonext::msleep(1000), .timeout = 500)
 call_mirai(m4)$data

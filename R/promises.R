@@ -31,19 +31,19 @@
 
 #' Make Mirai Promise
 #'
-#' Creates a 'promise' from a 'mirai'.
+#' Creates a \sQuote{promise} from a \sQuote{mirai}.
 #'
-#' @param x an object of class 'mirai'.
+#' @param x an object of class \sQuote{mirai}.
 #'
-#' @return A 'promise' object.
+#' @return A \sQuote{promise} object.
 #'
 #' @details This function is an S3 method for the generic \code{as.promise} for
-#'     class 'mirai'.
+#'     class \sQuote{mirai}.
 #'
 #'     Requires the \CRANpkg{promises} package.
 #'
-#'     Allows a 'mirai' to be used with the promise pipe \code{\%...>\%}, which
-#'     schedules a function to run upon resolution of the 'mirai'.
+#'     Allows a \sQuote{mirai} to be used with the promise pipe \code{\%...>\%},
+#'     which schedules a function to run upon resolution of the \sQuote{mirai}.
 #'
 #' @examples
 #' if (interactive() && requireNamespace("promises", quietly = TRUE)) {
@@ -64,22 +64,33 @@
 #'
 as.promise.mirai <- function(x) {
 
-  force(x)
-  promises::then(
-    promise = promises::promise(
-      function(resolve, reject) {
-        query <- function()
-          if (unresolved(x))
-            later::later(query, delay = 0.1) else
-              resolve(.subset2(x, "value"))
-        query()
-      }
-    ),
-    onFulfilled = function(value)
-      if (is_error_value(value) && !is_mirai_interrupt(value))
-        stop(value) else
-          value
-  )
+  promise <- .subset2(x, "promise")
+
+  if (is.null(promise)) {
+
+    promise <- promises::then(
+      promises::promise(
+        function(resolve, reject)
+          context <- set_promise_context(x, environment())
+      ),
+      onFulfilled = function(value)
+        if (is_error_value(value) && !is_mirai_interrupt(value))
+          stop(if (is_mirai_error(value)) value else nng_error(value)) else
+            value
+    )
+
+    if (!unresolved(x)) {
+      value <- .subset2(x, "value")
+      promise <- if (is_error_value(value) && !is_mirai_interrupt(value))
+        promises::promise_reject(if (is_mirai_error(value)) value else nng_error(value)) else
+          promises::promise_resolve(value)
+    }
+
+    assign("promise", promise, x)
+
+  }
+
+  promise
 
 }
 

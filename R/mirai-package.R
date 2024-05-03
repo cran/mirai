@@ -43,10 +43,10 @@
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
 #' @importFrom nanonext call_aio call_aio_ .context cv cv_value dial
-#'     is_error_value listen lock mclock msleep next_config opt opt<- parse_url
-#'     pipe_notify random reap recv recv_aio_signal request request_signal send
-#'     socket stat stop_aio strcat tls_config unresolved until wait write_cert
-#' @importFrom parallel nextRNGStream
+#'     is_error_value listen lock mclock msleep next_config nng_error opt opt<-
+#'     parse_url pipe_notify random reap recv recv_aio_signal request
+#'     request_signal send set_promise_context socket stat stop_aio strcat
+#'     tls_config unresolved until wait write_cert
 #' @importFrom stats rexp
 #' @importFrom utils .DollarNames
 #'
@@ -86,16 +86,16 @@
   list(
     arglen = "'args' and/or 'url' must be of length 1 or the same length",
     cluster_inactive = "cluster is no longer active",
-    correct_context = "must be called in the correct context e.g. as a function argument",
+    correct_context = "'host' must be specified if not using directly in a function argument",
     daemons_unset = "a numeric value for 'url' requires daemons to be set",
     dot_required = "'.' must be an element of the character vector(s) supplied to 'args'",
     missing_expression = "missing expression, perhaps wrap in {}?",
     missing_url = "at least one URL must be supplied for 'url' or 'n' must be at least 1",
-    named_args = "all '...' arguments must be named",
+    named_args = "all '...' arguments must be named, unless supplying an environment",
     n_one = "'n' must be 1 or greater",
     n_zero = "the number of daemons must be zero or greater",
     numeric_n = "'n' must be numeric, did you mean to provide 'url'?",
-    register_cluster = "this function requires R version 4.4 or newer",
+    register_cluster = "this function requires a more recent version of R",
     requires_local = "SSH tunnelling requires 'url' hostname to be '127.0.0.1' or 'localhost'",
     refhook_invalid = "'refhook' must be a list of 2 functions or NULL",
     single_url = "only one 'url' should be specified",

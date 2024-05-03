@@ -153,7 +153,8 @@ section.footnotes::before {
 <p>The /echo endpoint takes a GET request, sleeps for 1 second (simulating an expensive computation) and simply returns the ‘msg’ request header together with a timestamp and the process ID of the process it is run on.</p>
 <pre><code class="language-r">library(mirai)
 
-# important to supply SIGINT so the plumber server is interrupted and exits cleanly when torn down
+# important to supply SIGINT so the plumber server is interrupted and exits
+# cleanly when torn down
 daemons(1L, dispatcher = FALSE, autoexit = tools::SIGINT)
 #&gt; [1] 1
 
@@ -173,10 +174,10 @@ m &lt;- mirai({
           {
             Sys.sleep(1L)
             list(status = 200L, body = list(time = format(Sys.time()),
-                                            msg = req[[&quot;HEADERS&quot;]][[&quot;msg&quot;]],
+                                            msg = msg,
                                             pid = Sys.getpid()))
           },
-          req = req
+          msg = req[[&quot;HEADERS&quot;]][[&quot;msg&quot;]]
         ) %...&gt;% (function(x) {
           res$status &lt;- x$status
           res$body &lt;- x$body
@@ -194,21 +195,21 @@ res &lt;- lapply(1:8,
                                     headers = c(msg = as.character(i))))
 res &lt;- lapply(res, call_aio)
 for (r in res) print(r$data)
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:30\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[19652]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:30\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[19657]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:30\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[19660]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:30\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[19654]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:31\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[19652]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:31\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[19657]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:31\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[19660]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:31\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[19654]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:11\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[36065]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:11\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[36062]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:11\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[36068]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:11\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[36060]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:12\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[36065]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:12\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[36062]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:12\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[36068]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:12\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[36060]}&quot;
 
 daemons(0)
 #&gt; [1] 0
 </code></pre>
 <h4 id="example-post-endpoint">Example POST Endpoint</h4>
 <p>Below is a demonstration of the equivalent using a POST endpoint, accepting a JSON instruction sent as request data.</p>
-<p>It is important to note in this case that <code>req$postBody</code> should be accessed in the router process and passed in as an argument to the ‘mirai’ as this is retrieved using a connection that is not serializable.</p>
+<p>Note that <code>req$postBody</code> should always be accessed in the router process and passed in as an argument to the ‘mirai’, as this is retrieved using a connection that is not serializable.</p>
 <pre><code class="language-r">library(mirai)
 
 # important to supply SIGINT so the plumber server is interrupted and exits cleanly when torn down
@@ -253,14 +254,14 @@ res &lt;- lapply(1:8,
                                     data = sprintf('{&quot;msg&quot;:&quot;%d&quot;}', i)))
 res &lt;- lapply(res, call_aio)
 for (r in res) print(r$data)
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:35\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[19931]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:35\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[19937]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:35\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[19929]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:35\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[19934]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:36\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[19929]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:36\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[19931]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:36\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[19937]}&quot;
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-07 20:10:36\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[19934]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:15\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[36338]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:15\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[36343]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:15\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[36340]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:15\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[36346]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:16\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[36346]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:16\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[36338]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:16\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[36343]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-04-23 17:15:16\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[36340]}&quot;
 
 daemons(0)
 #&gt; [1] 0

@@ -147,7 +147,13 @@ section.footnotes::before {
 <div class="body">
 <h3 id="promises-integration">Promises Integration</h3>
 <p>{mirai} supplies its own <code>as.promise()</code> method, allowing it to be used as a promise from the <a href="https://rstudio.github.io/promises/"><code>promises</code></a> package.</p>
-<p>A ‘mirai’ may be piped directly using the promise pipe <code>&amp;...&gt;%</code>, which implicitly calls <code>as.promise()</code> on the ‘mirai’.</p>
+<p>These promises are innovative, event-driven promises, developed in collaboration with Joe Cheng.</p>
+<ul>
+<li>Do not require each promise to be polled for completion by a <code>later</code> loop like other promises.</li>
+<li>Instead, promise actions are automatically queued for execution as soon as each ‘mirai’ resolves.</li>
+<li>Allows for much higher responsiveness (lower latency) and massive scalability (situations with thousand of promises or more).</li>
+</ul>
+<p>A ‘mirai’ may be piped directly using the promise pipe <code>&amp;...&gt;%</code>, which implicitly calls <code>as.promise()</code> on the ‘mirai’. Similarly all promise-aware functions such as <code>promises::then()</code> or <code>shiny::ExtendedTask$new()</code> which take a promise can also take a ‘mirai’ (using <code>promises</code> &gt;= 1.3.0).</p>
 <p>Alternatively, it may be converted into a promise by <code>as.promise()</code>, which then allows using the methods <code>$then()</code>, <code>$finally()</code> etc.</p>
 <p>The following example outputs “hello” to the console after one second when the ‘mirai’ resolves.</p>
 <pre><code class="language-r">library(mirai)
@@ -159,23 +165,22 @@ p
 </code></pre>
 <p>It is possible to both access a ‘mirai’ value at <code>$data</code> and to use a promise for enacting a side effect (assigning the value to an environment in the example below).</p>
 <pre><code class="language-r">library(mirai)
-library(promises)
 
 env &lt;- new.env()
 
-m &lt;- mirai({Sys.sleep(1); &quot;hello&quot;})
-p &lt;- as.promise(m)$then(function(x) env$res &lt;- x)
+m &lt;- mirai({
+  Sys.sleep(1)
+  &quot;hello&quot;
+})
+
+promises::then(m, function(x) env$res &lt;- x)
 
 call_mirai(m)$data
 #&gt; [1] &quot;hello&quot;
-
-# after returning to the top level prompt:
-env$res
-#&gt; [1] &quot;hello&quot;
 </code></pre>
-<p>Used in combination with <code>promises</code> &gt;= 1.3.0, <code>is.promising()</code> returns TRUE. This allows ‘mirai’ to be used seamlessly in places accepting promises, such as Shiny ExtendedTasks, without the need to explicitly convert using <code>as.promise()</code>.</p>
-<pre><code class="language-r">is.promising(m)
-#&gt; [1] TRUE
+<p>After returning to the top level prompt:</p>
+<pre><code class="language-r">env$res
+#&gt; [1] &quot;hello&quot;
 </code></pre>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>

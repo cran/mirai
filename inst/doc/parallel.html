@@ -182,7 +182,7 @@ parallel::parLapply(cl, iris, mean)
 #&gt; [1] 4
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://bfdadd07dfad88c3149c2c97&quot;
+#&gt; [1] &quot;abstract://717bd47029c15a6c3421c3be&quot;
 
 stop_cluster(cl)
 </code></pre>
@@ -191,24 +191,12 @@ stop_cluster(cl)
 #&gt; Shell commands for deployment on nodes:
 #&gt; 
 #&gt; [1]
-#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:40081',rs=c(10407,-712929287,487124838,-1548361041,936929572,516359637,-964658030))&quot;
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:41557',rs=c(10407,-649272372,-839924131,-596536966,-590434125,19895896,-199893895))&quot;
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:40081',rs=c(10407,716174157,753336392,1540784125,1343950952,-477221459,1025440810))&quot;
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:41557',rs=c(10407,276960266,-2035903300,-1874904835,1952875809,1359474491,-567028289))&quot;
 
 stop_cluster(cl)
-</code></pre>
-<p>Starting with R 4.4, the <code>parallel</code> package has implemented a new function <code>registerClusterType()</code> for registering alternative communications backends.</p>
-<p>The function <code>mirai::register_cluster()</code> is a wrapper around this function to register ‘miraiCluster’ as a cluster type and also set it as the default. This only needs only to be inserted once at the top of a script and all subsequent calls to <code>parallel::makeCluster()</code> will default to ‘miraiCluster’.</p>
-<pre><code class="language-r">library(parallel)
-
-mirai::register_cluster()
-
-cl &lt;- makeCluster(2)
-cl
-#&gt; &lt; miraiCluster | ID: `2` nodes: 2 active: TRUE &gt;
-
-stopCluster(cl)
 </code></pre>
 <h3 id="foreach-integration">Foreach Integration</h3>
 <p>A ‘miraiCluster’ may also be registered by <a href="https://cran.r-project.org/package=doParallel"><code>doParallel</code></a> for use with the <a href="https://cran.r-project.org/package=foreach"><code>foreach</code></a> package.</p>
@@ -223,10 +211,10 @@ doParallel::registerDoParallel(cl)
 m &lt;- matrix(rnorm(9), 3, 3)
 foreach(i = 1:nrow(m), .combine = rbind) %dopar%
   (m[i, ] / mean(m[i, ]))
-#&gt;               [,1]        [,2]      [,3]
-#&gt; result.1  4.127729   3.3741203 -4.501849
-#&gt; result.2 -2.495306   0.9463084  4.548998
-#&gt; result.3 17.117011 -11.4476759 -2.669335
+#&gt;               [,1]      [,2]      [,3]
+#&gt; result.1  4.948511 -2.514537 0.5660261
+#&gt; result.2 -1.880495  3.198433 1.6820612
+#&gt; result.3 -1.015714  2.203200 1.8125144
 
 # simple parallel matrix multiply
 a &lt;- matrix(1:16, 4, 4)

@@ -2,31 +2,37 @@
 % Please edit documentation in R/mirai.R
 \name{stop_mirai}
 \alias{stop_mirai}
-\title{mirai (Stop Evaluation)}
+\title{mirai (Stop)}
 \usage{
 stop_mirai(aio)
 }
 \arguments{
-\item{aio}{a 'mirai' object.}
+\item{aio}{a \sQuote{mirai} object.}
 }
 \value{
 Invisible NULL.
 }
 \description{
-Stop evaluation of a mirai that is in progress.
+Stops a \sQuote{mirai} if still in progress, causing it to resolve
+    immediately to an \sQuote{errorValue} 20 (Operation canceled).
 }
 \details{
-Stops the asynchronous operation associated with the mirai by
-    aborting, and then waits for it to complete or to be completely aborted.
-    The mirai is then deallocated and attempting to access the value at
-    \code{$data} will result in an error.
+Forces the \sQuote{mirai} to resolve immediately. Has no effect if
+    the \sQuote{mirai} has already resolved.
+
+    If cancellation was successful, the value at \code{$data} will be an
+    \sQuote{errorValue} 20 (Operation canceled). Note that in such a case,
+    the \sQuote{mirai} has been aborted and the value not retrieved - but any
+    ongoing evaluation in the daemon process will continue to completion and
+    is not interrupted.
 }
 \examples{
 if (interactive()) {
 # Only run examples in interactive R sessions
 
-s <- mirai(Sys.sleep(n), n = 5)
-stop_mirai(s)
+m <- mirai(Sys.sleep(n), n = 5)
+stop_mirai(m)
+m$data
 
 }
 

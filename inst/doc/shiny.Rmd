@@ -15,19 +15,26 @@ knitr::opts_chunk$set(
 ```
 ### Shiny Integration
 
-#### Shiny Example Usage
-
 `mirai` may be used as an asynchronous / distributed backend to scale [Shiny](https://shiny.posit.co/) applications.
 
-Depending on the options suppled to `daemons()`, tasks may be distributed across local background processes or multiple networked servers in an efficient and performant manner.
+Depending on the options suppled to `daemons()`, mirai tasks may be distributed across local background processes or multiple networked servers in an efficient and performant manner.
 
-#### Example using Shiny ExtendedTask
+For use with Shiny, `mirai` implements innovative, event-driven promises, developed in collaboration with Joe Cheng.
 
-'mirai' may be used within Shiny's ExtendedTask framework to create scalable Shiny apps, which are more responsive for a single user, as well as multiple concurrent users. 'mirai' are accepted anywhere a 'promise', 'future' or 'future_promise' is currently accepted.
+- Do not require each promise to be polled for completion by a `later` loop like other promises.
+- Instead, promise actions are automatically queued for execution as soon as each 'mirai' resolves.
+- Allows for much higher responsiveness (lower latency) and massive scalability (situations with thousand of promises or more).
 
-The example below requires Shiny >= 1.8.1 and promises >= 1.3.0.
 
-Importantly, the app remains responsive, as shown by the clock continuing to tick whilst the simulated expensive computation is running. Also the button is disabled and the plot greyed out until the computation is complete.
+#### Shiny ExtendedTask Example: Clock and Plot
+
+mirai may be used within Shiny's ExtendedTask framework (in `shiny` >= 1.8.1) to create scalable Shiny apps, which are more responsive for a single user, as well as for multiple concurrent users.
+
+'mirai' are accepted anywhere a 'promise', 'future' or 'future_promise' is currently accepted (with `promises` >= 1.3.0).
+
+In the example below, the app remains responsive, with the clock continuing to tick whilst the simulated expensive computation is running. Also the button is disabled and the plot greyed out until the computation is complete.
+
+By wrapping the `runApp()` call in `with(daemons(...), ...)` the daemons are set up for the duration of the app, exiting automatically when the app is stopped.
 
 ```{r shinyextended, eval=FALSE}
 library(shiny)
@@ -39,7 +46,7 @@ ui <- page_fluid(
   hr(),
   numericInput("n", "Sample size (n)", 100),
   numericInput("delay", "Seconds to take for plot", 5),
-  input_task_button("btn", "Plot normal distribution"),
+  input_task_button("btn", "Plot uniform distribution"),
   plotOutput("plot")
 )
 
@@ -50,29 +57,176 @@ server <- function(input, output, session) {
   })
 
   extended_task <- ExtendedTask$new(
-    function(x, y) mirai({Sys.sleep(y); rnorm(x)}, .args = list(x, y))
+    function(x, y) mirai({Sys.sleep(y); runif(x)}, environment())
   ) |> bind_task_button("btn")
 
-  observeEvent(input$btn, {
-    extended_task$invoke(input$n, input$delay)
-  })
+  observeEvent(input$btn, extended_task$invoke(input$n, input$delay))
 
-  output$plot <- renderPlot({
-    str(extended_task$result())
-    hist(extended_task$result())
-  })
+  output$plot <- renderPlot(hist(extended_task$result()))
+  
 }
 
-# run extended tasks using 2 daemons
-with(daemons(2), shinyApp(ui, server))
+app <- shinyApp(ui = ui, server = server)
+
+# run app using 2 local daemons
+with(daemons(2), runApp(app))
 ```
 *Thanks to Joe Cheng for providing examples on which the above is based.*
 
-#### Example Without Promises
 
-Whilst it is generally recommended to use the ExtendedTask framework, it is also possible for 'mirai' to plug directly into the reactive framework, without the need for promises. This may be required for advanced uses of asynchronous programming.
+The key components to using ExtendedTask are:
 
-The following example has a button to submit tasks, which will be processed by one of 5 daemons, outputting a spiral pattern upon completion. If more than 5 tasks are submitted at once, the chart updates 5 at a time, limited by the number of available daemons.
+1. In the UI, use `bslib::input_task_button()`. This is a button which is disabled during computation to prevent additional clicks.
+
+```{r shinystep1, eval=FALSE}
+input_task_button("btn", "Plot uniform distribution")
+```
+
+2. In the server, create an ExtendedTask object by calling `ExtendedTask$new()` on a function passing named arguments to `mirai()`, and bind it to the button created in (1). The arguments are passed in through the use of `environment()` which captures the 'x' and 'y' contained in the environment of the anonymous function.
+
+```{r shinystep2, eval=FALSE}
+extended_task <- ExtendedTask$new(
+    function(x, y) mirai({Sys.sleep(y); runif(x)}, environment())
+  ) |> bind_task_button("btn")
+```
+
+3. In the server, create an observer on the input button, which invokes the ExtendedTask, supplying the arguments to the anonymous function above.
+
+```{r shinystep3, eval=FALSE}
+observeEvent(input$btn, extended_task$invoke(input$n, input$delay))
+```
+
+4. In the server, create a render function for the output, which consumes the result of the ExtendedTask.
+
+```{r shinystep4, eval=FALSE}
+output$plot <- renderPlot(hist(extended_task$result()))
+```
+
+
+#### Shiny ExtendedTask Example: Generative Art
+
+The following app produces pretty spiral patterns.
+
+The user can add multiple plots, making use of Shiny modules, each having a different calculation time.
+
+The plots are generated asynchronously, and it is easy to see the practical limitations of the number of daemons set. For example, if updating 4 plots, and there are only 3 daemons, the 4th plot will not start to be generated until one of the other plots has finished.
+
+```{r shinyextend2, eval=FALSE}
+library(shiny)
+library(mirai)
+library(bslib)
+library(ggplot2)
+library(aRtsy)
+
+# function definitions
+
+run_task <- function(calc_time) {
+  Sys.sleep(calc_time)
+  list(
+    colors = aRtsy::colorPalette(name = "random", n = 3),
+    angle = runif(n = 1, min = - 2 * pi, max = 2 * pi),
+    size = 1,
+    p = 1
+  )
+}
+
+plot_result <- function(result) {
+  do.call(what = canvas_phyllotaxis, args = result)
+}
+
+# modules for individual plots
+
+plotUI <- function(id, calc_time) {
+  ns <- NS(id)
+  card(
+    strong(paste0("Plot (calc time = ", calc_time, " secs)")),
+    input_task_button(ns("resample"), "Resample"),
+    plotOutput(ns("plot"), height="400px", width="400px")
+  )
+}
+
+plotServer <- function(id, calc_time) {
+  force(id)
+  force(calc_time)
+  moduleServer(
+    id,
+    function(input, output, session) {
+      extended_task <- ExtendedTask$new(
+        function(...) mirai(run(x), ...)
+      ) |> bind_task_button("resample")
+      
+      observeEvent(input$resample,
+                   extended_task$invoke(x = calc_time, run = run_task))
+      
+      output$plot <- renderPlot(plot_result(extended_task$result()))
+      
+    }
+  )
+}
+
+# ui and server
+
+ui <- page_sidebar(fillable = FALSE,
+  sidebar = sidebar(
+    numericInput("calc_time", "Calculation time (secs)", 5),
+    actionButton("add", "Add", class="btn-primary"),
+  ),
+  layout_column_wrap(id = "results", width = "400px", fillable = FALSE)
+)
+
+server <- function(input, output, session) {
+
+  observeEvent(input$add, {
+    id <- nanonext::random(4)
+    insertUI("#results", where = "beforeEnd", ui = plotUI(id, input$calc_time))
+    plotServer(id, input$calc_time)
+  })
+}
+
+app <- shinyApp(ui, server)
+
+# run app using 3 local daemons
+with(daemons(3), runApp(app))
+```
+*The above example builds on original code by Joe Cheng, Daniel Woodie and William Landau.* 
+
+This example uses `...` to pass variables through to the `mirai()` call. This is an alternative and equivalent way to using `environment()` and can be flexibly used to pass objects not defined there.
+
+The key components to using this ExtendedTask example are:
+
+1. In the UI, use `bslib::input_task_button()`. This is a button which is disabled during computation to prevent additional clicks.
+
+```{r shinystep21, eval=FALSE}
+input_task_button(ns("resample"), "Resample")
+```
+
+2. In the server, create an ExtendedTask object by calling `ExtendedTask$new()` on a function passing arguments to `mirai()`, and bind it to the button created in (1). As not all variables are supplied by inputs in this case, we make use of `environment()` to conveniently pass in the calling environment of the ExtendedTask function.
+
+```{r shinystep22, eval=FALSE}
+extended_task <- ExtendedTask$new(
+  function(x, run = run_task) mirai(run(x), environment())
+) |> bind_task_button("resample")
+```
+
+3. In the server, create an observer on the input button, which invokes the ExtendedTask with the parameters required by the ExtendedTask function.
+
+```{r shinystep23, eval=FALSE}
+observeEvent(input$resample, extended_task$invoke(calc_time))
+```
+
+4. In the server, create a render function for the output, which consumes the result of the ExtendedTask.
+
+```{r shinystep24, eval=FALSE}
+output$plot <- renderPlot(plot_result(extended_task$result()))
+```
+
+#### Advanced Non-Promise Example: Generative Art
+
+Whilst it is generally recommended to use the ExtendedTask framework, it is also possible for mirai to plug directly into Shiny's reactive framework, without the use of 'promises' either implicitly or explicitly. This may be required for advanced uses of asynchronous programming, or where the use case does not fit the semantics of ExtendedTask.
+
+The following is similar to the previous example, but allows multiple tasks to be submitted at once, rather than one after the other as required by ExtendedTask. There is a button to submit tasks, which will be processed by one of 3 daemons, outputting a pretty spiral pattern upon completion. If more than 3 tasks are submitted at once, the chart updates 3 at a time, limited by the number of available daemons.
+
+It requires more boilerplate code to manage the mirai tasks, but otherwise functions similarly to the ExtendedTask example.
 
 ```{r shiny, eval=FALSE}
 library(mirai)
@@ -83,7 +237,7 @@ library(aRtsy)
 # function definitions
 
 run_task <- function() {
-  Sys.sleep(5L)
+  Sys.sleep(5)
   list(
     colors = aRtsy::colorPalette(name = "random", n = 3),
     angle = runif(n = 1, min = - 2 * pi, max = 2 * pi),
@@ -100,7 +254,8 @@ status_message <- function(tasks) {
   if (tasks == 0L) {
     "All tasks completed."
   } else {
-    sprintf("%d task%s in progress at %s", tasks, if (tasks > 1L) "s" else "", format.POSIXct(Sys.time()))
+    sprintf("%d task%s in progress at %s",
+            tasks, if (tasks > 1L) "s" else "", format.POSIXct(Sys.time()))
   }
 }
 
@@ -145,7 +300,7 @@ server <- function(input, output, session) {
 
 app <- shinyApp(ui = ui, server = server)
 
-# mirai setup - 5 local daemons with dispatcher
-with(daemons(5L), runApp(app))
+# run app using 3 local daemons
+with(daemons(3), runApp(app))
 ```
-*Thanks to Daniel Woodie and William Landau for providing the original example on which this is based. Please see <https://wlandau.github.io/crew/articles/shiny.html> which also has examples of the fantastic artwork produced.*
+*Thanks to Daniel Woodie and William Landau for providing the original example on which this is based. Please see <https://wlandau.github.io/crew/articles/shiny.html>.*

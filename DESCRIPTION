@@ -1,7 +1,7 @@
 Package: mirai
 Type: Package
 Title: Minimalist Async Evaluation Framework for R
-Version: 0.13.2
+Version: 1.0.0
 Description: Lightweight parallel code execution and distributed computing.
     Designed for simplicity, a 'mirai' evaluates an R expression asynchronously,
     on local or network resources, resolving automatically upon completion.
@@ -22,15 +22,15 @@ URL: https://shikokuchuo.net/mirai/,
         https://github.com/shikokuchuo/mirai/
 Encoding: UTF-8
 Depends: R (>= 3.6)
-Imports: nanonext (>= 0.13.3)
+Imports: nanonext (>= 1.0.0)
 Enhances: parallel, promises
-Suggests: knitr, later, markdown
+Suggests: knitr, markdown
 VignetteBuilder: knitr
 RoxygenNote: 7.3.1
 NeedsCompilation: no
-Packaged: 2024-04-11 06:51:45 UTC; cg334
+Packaged: 2024-05-03 12:06:43 UTC; cg334
 Author: Charlie Gao [aut, cre] (<https://orcid.org/0000-0002-0750-061X>),
   Hibiki AI Limited [cph]
 Maintainer: Charlie Gao <charlie.gao@shikokuchuo.net>
 Repository: CRAN
-Date/Publication: 2024-04-11 07:20:02 UTC
+Date/Publication: 2024-05-03 12:30:02 UTC

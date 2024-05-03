@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<title>mirai - Databases and Arrow</title>
+<style type="text/css">
+/**
+ * Prism.s theme ported from highlight.js's xcode style
+ */
+pre code {
+  padding: 1em;
+}
+.token.comment {
+  color: #007400;
+}
+.token.punctuation {
+  color: #999;
+}
+.token.tag,
+.token.selector {
+  color: #aa0d91;
+}
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol {
+  color: #1c00cf;
+}
+.token.property,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin {
+  color: #c41a16;
+}
+.token.inserted {
+  background-color: #ccffd8;
+}
+.token.deleted {
+  background-color: #ffebe9;
+}
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #9a6e3a;
+}
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #836c28;
+}
+.token.function,
+.token.class-name {
+  color: #DD4A68;
+}
+.token.regex,
+.token.important,
+.token.variable {
+  color: #5c2699;
+}
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+.token.italic {
+  font-style: italic;
+}
+</style>
+<style type="text/css">
+body {
+  font-family: sans-serif;
+  max-width: 800px;
+  margin: auto;
+  padding: 1em;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+body, .footnotes, code { font-size: .9em; }
+li li { font-size: .95em; }
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+pre, img { max-width: 100%; }
+pre, pre:hover {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+pre code {
+  display: block;
+  overflow-x: auto;
+}
+code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
+:not(pre) > code, code[class] { background-color: #F8F8F8; }
+code.language-undefined, pre > code:not([class]) {
+  background-color: inherit;
+  border: 1px solid #eee;
+}
+table {
+  margin: auto;
+  border-top: 1px solid #666;
+}
+table thead th { border-bottom: 1px solid #ddd; }
+th, td { padding: 5px; }
+thead, tfoot, tr:nth-child(even) { background: #eee; }
+blockquote {
+  color: #666;
+  margin: 0;
+  padding-left: 1em;
+  border-left: 0.5em solid #eee;
+}
+hr, .footnotes::before { border: 1px dashed #ddd; }
+.frontmatter { text-align: center; }
+#TOC .numbered li { list-style: none; }
+#TOC .numbered { padding-left: 0; }
+#TOC .numbered ul { padding-left: 1em; }
+table, .body h2 { border-bottom: 1px solid #666; }
+.body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
+.footnote-ref a::before { content: "["; }
+.footnote-ref a::after { content: "]"; }
+section.footnotes::before {
+  content: "";
+  display: block;
+  max-width: 20em;
+}
+
+@media print {
+  body {
+    font-size: 12pt;
+    max-width: 100%;
+  }
+  tr, img { page-break-inside: avoid; }
+}
+@media only screen and (min-width: 992px) {
+  pre { white-space: pre; }
+}
+</style>
+</head>
+<body>
+<div class="frontmatter">
+<div class="title"><h1>mirai - Databases and Arrow</h1></div>
+<div class="author"><h2></h2></div>
+<div class="date"><h3></h3></div>
+</div>
+<div class="body">
+<h3 id="database-hosting-the-basics">Database Hosting - The Basics</h3>
+<p><code>mirai</code> supports the hosting of multiple database connections across processes on the local machine or a remote server. <code>everywhere()</code> easily sets up identical database connections in each daemon process.</p>
+<p>The following represents a simple example, which sets up 2 local daemons, and then opens a connection to the same SQLite file database in each daemon.</p>
+<pre><code class="language-r">file &lt;- tempfile()
+library(mirai)
+
+daemons(2)
+</code></pre>
+<pre><code>## [1] 2
+</code></pre>
+<pre><code class="language-r">everywhere({
+  library(DBI)
+  con &lt;&lt;- dbConnect(RSQLite::SQLite(), file)
+}, file = file)
+</code></pre>
+<p><code>mirai()</code> calls may then be used to write to or query the database, and may be executed on either daemon.</p>
+<pre><code class="language-r">m &lt;- mirai(dbWriteTable(con, &quot;iris&quot;, iris))
+call_mirai(m)$data
+</code></pre>
+<pre><code>## [1] TRUE
+</code></pre>
+<pre><code class="language-r">m &lt;- mirai(dbListTables(con))
+call_mirai(m)$data
+</code></pre>
+<pre><code>## [1] &quot;iris&quot;
+</code></pre>
+<pre><code class="language-r">m &lt;- mirai(dbGetQuery(con, 'SELECT * FROM iris WHERE &quot;Sepal.Length&quot; &lt; 4.6'))
+call_mirai(m)$data
+</code></pre>
+<pre><code>##   Sepal.Length Sepal.Width Petal.Length Petal.Width Species
+## 1          4.4         2.9          1.4         0.2  setosa
+## 2          4.3         3.0          1.1         0.1  setosa
+## 3          4.4         3.0          1.3         0.2  setosa
+## 4          4.5         2.3          1.3         0.3  setosa
+## 5          4.4         3.2          1.3         0.2  setosa
+</code></pre>
+<p><code>everywhere()</code> can be used again to cleanly tear down the databases, before resetting daemons.</p>
+<pre><code class="language-r">everywhere(dbDisconnect(con))
+daemons(0)
+</code></pre>
+<pre><code>## [1] 0
+</code></pre>
+<h3 id="database-hosting-using-arrow-database-connectivity">Database Hosting - Using Arrow Database Connectivity</h3>
+<p>It is possible using the <code>DBI</code> interface to access and manipulate data in the Apache Arrow data format efficiently through ABDC (Arrow Database Connectivity).</p>
+<p>The example below creates an in-memory SQLite connection using the <code>adbcsqlite</code> backend.</p>
+<p>Serialization is set up with the relevant serialization and deserialization functions from the <code>arrow</code> package. Note that the format class is ‘nanoarrow_array_stream’ as <code>nanoarrow</code> is the backend for all queries made by the DBI <code>db*Arrow()</code> functions.</p>
+<pre><code class="language-r">library(mirai)
+
+daemons(1)
+</code></pre>
+<pre><code>## [1] 1
+</code></pre>
+<pre><code class="language-r">everywhere({
+  library(DBI) # `adbi` and `adbcsqlite` packages must also be installed
+  con &lt;&lt;- dbConnect(adbi::adbi(&quot;adbcsqlite&quot;), uri = &quot;:memory:&quot;)
+})
+
+serialization(
+  refhook = list(arrow::write_to_raw,
+                 function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)),
+  class = &quot;nanoarrow_array_stream&quot;
+)
+</code></pre>
+<p><code>mirai()</code> calls may then be used to write to or query the database all in the Arrow format.</p>
+<pre><code class="language-r">m &lt;- mirai(dbWriteTableArrow(con, &quot;iris&quot;, iris))
+call_mirai(m)$data
+</code></pre>
+<pre><code>## [1] TRUE
+</code></pre>
+<pre><code class="language-r">m &lt;- mirai(dbReadTableArrow(con, &quot;iris&quot;))
+call_mirai(m)$data
+</code></pre>
+<pre><code>## Table
+## 150 rows x 5 columns
+## $Sepal.Length &lt;double&gt;
+## $Sepal.Width &lt;double&gt;
+## $Petal.Length &lt;double&gt;
+## $Petal.Width &lt;double&gt;
+## $Species &lt;string&gt;
+</code></pre>
+<pre><code class="language-r">m &lt;- mirai(dbGetQueryArrow(con, 'SELECT * FROM iris WHERE &quot;Sepal.Length&quot; &lt; 4.6'))
+call_mirai(m)$data
+</code></pre>
+<pre><code>## Table
+## 5 rows x 5 columns
+## $Sepal.Length &lt;double&gt;
+## $Sepal.Width &lt;double&gt;
+## $Petal.Length &lt;double&gt;
+## $Petal.Width &lt;double&gt;
+## $Species &lt;string&gt;
+</code></pre>
+<p>Due to the tight integration of the <code>mirai</code> serialization mechanism with R’s ‘refhook’ system, we can easily return complex / nested objects containing multiple queries in the Arrow format:</p>
+<pre><code class="language-r">m &lt;- mirai({
+  a &lt;- dbGetQueryArrow(con, 'SELECT * FROM iris WHERE &quot;Sepal.Length&quot; &lt; 4.6')
+  b &lt;- dbGetQueryArrow(con, 'SELECT * FROM iris WHERE &quot;Sepal.Width&quot; &lt; 2.6')
+  x &lt;- dbGetQueryArrow(con, 'SELECT * FROM iris WHERE &quot;Petal.Length&quot; &lt; 1.5')
+  y &lt;- dbGetQueryArrow(con, 'SELECT * FROM iris WHERE &quot;Petal.Width&quot; &lt; 0.2')
+  list(sepal = list(length = a, width = b), petal = list(length = x, width = y))
+})
+call_mirai(m)$data
+</code></pre>
+<pre><code>## $sepal
+## $sepal$length
+## Table
+## 5 rows x 5 columns
+## $Sepal.Length &lt;double&gt;
+## $Sepal.Width &lt;double&gt;
+## $Petal.Length &lt;double&gt;
+## $Petal.Width &lt;double&gt;
+## $Species &lt;string&gt;
+## 
+## $sepal$width
+## Table
+## 19 rows x 5 columns
+## $Sepal.Length &lt;double&gt;
+## $Sepal.Width &lt;double&gt;
+## $Petal.Length &lt;double&gt;
+## $Petal.Width &lt;double&gt;
+## $Species &lt;string&gt;
+## 
+## 
+## $petal
+## $petal$length
+## Table
+## 24 rows x 5 columns
+## $Sepal.Length &lt;double&gt;
+## $Sepal.Width &lt;double&gt;
+## $Petal.Length &lt;double&gt;
+## $Petal.Width &lt;double&gt;
+## $Species &lt;string&gt;
+## 
+## $petal$width
+## Table
+## 5 rows x 5 columns
+## $Sepal.Length &lt;double&gt;
+## $Sepal.Width &lt;double&gt;
+## $Petal.Length &lt;double&gt;
+## $Petal.Width &lt;double&gt;
+## $Species &lt;string&gt;
+</code></pre>
+<p>As before, <code>everywhere()</code> can be used again to cleanly tear down the databases, before resetting daemons.</p>
+<pre><code class="language-r">everywhere(dbDisconnect(con))
+daemons(0)
+</code></pre>
+<pre><code>## [1] 0
+</code></pre>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
+</body>
+</html>

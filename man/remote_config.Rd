@@ -9,46 +9,54 @@ remote_config(command = NULL, args = c("", "."), rscript = "Rscript")
 
 ssh_config(
   remotes,
-  timeout = 10,
   tunnel = FALSE,
+  timeout = 10,
   command = "ssh",
-  rscript = "Rscript"
+  rscript = "Rscript",
+  host
 )
 }
 \arguments{
 \item{command}{the command used to effect the daemon launch on the remote
-machine as a character string (e.g. \code{'ssh'}). Defaults to 'ssh' for
-\code{ssh_config}, although may be substituted for the full path to a
-specific SSH application. The default NULL for \code{remote_config} does
-not effect any launches, but causes \code{\link{launch_remote}} to return
-the shell commands for manual deployment on remote machines.}
+machine as a character string (e.g. \code{'ssh'}). Defaults to
+\sQuote{ssh} for \code{ssh_config}, although may be substituted for the
+full path to a specific SSH application. The default NULL for
+\code{remote_config} does not effect any launches, but causes
+\code{\link{launch_remote}} to return the shell commands for manual
+deployment on remote machines.}
 
-\item{args}{(optional) arguments passed to 'command', as a character vector
-that must include \code{"."} as an element, which will be substituted
-for the daemon launch command. Alternatively, a list of such character
-vectors to effect multiple launches (one for each list element).}
+\item{args}{(optional) arguments passed to \sQuote{command}, as a character
+vector that must include \code{"."} as an element, which will be
+substituted for the daemon launch command. Alternatively, a list of such
+character vectors to effect multiple launches (one for each list element).}
 
 \item{rscript}{(optional) name / path of the Rscript executable on the remote
-machine. The default assumes 'Rscript' is on the executable search path.
-Prepend the full path if necessary. If launching on Windows, 'Rscript'
-should be replaced with 'Rscript.exe'.}
+machine. The default assumes \sQuote{Rscript} is on the executable search
+path. Prepend the full path if necessary. If launching on Windows,
+\sQuote{Rscript} should be replaced with \sQuote{Rscript.exe}.}
 
 \item{remotes}{the character URL or vector of URLs to SSH into, using the
 'ssh://' scheme and including the port open for SSH connections (defaults
 to 22 if not specified), e.g. 'ssh://10.75.32.90:22' or 'ssh://nodename'.}
 
+\item{tunnel}{[default FALSE] logical value whether to use SSH reverse
+tunnelling. If TRUE, a tunnel is created between the same ports on the
+local and remote machines. See the \sQuote{SSH Tunnelling} section below
+for how to correctly specify required settings.}
+
 \item{timeout}{[default 10] maximum time allowed for connection setup in
 seconds.}
 
-\item{tunnel}{[default FALSE] logical value whether to use SSH reverse
-tunnelling. If TRUE, a tunnel is created between the same ports (as
-specified in 'url') on the local and remote machines. Setting to TRUE
-requires access to 'url' in the evaluation context and will error if not
-called from a relevant function.}
+\item{host}{(optional) only applicable for reverse tunnelling. Should be
+specified if creating a standalone configuration object. If calling this
+function directly as an argument to \code{\link{daemons}}, this is not
+required and can be inferred from the \sQuote{url} supplied (see
+\sQuote{SSH Tunnelling} section below).}
 }
 \value{
-A list in the required format to be supplied to the 'remote' argument
-    of \code{\link{launch_remote}}, \code{\link{daemons}}, or \code{\link{make_cluster}}.
+A list in the required format to be supplied to the \sQuote{remote}
+    argument of \code{\link{launch_remote}}, \code{\link{daemons}}, or
+    \code{\link{make_cluster}}.
 }
 \description{
 \code{remote_config} provides a flexible generic framework for generating
@@ -82,18 +90,28 @@ A list in the required format to be supplied to the 'remote' argument
     of the corresponding node. SSH key-based authentication must also already
     be in place.
 
-    Tunnelling requires the hostname for 'url' specified when setting up
-    \code{\link{daemons}} to be either '127.0.0.1' or 'localhost'. This is as
-    the tunnel is created between \code{127.0.0.1:port} or equivalently
-    \code{localhost:port} on each machine. The host listens to \code{port} on
-    its machine and the remotes each dial into \code{port} on their own
-    respective machines.
+    Tunnelling requires the hostname for the \sQuote{host} argument (or the
+    \sQuote{url} argument to \code{\link{daemons}} if called directly in
+    that context) to be either \sQuote{127.0.0.1} or \sQuote{localhost}.
+    This is as the tunnel is created between \code{127.0.0.1:port} or
+    equivalently \code{localhost:port} on each machine. The host listens to
+    \code{port} on its machine and the remotes each dial into \code{port} on
+    their own respective machines.
 }
 
 \examples{
 remote_config(command = "ssh", args = c("-fTp 22 10.75.32.90", "."))
 
-ssh_config(remotes = c("ssh://10.75.32.90:222", "ssh://nodename"), timeout = 5)
+ssh_config(
+  remotes = c("ssh://10.75.32.90:222", "ssh://nodename"),
+  timeout = 5
+)
+
+ssh_config(
+  remotes = c("ssh://10.75.32.90:222", "ssh://nodename"),
+  tunnel = TRUE,
+  host = "tls+tcp://127.0.0.1:5555"
+)
 
 \dontrun{
 
@@ -115,8 +133,8 @@ cl <- make_cluster(
   url = "tcp://localhost:5555",
   remote = ssh_config(
     remotes = c("ssh://10.75.32.90", "ssh://10.75.32.90"),
-    timeout = 1,
-    tunnel = TRUE
+    tunnel = TRUE,
+    timeout = 1
   )
 )
 }
