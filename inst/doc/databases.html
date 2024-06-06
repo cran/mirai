@@ -150,10 +150,8 @@ section.footnotes::before {
 <p>The following represents a simple example, which sets up 2 local daemons, and then opens a connection to the same SQLite file database in each daemon.</p>
 <pre><code class="language-r">file &lt;- tempfile()
 library(mirai)
-
 daemons(2)
-</code></pre>
-<pre><code>## [1] 2
+#&gt; [1] 2
 </code></pre>
 <pre><code class="language-r">everywhere({
   library(DBI)
@@ -162,46 +160,39 @@ daemons(2)
 </code></pre>
 <p><code>mirai()</code> calls may then be used to write to or query the database, and may be executed on either daemon.</p>
 <pre><code class="language-r">m &lt;- mirai(dbWriteTable(con, &quot;iris&quot;, iris))
-call_mirai(m)$data
-</code></pre>
-<pre><code>## [1] TRUE
+m[]
+#&gt; [1] TRUE
 </code></pre>
 <pre><code class="language-r">m &lt;- mirai(dbListTables(con))
-call_mirai(m)$data
-</code></pre>
-<pre><code>## [1] &quot;iris&quot;
+m[]
+#&gt; [1] &quot;iris&quot;
 </code></pre>
 <pre><code class="language-r">m &lt;- mirai(dbGetQuery(con, 'SELECT * FROM iris WHERE &quot;Sepal.Length&quot; &lt; 4.6'))
-call_mirai(m)$data
-</code></pre>
-<pre><code>##   Sepal.Length Sepal.Width Petal.Length Petal.Width Species
-## 1          4.4         2.9          1.4         0.2  setosa
-## 2          4.3         3.0          1.1         0.1  setosa
-## 3          4.4         3.0          1.3         0.2  setosa
-## 4          4.5         2.3          1.3         0.3  setosa
-## 5          4.4         3.2          1.3         0.2  setosa
+m[]
+#&gt;   Sepal.Length Sepal.Width Petal.Length Petal.Width Species
+#&gt; 1          4.4         2.9          1.4         0.2  setosa
+#&gt; 2          4.3         3.0          1.1         0.1  setosa
+#&gt; 3          4.4         3.0          1.3         0.2  setosa
+#&gt; 4          4.5         2.3          1.3         0.3  setosa
+#&gt; 5          4.4         3.2          1.3         0.2  setosa
 </code></pre>
 <p><code>everywhere()</code> can be used again to cleanly tear down the databases, before resetting daemons.</p>
 <pre><code class="language-r">everywhere(dbDisconnect(con))
 daemons(0)
-</code></pre>
-<pre><code>## [1] 0
+#&gt; [1] 0
 </code></pre>
 <h3 id="database-hosting-using-arrow-database-connectivity">Database Hosting - Using Arrow Database Connectivity</h3>
 <p>It is possible using the <code>DBI</code> interface to access and manipulate data in the Apache Arrow data format efficiently through ABDC (Arrow Database Connectivity).</p>
 <p>The example below creates an in-memory SQLite connection using the <code>adbcsqlite</code> backend.</p>
 <p>Serialization is set up with the relevant serialization and deserialization functions from the <code>arrow</code> package. Note that the format class is ‘nanoarrow_array_stream’ as <code>nanoarrow</code> is the backend for all queries made by the DBI <code>db*Arrow()</code> functions.</p>
 <pre><code class="language-r">library(mirai)
-
 daemons(1)
-</code></pre>
-<pre><code>## [1] 1
+#&gt; [1] 1
 </code></pre>
 <pre><code class="language-r">everywhere({
   library(DBI) # `adbi` and `adbcsqlite` packages must also be installed
   con &lt;&lt;- dbConnect(adbi::adbi(&quot;adbcsqlite&quot;), uri = &quot;:memory:&quot;)
 })
-
 serialization(
   refhook = list(arrow::write_to_raw,
                  function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)),
@@ -210,31 +201,28 @@ serialization(
 </code></pre>
 <p><code>mirai()</code> calls may then be used to write to or query the database all in the Arrow format.</p>
 <pre><code class="language-r">m &lt;- mirai(dbWriteTableArrow(con, &quot;iris&quot;, iris))
-call_mirai(m)$data
-</code></pre>
-<pre><code>## [1] TRUE
+m[]
+#&gt; [1] TRUE
 </code></pre>
 <pre><code class="language-r">m &lt;- mirai(dbReadTableArrow(con, &quot;iris&quot;))
-call_mirai(m)$data
-</code></pre>
-<pre><code>## Table
-## 150 rows x 5 columns
-## $Sepal.Length &lt;double&gt;
-## $Sepal.Width &lt;double&gt;
-## $Petal.Length &lt;double&gt;
-## $Petal.Width &lt;double&gt;
-## $Species &lt;string&gt;
+m[]
+#&gt; Table
+#&gt; 150 rows x 5 columns
+#&gt; $Sepal.Length &lt;double&gt;
+#&gt; $Sepal.Width &lt;double&gt;
+#&gt; $Petal.Length &lt;double&gt;
+#&gt; $Petal.Width &lt;double&gt;
+#&gt; $Species &lt;string&gt;
 </code></pre>
 <pre><code class="language-r">m &lt;- mirai(dbGetQueryArrow(con, 'SELECT * FROM iris WHERE &quot;Sepal.Length&quot; &lt; 4.6'))
-call_mirai(m)$data
-</code></pre>
-<pre><code>## Table
-## 5 rows x 5 columns
-## $Sepal.Length &lt;double&gt;
-## $Sepal.Width &lt;double&gt;
-## $Petal.Length &lt;double&gt;
-## $Petal.Width &lt;double&gt;
-## $Species &lt;string&gt;
+m[]
+#&gt; Table
+#&gt; 5 rows x 5 columns
+#&gt; $Sepal.Length &lt;double&gt;
+#&gt; $Sepal.Width &lt;double&gt;
+#&gt; $Petal.Length &lt;double&gt;
+#&gt; $Petal.Width &lt;double&gt;
+#&gt; $Species &lt;string&gt;
 </code></pre>
 <p>Due to the tight integration of the <code>mirai</code> serialization mechanism with R’s ‘refhook’ system, we can easily return complex / nested objects containing multiple queries in the Arrow format:</p>
 <pre><code class="language-r">m &lt;- mirai({
@@ -244,52 +232,144 @@ call_mirai(m)$data
   y &lt;- dbGetQueryArrow(con, 'SELECT * FROM iris WHERE &quot;Petal.Width&quot; &lt; 0.2')
   list(sepal = list(length = a, width = b), petal = list(length = x, width = y))
 })
-call_mirai(m)$data
-</code></pre>
-<pre><code>## $sepal
-## $sepal$length
-## Table
-## 5 rows x 5 columns
-## $Sepal.Length &lt;double&gt;
-## $Sepal.Width &lt;double&gt;
-## $Petal.Length &lt;double&gt;
-## $Petal.Width &lt;double&gt;
-## $Species &lt;string&gt;
-## 
-## $sepal$width
-## Table
-## 19 rows x 5 columns
-## $Sepal.Length &lt;double&gt;
-## $Sepal.Width &lt;double&gt;
-## $Petal.Length &lt;double&gt;
-## $Petal.Width &lt;double&gt;
-## $Species &lt;string&gt;
-## 
-## 
-## $petal
-## $petal$length
-## Table
-## 24 rows x 5 columns
-## $Sepal.Length &lt;double&gt;
-## $Sepal.Width &lt;double&gt;
-## $Petal.Length &lt;double&gt;
-## $Petal.Width &lt;double&gt;
-## $Species &lt;string&gt;
-## 
-## $petal$width
-## Table
-## 5 rows x 5 columns
-## $Sepal.Length &lt;double&gt;
-## $Sepal.Width &lt;double&gt;
-## $Petal.Length &lt;double&gt;
-## $Petal.Width &lt;double&gt;
-## $Species &lt;string&gt;
+m[]
+#&gt; $sepal
+#&gt; $sepal$length
+#&gt; Table
+#&gt; 5 rows x 5 columns
+#&gt; $Sepal.Length &lt;double&gt;
+#&gt; $Sepal.Width &lt;double&gt;
+#&gt; $Petal.Length &lt;double&gt;
+#&gt; $Petal.Width &lt;double&gt;
+#&gt; $Species &lt;string&gt;
+#&gt; 
+#&gt; $sepal$width
+#&gt; Table
+#&gt; 19 rows x 5 columns
+#&gt; $Sepal.Length &lt;double&gt;
+#&gt; $Sepal.Width &lt;double&gt;
+#&gt; $Petal.Length &lt;double&gt;
+#&gt; $Petal.Width &lt;double&gt;
+#&gt; $Species &lt;string&gt;
+#&gt; 
+#&gt; 
+#&gt; $petal
+#&gt; $petal$length
+#&gt; Table
+#&gt; 24 rows x 5 columns
+#&gt; $Sepal.Length &lt;double&gt;
+#&gt; $Sepal.Width &lt;double&gt;
+#&gt; $Petal.Length &lt;double&gt;
+#&gt; $Petal.Width &lt;double&gt;
+#&gt; $Species &lt;string&gt;
+#&gt; 
+#&gt; $petal$width
+#&gt; Table
+#&gt; 5 rows x 5 columns
+#&gt; $Sepal.Length &lt;double&gt;
+#&gt; $Sepal.Width &lt;double&gt;
+#&gt; $Petal.Length &lt;double&gt;
+#&gt; $Petal.Width &lt;double&gt;
+#&gt; $Species &lt;string&gt;
 </code></pre>
 <p>As before, <code>everywhere()</code> can be used again to cleanly tear down the databases, before resetting daemons.</p>
 <pre><code class="language-r">everywhere(dbDisconnect(con))
 daemons(0)
+#&gt; [1] 0
 </code></pre>
-<pre><code>## [1] 0
+<h3 id="shiny-mirai-dbi-adbc-integrated-example">Shiny / mirai / DBI / ADBC Integrated Example</h3>
+<p>The following is an example of how database connections hosted in mirai daemons may be used to power a Shiny app.</p>
+<p>The one-time <code>serialization()</code> setup ensures seamless transport of Apache Arrow data, and occurs in the global environment outside of <code>server()</code>.</p>
+<p>A new database connection is created in a new daemon process for every new Shiny session. The resources are freed when a sesssion ends. This logic is all defined within <code>server()</code>. A unique ID is used to identify each session, and is specified as the ‘compute profile’ for daemons.</p>
+<p>Non-dispatcher daemons are created as scheduling is not required (all queries expected to take roughly the same time, and in this case each session uses only one daemon anyway).</p>
+<p>Shiny ExtendedTask is then used to perform each query via a <code>mirai()</code> call, using the session-specific compute profile.</p>
+<pre><code class="language-r">library(mirai)
+library(secretbase)
+library(shiny)
+library(bslib)
+
+# write 'iris' dataset to temp database file (for this demonstration)
+file &lt;- tempfile()
+con &lt;- DBI::dbConnect(adbi::adbi(&quot;adbcsqlite&quot;), uri = file)
+DBI::dbWriteTableArrow(con, &quot;iris&quot;, iris)
+DBI::dbDisconnect(con)
+
+# common input parameters
+slmin &lt;- min(iris$Sepal.Length)
+slmax &lt;- max(iris$Sepal.Length)
+
+ui &lt;- page_fluid(
+  p(&quot;The time is &quot;, textOutput(&quot;current_time&quot;, inline = TRUE)),
+  hr(),
+  h3(&quot;Shiny / mirai / DBI / ADBC demonstration&quot;),
+  p(&quot;New daemon-hosted database connection is created for every Shiny session&quot;),
+  sliderInput(
+    &quot;sl&quot;, &quot;Query iris dataset based on Sepal Length&quot;, min = slmin, max = slmax,
+    value = c(slmin, slmax), width = &quot;75%&quot;
+  ),
+  input_task_button(&quot;btn&quot;, &quot;Return query&quot;),
+  tableOutput(&quot;table&quot;)
+)
+
+# uses Shiny ExtendedTask with mirai
+server &lt;- function(input, output, session) {
+
+  # create unique session id by hashing current time with a random key
+  id &lt;- secretbase::siphash13(Sys.time(), key = nanonext::random(4L))
+
+  # create new daemon for each session (set dispatcher = FALSE)
+  daemons(1L, dispatcher = FALSE, .compute = id)
+
+  # tear down daemon when session ends
+  session$onEnded(function() daemons(0L, .compute = id))
+
+  # everywhere() loads DBI and creates ADBC connection in each daemon
+  everywhere(
+    {
+      library(DBI) # `adbi` and `adbcsqlite` packages must also be installed
+      con &lt;&lt;- dbConnect(adbi::adbi(&quot;adbcsqlite&quot;), uri = file)
+    },
+    file = file,
+    .compute = id
+  )
+
+  output$current_time &lt;- renderText({
+    invalidateLater(1000)
+    format(Sys.time(), &quot;%H:%M:%S %p&quot;)
+  })
+
+  task &lt;- ExtendedTask$new(
+    function(...) mirai(
+      dbGetQueryArrow(
+        con,
+        sprintf(
+          &quot;SELECT * FROM iris WHERE \&quot;Sepal.Length\&quot; BETWEEN %.2f AND %.2f&quot;,
+          sl[1L],
+          sl[2L]
+        )
+      ),
+      ...,
+      .compute = id
+    )
+  ) |&gt; bind_task_button(&quot;btn&quot;)
+
+  observeEvent(input$btn, task$invoke(sl = input$sl))
+
+  output$table &lt;- renderTable(task$result())
+
+}
+
+# serialization() specifies the native Arrow serialization functions
+serialization(
+  refhook = list(arrow::write_to_raw, nanoarrow::read_nanoarrow),
+  class = &quot;nanoarrow_array_stream&quot;
+)
+
+# run Shiny app
+shinyApp(ui = ui, server = server)
+
+# deletes temp database file (for this demonstration)
+unlink(file)
 </code></pre>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>

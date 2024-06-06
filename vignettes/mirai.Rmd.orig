@@ -24,7 +24,8 @@ knitr::opts_chunk$set(
 7. [Distributed Computing: TLS Secure Connections](#distributed-computing-tls-secure-connections)
 8. [Compute Profiles](#compute-profiles)
 9. [Errors, Interrupts and Timeouts](#errors-interrupts-and-timeouts)
-10. [Serialization](#serialization)
+10. [Serialization - Arrow, polars and beyond](#serialization-arrow-polars-and-beyond)
+11. [Map Functions](#map-functions)
 
 ### Example 1: Compute-intensive Operations
 
@@ -38,47 +39,51 @@ A 'mirai' object is returned immediately.
 ```{r exec}
 library(mirai)
 
+input <- list(x = 2, y = 5, z = double(1e8))
+
 m <- mirai(
   {
-    res <- rnorm(n) + m
-    res / rev(res)
+    res <- rnorm(1e8, mean = mean, sd = sd)
+    max(res) - min(res)
   },
-  m = runif(1),
-  n = 1e8
+  mean = input$x,
+  sd = input$y
 )
-
-m
 ```
-Above, all specified `name = value` pairs are passed through to the 'mirai'.
+Above, all `name = value` pairs are passed through to the mirai via the `...` argument.
 
-The 'mirai' yields an 'unresolved' logical NA whilst the async operation is ongoing.
+Whilst the async operation is ongoing, attempting to access the data yields an 'unresolved' logical NA.
 ```{r do}
+m
 m$data
 ```
-```{r dowhile, echo=FALSE}
-call_mirai(m)
+To check whether a mirai has resolved:
+```{r unres}
+unresolved(m)
 ```
-Upon completion, the 'mirai' resolves automatically to the evaluated result.
-```{r resolv}
-m$data |> str()
-```
-Alternatively, explicitly call and wait for the result using `call_mirai()`.
+To wait for and collect the evaluated result, use the mirai's `[]` method:
 ```{r call}
-call_mirai(m)$data |> str()
+m[]
+```
+It is not necessary to wait, as the mirai resolves automatically whenever the async operation completes, the evaluated result then available at `$data`.
+
+```{r resolv}
+m
+m$data
 ```
 For easy programmatic use of `mirai()`, '.expr' accepts a pre-constructed language object, and also a list of named arguments passed via '.args'. So, the following would be equivalent to the above:
 
 ```{r equiv}
 expr <- quote({
-  res <- rnorm(n) + m
-  res / rev(res)
+  res <- rnorm(1e8, mean = mean, sd = sd)
+  max(res) - min(res)
 })
 
-args <- list(m = runif(1), n = 1e8)
+args <- list(mean = input$x, sd = input$y)
 
 m <- mirai(.expr = expr, .args = args)
 
-call_mirai(m)$data |> str()
+m[]
 ```
 
 [&laquo; Back to ToC](#table-of-contents)
@@ -92,7 +97,6 @@ High-frequency real-time data cannot be written to file/database synchronously w
 Cache data in memory and use `mirai()` to perform periodic write operations concurrently in a separate process.
 
 Below, '.args' is used to pass `environment()`, which is the calling environment. This provides a convenient method of passing in existing objects.
-
 ```{r cleanglobalenv, include=FALSE}
 rm(list = ls())
 ```
@@ -111,12 +115,10 @@ A 'mirai' object is returned immediately.
 This means there is no need to actually wait (block) for a 'mirai' to resolve, as the example below demonstrates.
 ```{r call2}
 # unresolved() queries for resolution itself so no need to use it again within the while loop
-
 while (unresolved(m)) {
   cat("while unresolved\n")
   Sys.sleep(0.5)
 }
-
 cat("Write complete:", is.null(m$data))
 
 ```
@@ -203,19 +205,39 @@ This implementation sends tasks immediately, and ensures that tasks are evenly-d
 
 The advantage of this approach is that it is low-level and does not require an additional dispatcher process. It is well-suited to working with similar-length tasks, or where the number of concurrent tasks typically does not exceed available daemons.
 
-`everywhere()` may be used to evaluate an expression on all connected daemons and persist the resultant state, regardless of a daemon's 'cleanup' setting.
-```{r everywhere}
-everywhere(library(parallel))
-```
-The above keeps the `parallel` package loaded for all evaluations. Other types of setup task may also be performed such as making a common resource available, etc.
-```{r daemons5}
-daemons(0)
-```
-Set the number of daemons to zero to reset.
-
 #### Everywhere
 
-`everywhere()` may be used to evaluate an expression on all connected daemons and persist the resultant state, regardless of a daemon's 'cleanup' setting. This may be used for performing setup of the evaluation environment, with particular packages loaded, or common resources made available, etc.
+`everywhere()` may be used to evaluate an expression on all connected daemons and persist the resultant state, regardless of a daemon's 'cleanup' setting.
+```{r everywhere}
+everywhere(library(DBI))
+```
+The above keeps the [`DBI`](https://dbi.r-dbi.org/) package loaded for all evaluations. Other types of setup task may also be performed, including making a common resource available, such as a database connection:
+
+```{r everywhere2}
+file <- tempfile()
+everywhere(con <<- dbConnect(RSQLite::SQLite(), file), file = file)
+```
+By super-assignment, the conenction 'con' will be available in the global environment of all daemon instances. Subsequent mirai calls may then make use of 'con'.
+
+```{r everywhere3}
+m <- mirai(capture.output(str(con)))
+m[]
+```
+Disconnect from the database everywhere, and set the number of daemons to zero to reset.
+
+```{r daemons5}
+everywhere(dbDisconnect(con))
+daemons(0)
+```
+
+#### With Method
+
+`daemons()` has a `with()` method, which evaluates an expression with daemons created for the duration of the expression and automatically torn down upon completion. It was designed for the use case of running a Shiny app with the desired number of daemons.
+
+```{r withshiny, eval=FALSE}
+with(daemons(4), shiny::runApp(app))
+```
+Note: in the above case, it is assumed the app is already created. Wrapping a call to `shiny::shinyApp()` would not work as `runApp()` is implicitly called when the app is printed, however printing occurs only after `with()` has returned, hence the app would run outside of the scope of the `with()` statement.
 
 [&laquo; Back to ToC](#table-of-contents)
 
@@ -335,9 +357,7 @@ daemons(
 As an alternative to automated launches, calling `launch_remote()` without specifying 'remote' may be used to return the shell commands for deploying daemons manually. The printed return values may be copy / pasted directly to a remote machine.
 ```{r launchremotereal}
 daemons(n = 2, url = host_url())
-
 launch_remote(1:2)
-
 daemons(0)
 ```
 Note that `daemons()` should be set up on the host machine before launching `daemon()` on remote resources, otherwise the daemon instances will exit if a connection is not immediately available. Alternatively, specifying the argument `autoexit = FALSE` will allow daemons to wait (indefinitely) for a connection to become available.
@@ -416,24 +436,19 @@ Similarly, functions such as `status()`, `launch_local()` or `launch_remote()` s
 If execution in a mirai fails, the error message is returned as a character string of class 'miraiError' and 'errorValue' to facilitate debugging. `is_mirai_error()` may be used to test for mirai execution errors.
 ```{r errorexample}
 m1 <- mirai(stop("occurred with a custom message", call. = FALSE))
-call_mirai(m1)$data
-
+m1[]
 m2 <- mirai(mirai::mirai())
-call_mirai(m2)$data
-
+m2[]
 is_mirai_error(m2$data)
 is_error_value(m2$data)
 ```
-
 A full stack trace of evaluation within the mirai is recorded and accessible at `$stack.trace` on the error object.
 ```{r stackexample}
 f <- function(x) if (x > 0) stop("positive")
 m3 <- mirai({f(-1); f(1)}, f = f)
-call_mirai(m3)$data
-
+m3[]
 m3$data$stack.trace
 ```
-
 If a daemon instance is sent a user interrupt, the mirai will resolve to an object of class 'miraiInterrupt' and 'errorValue'. `is_mirai_interrupt()` may be used to test for such interrupts.
 ```{r interruptexample}
 is_mirai_interrupt(m2$data)
@@ -441,8 +456,7 @@ is_mirai_interrupt(m2$data)
 If execution of a mirai surpasses the timeout set via the '.timeout' argument, the mirai will resolve to an 'errorValue' of 5L (timed out). This can, amongst other things, guard against mirai processes that have the potential to hang and never return.
 ```{r timeouts}
 m4 <- mirai(nanonext::msleep(1000), .timeout = 500)
-call_mirai(m4)$data
-
+m4[]
 is_mirai_error(m4$data)
 is_mirai_interrupt(m4$data)
 is_error_value(m4$data)
@@ -451,7 +465,7 @@ is_error_value(m4$data)
 
 [&laquo; Back to ToC](#table-of-contents)
 
-### Serialization
+### Serialization: Arrow, polars and beyond
 
 Native R serialization is used for sending data between host and daemons. Some R objects by their nature cannot be serialized, such as those accessed via an external pointer. In these cases, performing 'mirai' operations on them would normally error.
 
@@ -465,12 +479,11 @@ everywhere(library(arrow))
 x <- as_arrow_table(iris)
 
 m <- mirai(list(a = head(x), b = "some text"), x = x)
-call_mirai(m)$data
+m[]
 ```
 However it is possible to register custom serialization and unserialization functions as 'refhooks' or hooks into R's native serialization mechanism for reference objects.
 
-It is only required to specify them once upfront, as a list of functions. The argument 'class' must also be specified to activate them and restrict their use to this class of object only.
-
+It is only required to specify them once upfront, as a list of functions. The argument 'class' must also be specified to register them for this class of object only.
 ```{r arrowpass}
 serialization(
   refhook = list(
@@ -481,19 +494,96 @@ serialization(
 )
 
 m <- mirai(list(a = head(x), b = "some text"), x = x)
-call_mirai(m)$data
+m[]
 
-daemons(0)
 ```
 It can be seen that this time, the arrow table is seamlessly handled in the 'mirai' process. This is the case even when the object is deeply nested inside lists or other structures.
 
-To change registered serialization functions, just call `serialization()` again supplying the new functions, or else to cancel them entirely:
+To change registered serialization functions, just call `serialization()` again supplying the new functions. Here we switch to using [`polars`](https://pola-rs.github.io/r-polars/), a 'lightning fast' dataframe library written in Rust (requires `polars` >= 0.16.4).
+```{r polars}
+serialization(
+  refhook = list(
+    function(x) polars::as_polars_df(x)$to_raw_ipc(),
+    polars::pl$read_ipc
+  ),
+  class = "RPolarsDataFrame"
+)
 
+x <- polars::as_polars_df(iris)
+
+m <- mirai(list(a = head(x), b = "some text"), x = x)
+m[]
+```
+To cancel serialization functions entirely:
 ```{r serialcancel}
 serialization(NULL)
+```
+```{r serialcancelclose}
+daemons(0)
 ```
 The 'vec' argument to `serialization()` may be specified as `TRUE` if the serialization functions are vectorized and take lists of objects, as is the case for [`safetensors`](https://mlverse.github.io/safetensors/), used for serialization in [`torch`](https://torch.mlverse.org/).
 
 Please refer to the [torch vignette](https://shikokuchuo.net/mirai/articles/torch.html) for further examples.
+
+[&laquo; Back to ToC](#table-of-contents)
+
+### Map Functions
+
+`mirai_map()` performs asynchronous parallel/distributed map using `mirai`.
+
+This function is analogous to `purrr:map()`, but returns a 'mirai_map' object.
+
+The results of a mirai_map `x` may be collected using `x[]`. This waits for all asynchronous operations to complete if still in progress.
+
+Key advantages of `mirai_map()`:
+
+1. Returns immediately with all evaluations taking place asynchronously. Printing a 'mirai map' object shows the current completion progress.
+1. The '.promise' argument allows a promise to registered against each mirai, which can be used to perform side-effects.
+1. Returns evaluation errors as 'miraiError' or 'errorValue' as the case may be, rather than causing the entire operation to fail. This allows more efficient recovery from partial failure.
+1. Does not rely on a 'chunking' algorithm that attempts to split work into batches according to the number of available daemons, as implemented for example in the `parallel` package. Chunking cannot take into account varying or unpredictable compute times over the indices. It can be optimal to rely on `mirai` for scheduling instead. This is demonstrated in the example below.
+```{r chunk}
+library(mirai)
+library(parallel)
+cl <- make_cluster(4)
+daemons(4, retry = FALSE)
+vec <- c(1, 1, 4, 4, 1, 1, 1, 1)
+system.time(mirai_map(vec, Sys.sleep)[])
+system.time(parLapplyLB(cl, vec, Sys.sleep))
+system.time(parLapply(cl, vec, Sys.sleep))
+```
+`.args` is used to specify further constant arguments to `.f` - the 'mean' and 'sd' in the example below:
+```{r mmap}
+with(
+  daemons(3, dispatcher = FALSE),
+  mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
+)
+```
+Use `...` to further specify objects referenced but not defined in `.f` - the 'do' in the anonymous function below:
+```{r mmap2}
+ml <- mirai_map(
+  c(a = 1, b = 2, c = 3),
+  function(x) do(x, as.logical(x %% 2)),
+  do = nanonext::random
+)
+ml
+ml[]
+```
+Use of `mirai_map()` assumes that `daemons()` have previously been set. If not then one (non-dispatcher) daemon is set to allow the function to proceed. This ensures safe behaviour, but is unlikely to be optimal, so please ensure daemons are set beforehand.
+
+When collecting the results, optionally specify `.progress` or `.stop` to `[]`:
+
+- `x[.progress]` collects results whilst showing a simple text progress indicator.
+- `x[.stop]` collects the results with early stopping, which stops at the first failure and aborts all remaining in-progress computations.
+```{r mmapadv}
+tryCatch(
+  mirai_map(list(a = 1, b = "a", c = 3), sum)[.stop],
+  error = identity
+)
+with(
+  daemons(4, dispatcher = FALSE),
+  mirai_map(c(0.1, 0.2, 0.3), Sys.sleep)[.progress]
+)
+daemons(0)
+```
 
 [&laquo; Back to ToC](#table-of-contents)

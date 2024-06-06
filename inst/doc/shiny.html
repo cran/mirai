@@ -322,6 +322,61 @@ with(daemons(3), runApp(app))
 </ol>
 <pre><code class="language-r">output$plot &lt;- renderPlot(plot_result(extended_task$result()))
 </code></pre>
+<h4 id="advanced-promises-example-coin-flips">Advanced Promises Example: Coin Flips</h4>
+<p>The below example demonstrates how to integrate a <code>mirai_map()</code> operation into a Shiny app.</p>
+<p>By specifying the ‘.promise’ argument, this registers a promise action against each mapped operation. These can then be used to update reactive values or otherwise interact with the Shiny app.</p>
+<pre><code class="language-r">library(shiny)
+library(mirai)
+
+flip_coin &lt;- function(...) {
+  Sys.sleep(0.1)
+  rbinom(n = 1, size = 1, prob = 0.501)
+}
+
+ui &lt;- fluidPage(
+  div(&quot;Is the coin fair?&quot;),
+  actionButton(&quot;task&quot;, &quot;Flip 1000 coins&quot;),
+  textOutput(&quot;status&quot;),
+  textOutput(&quot;outcomes&quot;)
+)
+
+server &lt;- function(input, output, session) {
+  
+  # Keep running totals of heads, tails, and task errors
+  flips &lt;- reactiveValues(heads = 0, tails = 0, flips = 0)
+  
+  # Button to submit a batch of coin flips
+  observeEvent(input$task, {
+    flips$flips &lt;- flips$flips + 1000
+    m &lt;- mirai_map(1:1000, flip_coin, .promise = \(x)
+      if (x) flips$heads &lt;- flips$heads + 1 else flips$tails &lt;- flips$tails + 1)
+  })
+  
+  # Print time and task status
+  output$status &lt;- renderText({
+    input$task
+    invalidateLater(millis = 1000)
+    time &lt;- format(Sys.time(), &quot;%H:%M:%S&quot;)
+    sprintf(&quot;%s %s flips submitted&quot;, time, flips$flips)
+  })
+  
+  # Print number of heads and tails
+  output$outcomes &lt;- renderText(
+    sprintf(&quot;%s heads %s tails&quot;, flips$heads, flips$tails)
+  )
+
+}
+
+app &lt;- shinyApp(ui = ui, server = server)
+
+# run app using 8 local daemons, without dispatcher as tasks are the same length
+with(daemons(8, dispatcher = FALSE), {
+  # pre-load flip_coin function on all daemons for efficiency
+  everywhere({}, flip_coin = flip_coin)
+  runApp(app)
+})
+</code></pre>
+<p><em>This is an adaptation of an original example provided by Will Landau for use of <code>crew</code> with Shiny. Please see <a href="https://wlandau.github.io/crew/articles/shiny.html">https://wlandau.github.io/crew/articles/shiny.html</a>.</em></p>
 <h4 id="advanced-non-promise-example-generative-art">Advanced Non-Promise Example: Generative Art</h4>
 <p>Whilst it is generally recommended to use the ExtendedTask framework, it is also possible for mirai to plug directly into Shiny’s reactive framework, without the use of ‘promises’ either implicitly or explicitly. This may be required for advanced uses of asynchronous programming, or where the use case does not fit the semantics of ExtendedTask.</p>
 <p>The following is similar to the previous example, but allows multiple tasks to be submitted at once, rather than one after the other as required by ExtendedTask. There is a button to submit tasks, which will be processed by one of 3 daemons, outputting a pretty spiral pattern upon completion. If more than 3 tasks are submitted at once, the chart updates 3 at a time, limited by the number of available daemons.</p>

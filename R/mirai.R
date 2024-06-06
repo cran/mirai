@@ -87,6 +87,14 @@
 #'     (the stack trace is available at \code{$stack.trace} on the error
 #'     object). \code{\link{is_mirai_error}} may be used to test for this.
 #'
+#'     If a daemon crashes or terminates unexpectedly during evaluation, an
+#'     \sQuote{errorValue} 19 (Connection reset) is returned (when not using
+#'     dispatcher or using dispatcher with \code{retry = FALSE}). Otherwise,
+#'     using dispatcher with \code{retry = TRUE}, the mirai will remain
+#'     unresolved and is automatically re-tried on the next daemon to connect to
+#'     the particular instance. To cancel the task instead, use
+#'     \code{saisei(force = TRUE)} (see \code{\link{saisei}}).
+#'
 #'     \code{\link{is_error_value}} tests for all error conditions including
 #'     \sQuote{mirai} errors, interrupts, and timeouts.
 #'
@@ -159,7 +167,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
     gn <- names(globals)
     if (is.null(gn)) {
       glen == 1L && is.environment(globals[[1L]]) || stop(._[["named_args"]])
-      globals <- as.list(globals[[1L]])
+      globals <- as.list.environment(globals[[1L]])
     }
     all(nzchar(gn)) || stop(._[["named_args"]])
   }
@@ -174,15 +182,14 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
   envir <- ..[[.compute]]
   if (is.null(envir)) {
     sock <- ephemeral_daemon(local_url())
-    aio <- request(.context(sock), data = data,
-                   send_mode = 1L, recv_mode = 1L, timeout = .timeout)
+    aio <- request(.context(sock), data = data, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
     `attr<-`(.subset2(aio, "aio"), "sock", sock)
   } else {
-    aio <- request_signal(.context(envir[["sock"]]), data = data, cv = envir[["cv"]],
-                          send_mode = 3L, recv_mode = 1L, timeout = .timeout)
+    aio <- request(.context(envir[["sock"]]), data = data, send_mode = 3L,
+                   recv_mode = 1L, timeout = .timeout, cv = envir[["cv"]])
   }
 
-  `class<-`(aio, c("mirai", "recvAio"))
+  aio
 
 }
 
@@ -231,7 +238,7 @@ everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
 
     expr <- substitute(.expr)
     .expr <- c(
-      as.expression(if (is.symbol(expr) && is.language(.expr)) .expr else expr),
+      as.expression(if (is.symbol(expr) && exists(expr, where = parent.frame()) && is.language(.expr)) .expr else expr),
       .snapshot
     )
 
@@ -239,7 +246,7 @@ everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
       for (i in seq_len(max(stat(envir[["sock"]], "pipes"), envir[["n"]])))
         mirai(.expr = .expr, ..., .args = .args, .compute = .compute)
     } else {
-      .expr <- c(.expr, .timedelay)
+      .expr <- c(.expr, .block)
       for (i in seq_len(envir[["n"]]))
         mirai(.expr = .expr, ..., .args = .args, .compute = .compute)
     }
@@ -250,21 +257,23 @@ everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
 
 #' mirai (Call Value)
 #'
-#' \code{call_mirai} retrieves the value of a \sQuote{mirai}, waiting for the
-#'     asynchronous operation to resolve if it is still in progress.
+#' \code{call_mirai} waits for the \sQuote{mirai} to resolve if still in
+#'     progress, storing the value at \code{$data}, and returns the
+#'     \sQuote{mirai} object.
 #'
-#' @param aio a \sQuote{mirai} object.
+#' @param x a \sQuote{mirai} object, or list of \sQuote{mirai} objects.
 #'
-#' @return The passed \sQuote{mirai} (invisibly). The retrieved value is stored
-#'     at \code{$data}.
+#' @return The passed object (invisibly). For a \sQuote{mirai}, the retrieved
+#'     value is stored at \code{$data}.
 #'
-#' @details This function will wait for the async operation to complete if still
-#'     in progress (blocking).
+#' @details Both functions accept a list of \sQuote{mirai} objects, such as that
+#'     returned by \code{\link{mirai_map}} as well as individual \sQuote{mirai}.
 #'
-#'     The \sQuote{mirai} updates itself in place, so to access the value of a
-#'     \sQuote{mirai} \code{x} directly, use \code{call_mirai(x)$data}.
+#'     They will wait for the asynchronous operation(s) to complete if still in
+#'     progress (blocking).
 #'
-#' @inheritSection mirai Errors
+#'     \code{x[]} may also be used to wait for and return the value of a mirai
+#'     \code{x}, and is the equivalent of \code{call_mirai_(x)$data}.
 #'
 #' @section Alternatively:
 #'
@@ -275,6 +284,8 @@ everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
 #'     Using \code{\link{unresolved}} on a \sQuote{mirai} returns TRUE only if
 #'     it has yet to resolve and FALSE otherwise. This is suitable for use in
 #'     control flow statements such as \code{while} or \code{if}.
+#'
+#' @inheritSection mirai Errors
 #'
 #' @examples
 #' if (interactive()) {
@@ -304,24 +315,64 @@ everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
 #'
 #' @export
 #'
-call_mirai <- call_aio
+call_mirai <- function(x) call_aio(x)
 
 #' mirai (Call Value)
 #'
-#' \code{call_mirai_} is a variant that allows user interrupts, suitable for
-#'     interactive use.
+#' \code{call_mirai_} is a variant of \code{call_mirai} that allows user
+#'     interrupts, suitable for interactive use.
 #'
 #' @rdname call_mirai
 #' @export
 #'
-call_mirai_ <- call_aio_
+call_mirai_ <- function(x) call_aio_(x)
+
+#' mirai (Collect Value)
+#'
+#' \code{collect_mirai} waits for the \sQuote{mirai} to resolve if still in
+#'     progress, and returns its value directly. It is a more efifcient version
+#'     of and equivalent to \code{call_mirai(x)$data}.
+#'
+#' @inheritParams call_mirai
+#'
+#' @return An object (the return value of the \sQuote{mirai}), or a list of such
+#'     objects (the same length as \sQuote{x}, preserving names).
+#'
+#' @details This function will wait for the asynchronous operation(s) to
+#'     complete if still in progress (blocking), and is not interruptible.
+#'
+#'     \code{x[]} may be used to wait for and return the value of a mirai
+#'     \code{x}, and is the user-interruptible counterpart to
+#'     \code{collect_mirai(x)}.
+#'
+#' @inheritSection call_mirai Alternatively
+#' @inheritSection mirai Errors
+#'
+#' @examples
+#' if (interactive()) {
+#' # Only run examples in interactive R sessions
+#'
+#' # using collect_mirai()
+#' df1 <- data.frame(a = 1, b = 2)
+#' df2 <- data.frame(a = 3, b = 1)
+#' m <- mirai(as.matrix(rbind(df1, df2)), df1 = df1, df2 = df2, .timeout = 1000)
+#' collect_mirai(m)
+#'
+#' # using x[]
+#' m[]
+#'
+#' }
+#'
+#' @export
+#'
+collect_mirai <- collect_aio
 
 #' mirai (Stop)
 #'
 #' Stops a \sQuote{mirai} if still in progress, causing it to resolve
 #'     immediately to an \sQuote{errorValue} 20 (Operation canceled).
 #'
-#' @param aio a \sQuote{mirai} object.
+#' @inheritParams call_mirai
 #'
 #' @return Invisible NULL.
 #'
@@ -346,19 +397,20 @@ call_mirai_ <- call_aio_
 #'
 #' @export
 #'
-stop_mirai <- stop_aio
+stop_mirai <- function(x) stop_aio(x)
 
 #' Query if a mirai is Unresolved
 #'
-#' Query whether a \sQuote{mirai} or \sQuote{mirai} value remains unresolved.
-#'     Unlike \code{\link{call_mirai}}, this function does not wait for
-#'     completion.
+#' Query whether a \sQuote{mirai}, \sQuote{mirai} value or list of \sQuote{mirai}
+#'     remains unresolved. Unlike \code{\link{call_mirai}}, this function does
+#'     not wait for completion.
 #'
-#' @param aio a \sQuote{mirai} object or \sQuote{mirai} value stored at
-#'     \code{$data}.
+#' @param x a \sQuote{mirai} object or list of \sQuote{mirai} objects, or a
+#'     \sQuote{mirai} value stored at \code{$data}.
 #'
 #' @return Logical TRUE if \sQuote{aio} is an unresolved \sQuote{mirai} or
-#'     \sQuote{mirai} value, or FALSE otherwise.
+#'     \sQuote{mirai} value or the list contains at least one unresolved
+#'     \sQuote{mirai}, or FALSE otherwise.
 #'
 #' @details Suitable for use in control flow statements such as \code{while} or
 #'     \code{if}.
@@ -379,7 +431,9 @@ stop_mirai <- stop_aio
 #'
 #' @export
 #'
-unresolved <- unresolved
+unresolved <- function(x) unresolved_impl(x)
+
+unresolved_impl <- nanonext::unresolved
 
 #' Is mirai
 #'
@@ -461,9 +515,13 @@ is_error_value <- is_error_value
 
 #' @export
 #'
+`[.mirai` <- function(x, i) collect_aio_(x)
+
+#' @export
+#'
 print.mirai <- function(x, ...) {
 
-  cat("< mirai | $data >\n", file = stdout())
+  cat(if (.unresolved(x)) "< mirai [] >\n" else "< mirai [$data] >\n", file = stdout())
   invisible(x)
 
 }
@@ -472,7 +530,7 @@ print.mirai <- function(x, ...) {
 #'
 print.miraiError <- function(x, ...) {
 
-  cat(strcat("'miraiError' chr ", x), file = stdout())
+  cat(sprintf("'miraiError' chr %s", x), file = stdout())
   invisible(x)
 
 }
@@ -499,7 +557,7 @@ print.miraiInterrupt <- function(x, ...) {
 # internals --------------------------------------------------------------------
 
 ephemeral_daemon <- function(url) {
-  sock <- req_socket(url, resend = 0L)
+  sock <- req_socket(url)
   system2(command = .command, args = c("-e", shQuote(sprintf("mirai::.daemon('%s')", url))), stdout = FALSE, stderr = FALSE, wait = FALSE)
   sock
 }
@@ -519,7 +577,7 @@ mk_mirai_error <- function(e, sc) {
   msg <- if (is.null(call) || call == "eval(expr = ._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = NULL)")
     sprintf("Error: %s", .subset2(e, "message")) else
       sprintf("Error in %s: %s", call, .subset2(e, "message"))
-  cat(strcat(msg, "\n"), file = stderr())
+  cat(sprintf("%s\n", msg), file = stderr())
   idx <- which(as.logical(lapply(sc, identical, quote(eval(expr = ._mirai_.[[".expr"]], envir = ._mirai_., enclos = NULL)))))
   sc <- sc[(length(sc) - 1L):(idx + 1L)]
   if (sc[[1L]][[1L]] == ".handleSimpleError")
@@ -530,4 +588,4 @@ mk_mirai_error <- function(e, sc) {
 
 .miraiInterrupt <- `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))
 .snapshot <- expression(mirai:::snapshot())
-.timedelay <- expression(nanonext::msleep(500L))
+.block <- expression(mirai:::block())

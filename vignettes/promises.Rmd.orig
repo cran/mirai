@@ -15,9 +15,9 @@ knitr::opts_chunk$set(
 ```
 ### Promises Integration
 
-{mirai} supplies its own `as.promise()` method, allowing it to be used as a promise from the [`promises`](https://rstudio.github.io/promises/) package.
+`mirai` supplies its own `as.promise()` method, allowing it to be used as a promise from the [`promises`](https://rstudio.github.io/promises/) package.
 
-These promises are innovative, event-driven promises, developed in collaboration with Joe Cheng.
+These are next-generation, event-driven promises, developed in collaboration with Joe Cheng.
 
 - Do not require each promise to be polled for completion by a `later` loop like other promises.
 - Instead, promise actions are automatically queued for execution as soon as each 'mirai' resolves.
@@ -25,7 +25,7 @@ These promises are innovative, event-driven promises, developed in collaboration
 
 A 'mirai' may be piped directly using the promise pipe `&...>%`, which implicitly calls `as.promise()` on the 'mirai'. Similarly all promise-aware functions such as `promises::then()` or `shiny::ExtendedTask$new()` which take a promise can also take a 'mirai' (using `promises` >= 1.3.0).
 
-Alternatively, it may be converted into a promise by `as.promise()`, which then allows using the methods `$then()`, `$finally()` etc.
+Alternatively, a 'mirai' may be explicitly converted into a promise by `as.promise()`, which then allows using the methods `$then()`, `$finally()` etc.
 
 The following example outputs "hello" to the console after one second when the 'mirai' resolves.
 ```{r promises}
@@ -37,8 +37,6 @@ p
 ```
 It is possible to both access a 'mirai' value at `$data` and to use a promise for enacting a side effect (assigning the value to an environment in the example below).
 ```{r promisesalt}
-library(mirai)
-
 env <- new.env()
 
 m <- mirai({
@@ -48,10 +46,26 @@ m <- mirai({
 
 promises::then(m, function(x) env$res <- x)
 
-call_mirai(m)$data
+m[]
 ```
 After returning to the top level prompt:
 
 ```{r promisesaltcont}
 env$res
 ```
+### The One Million Promises Challenge
+
+The code below is taken from the challenge to launch and collect one million promises. For illustration, the example is scaled down to one thousand.
+
+```{r promiseschallenge}
+library(mirai)
+daemons(8, dispatcher = FALSE)
+r <- 0
+start <- Sys.time()
+m <- mirai_map(1:1000, \(x) x, .promise = \(x) r <<- r + x)
+Sys.time() - start
+later::run_now()
+r
+daemons(0)
+```
+The one million promises challenge took 6 mins 25 secs to complete using an Intel i7 11th gen mobile processor with 16GB RAM.

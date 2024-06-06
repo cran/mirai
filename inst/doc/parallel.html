@@ -158,9 +158,9 @@ section.footnotes::before {
 
 cl &lt;- make_cluster(4)
 cl
-#&gt; &lt; miraiCluster | ID: `0` nodes: 4 active: TRUE &gt;
-
-parallel::parLapply(cl, iris, mean)
+#&gt; &lt; miraiCluster | ID: `4` nodes: 4 active: TRUE &gt;
+</code></pre>
+<pre><code class="language-r">parallel::parLapply(cl, iris, mean)
 #&gt; $Sepal.Length
 #&gt; [1] 5.843333
 #&gt; 
@@ -182,21 +182,21 @@ parallel::parLapply(cl, iris, mean)
 #&gt; [1] 4
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://717bd47029c15a6c3421c3be&quot;
-
-stop_cluster(cl)
+#&gt; [1] &quot;abstract://72c96e3b8c531fe9d5c32bfa&quot;
+</code></pre>
+<pre><code class="language-r">stop_cluster(cl)
 </code></pre>
 <p>Making a cluster specifying ‘url’ without ‘remote’ causes the shell commands for manual deployment of nodes to be printed to the console.</p>
 <pre><code class="language-r">cl &lt;- make_cluster(n = 2, url = host_url())
 #&gt; Shell commands for deployment on nodes:
 #&gt; 
 #&gt; [1]
-#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:41557',rs=c(10407,-649272372,-839924131,-596536966,-590434125,19895896,-199893895))&quot;
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:45985',rs=c(10407,-409141256,1907397017,-1822270330,1627186511,1735893828,-1856229003))&quot;
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:41557',rs=c(10407,276960266,-2035903300,-1874904835,1952875809,1359474491,-567028289))&quot;
-
-stop_cluster(cl)
+#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:45985',rs=c(10407,1184372690,-983753352,952506510,543524672,1744308145,-1294231923))&quot;
+</code></pre>
+<pre><code class="language-r">stop_cluster(cl)
 </code></pre>
 <h3 id="foreach-integration">Foreach Integration</h3>
 <p>A ‘miraiCluster’ may also be registered by <a href="https://cran.r-project.org/package=doParallel"><code>doParallel</code></a> for use with the <a href="https://cran.r-project.org/package=foreach"><code>foreach</code></a> package.</p>
@@ -211,12 +211,12 @@ doParallel::registerDoParallel(cl)
 m &lt;- matrix(rnorm(9), 3, 3)
 foreach(i = 1:nrow(m), .combine = rbind) %dopar%
   (m[i, ] / mean(m[i, ]))
-#&gt;               [,1]      [,2]      [,3]
-#&gt; result.1  4.948511 -2.514537 0.5660261
-#&gt; result.2 -1.880495  3.198433 1.6820612
-#&gt; result.3 -1.015714  2.203200 1.8125144
-
-# simple parallel matrix multiply
+#&gt;               [,1]       [,2]      [,3]
+#&gt; result.1 1.5236796  0.6250741 0.8512463
+#&gt; result.2 1.4332458  0.1446897 1.4220646
+#&gt; result.3 0.4319478 -0.2369253 2.8049775
+</code></pre>
+<pre><code class="language-r"># simple parallel matrix multiply
 a &lt;- matrix(1:16, 4, 4)
 b &lt;- t(a)
 foreach(b = iter(b, by='col'), .combine = cbind) %dopar%

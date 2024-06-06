@@ -139,7 +139,7 @@ daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
   repeat {
 
     ctx <- .context(sock)
-    aio <- recv_aio_signal(ctx, cv = cv, mode = 1L, timeout = idletime)
+    aio <- recv_aio(ctx, mode = 1L, timeout = idletime, cv = cv)
     wait(cv) || break
     m <- .subset2(aio, "data")
     is.environment(m) || {
@@ -155,7 +155,7 @@ daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
     (count >= maxtasks || count > timerstart && mclock() - start >= walltime) && {
       next_config(mark = TRUE)
       send(ctx, data = data, mode = 3L, block = TRUE)
-      aio <- recv_aio_signal(ctx, cv = cv, mode = 8L)
+      aio <- recv_aio(ctx, mode = 8L, cv = cv)
       wait(cv)
       break
     }
@@ -183,6 +183,7 @@ daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
 .daemon <- function(url) {
 
   sock <- socket(protocol = "rep", dial = url, autostart = NA)
+  on.exit(reap(sock))
   data <- eval_mirai(recv(sock, mode = 1L, block = TRUE))
   send(sock, data = data, mode = 1L, block = TRUE)
   msleep(2000L)
@@ -213,6 +214,7 @@ dial_and_sync_socket <- function(sock, url, asyncdial, tls = NULL) {
   pipe_notify(sock, cv = cv, add = TRUE)
   dial(sock, url = url, autostart = asyncdial || NA, tls = tls, error = TRUE)
   wait(cv)
+  pipe_notify(sock, cv = NULL, add = TRUE)
 }
 
 parse_cleanup <- function(cleanup)
@@ -228,3 +230,4 @@ perform_cleanup <- function(cleanup) {
 }
 
 snapshot <- function() `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", names(.GlobalEnv))
+block <- function() msleep(500L)

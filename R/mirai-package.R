@@ -16,12 +16,12 @@
 
 #' mirai: Minimalist Async Evaluation Framework for R
 #'
-#' Lightweight parallel code execution and distributed computing. Designed for
-#'     simplicity, a 'mirai' evaluates an R expression asynchronously, on local
-#'     or network resources, resolving automatically upon completion. State of
-#'     the art networking and concurrency via 'nanonext' and 'NNG' (Nanomsg Next
-#'     Gen) offers reliable and efficient scheduling over fast inter-process
-#'     communications or TCP/IP secured by TLS.
+#' High performance parallel code execution and distributed computing. Designed
+#'     for simplicity, a 'mirai' evaluates an R expression asynchronously, on
+#'     local or network resources, resolving automatically upon completion.
+#'     Modern networking and concurrency built on 'nanonext' and 'NNG' (Nanomsg
+#'     Next Gen) ensures reliable and efficient scheduling, over fast
+#'     inter-process communications or TCP/IP secured by TLS.
 #'
 #' @section Notes:
 #'
@@ -42,11 +42,11 @@
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
-#' @importFrom nanonext call_aio call_aio_ .context cv cv_value dial
-#'     is_error_value listen lock mclock msleep next_config nng_error opt opt<-
-#'     parse_url pipe_notify random reap recv recv_aio_signal request
-#'     request_signal send set_promise_context socket stat stop_aio strcat
-#'     tls_config unresolved until wait write_cert
+#' @importFrom nanonext collect_aio collect_aio_ call_aio call_aio_ .context cv
+#'     cv_value dial is_error_value listen lock mclock msleep next_config
+#'     nng_error opt opt<- parse_url pipe_notify random reap recv recv_aio
+#'     request send set_promise_context socket stat stop_aio tls_config
+#'     unresolved .unresolved until wait write_cert
 #' @importFrom stats rexp
 #' @importFrom utils .DollarNames
 #'
@@ -96,6 +96,7 @@
     n_zero = "the number of daemons must be zero or greater",
     numeric_n = "'n' must be numeric, did you mean to provide 'url'?",
     register_cluster = "this function requires a more recent version of R",
+    requires_daemons = "launching one local daemon as none previously set",
     requires_local = "SSH tunnelling requires 'url' hostname to be '127.0.0.1' or 'localhost'",
     refhook_invalid = "'refhook' must be a list of 2 functions or NULL",
     single_url = "only one 'url' should be specified",

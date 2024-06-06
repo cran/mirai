@@ -44,12 +44,10 @@
 #'     below).
 #' @param ... (optional) additional arguments passed through to
 #'     \code{\link{dispatcher}} if using dispatcher and/or \code{\link{daemon}}
-#'     if launching daemons. These include \sQuote{token} at dispatcher and
-#'     \sQuote{autoexit}, \sQuote{cleanup}, \sQuote{output}, \sQuote{maxtasks},
-#'     \sQuote{idletime}, \sQuote{walltime} and \sQuote{timerstart} at daemon.
-#' @param resilience [default TRUE] (applicable when not using dispatcher)
-#'     logical value whether to retry failed tasks on other daemons. If FALSE,
-#'     an appropriate \sQuote{errorValue} will be returned in such cases.
+#'     if launching daemons. These include \sQuote{retry} and \sQuote{token} at
+#'     dispatcher and \sQuote{autoexit}, \sQuote{cleanup}, \sQuote{output},
+#'     \sQuote{maxtasks}, \sQuote{idletime}, \sQuote{walltime} and
+#'     \sQuote{timerstart} at daemon.
 #' @param seed [default NULL] (optional) supply a random seed (single value,
 #'     interpreted as an integer). This is used to inititalise the L'Ecuyer-CMRG
 #'     RNG streams sent to each daemon. Note that reproducible results can be
@@ -76,13 +74,14 @@
 #'
 #' @details Use \code{daemons(0)} to reset daemon connections:
 #'     \itemize{
-#'     \item A reset is required before revising settings for the same compute
-#'     profile, otherwise changes are not registered.
 #'     \item All connected daemons and/or dispatchers exit automatically.
 #'     \item \pkg{mirai} reverts to the default behaviour of creating a new
 #'     background process for each request.
-#'     \item Any unresolved \sQuote{mirai} will return an \sQuote{errorValue} 7
-#'     (Object closed) after a reset.
+#'     \item Any unresolved \sQuote{mirai} will return an \sQuote{errorValue} 19
+#'     (Connection reset) after a reset.
+#'     \item Calling \code{daemons} with revised (or even the same) settings for
+#'     the same compute profile implicitly resets daemons before applying the
+#'     new settings.
 #'     }
 #'
 #'     If the host session ends, all connected dispatcher and daemon processes
@@ -119,21 +118,22 @@
 #'
 #'     By specifying \code{dispatcher = FALSE}, daemons connect to the host
 #'     directly rather than through dispatcher. The host sends tasks to
-#'     connected daemons immediately in an evenly-distributed fashion. However,
-#'     optimal scheduling is not guaranteed as the duration of tasks cannot be
-#'     known \emph{a priori}, such that tasks can be queued at one daemon while
-#'     other daemons remain idle. Nevertheless, this provides a resource-light
-#'     approach suited to working with similar-length tasks, or where concurrent
-#'     tasks typically do not exceed available daemons.
+#'     connected daemons immediately in a round-robin fashion. Optimal
+#'     scheduling is not guaranteed as the duration of tasks cannot be known
+#'     \emph{a priori}, hence tasks can be queued at one daemon while other
+#'     daemons remain idle. However, this provides a resource-light approach
+#'     suited to working with similar-length tasks, or where concurrent tasks
+#'     typically do not exceed available daemons.
 #'
 #' @section Distributed Computing:
 #'
 #'     Specifying \sQuote{url} allows tasks to be distributed across the network.
-#'     This should be a character string such as: 'tcp://10.75.32.70:5555' at
-#'     which daemon processes should connect to. Switching the URL scheme to
-#'     'tls+tcp://' or 'wss://' automatically upgrades the connection to use TLS.
-#'     The auxiliary function \code{\link{host_url}} may be used to
-#'     automatically construct a valid host URL based on the computer's hostname.
+#'     This should be a character string such as \sQuote{tcp://10.75.32.70:5555}
+#'     at which daemon processes should connect to. Switching the URL scheme to
+#'     \sQuote{tls+tcp://} or \sQuote{wss://} automatically upgrades the
+#'     connection to use TLS. The auxiliary function \code{\link{host_url}} may
+#'     be used to automatically construct a valid host URL based on the
+#'     computer's hostname.
 #'
 #'     Specify \sQuote{remote} with a call to \code{\link{remote_config}} or
 #'     \code{\link{ssh_config}} to launch daemons on remote machines. Otherwise,
@@ -143,11 +143,12 @@
 #'     IPv6 addresses are also supported and must be enclosed in square brackets
 #'     [ ] to avoid confusion with the final colon separating the port. For
 #'     example, port 5555 on the IPv6 loopback address ::1 would be specified
-#'     as 'tcp://[::1]:5555'.
+#'     as \sQuote{tcp://[::1]:5555}.
 #'
-#'     Specifying the wildcard value zero for the port number e.g. 'tcp://[::1]:0'
-#'     or 'ws://[::1]:0' will automatically assign a free ephemeral port. Use
-#'     \code{\link{status}} to inspect the actual assigned port at any time.
+#'     Specifying the wildcard value zero for the port number e.g.
+#'     \sQuote{tcp://[::1]:0} or \sQuote{ws://[::1]:0} will automatically assign
+#'     a free ephemeral port. Use \code{\link{status}} to inspect the actual
+#'     assigned port at any time.
 #'
 #'     \strong{With Dispatcher}
 #'
@@ -156,9 +157,10 @@
 #'     websocket URL supports a path after the port number, which can be made
 #'     unique for each daemon.
 #'
-#'     Specifying a single host URL such as 'ws://10.75.32.70:5555' with
+#'     Specifying a single host URL such as \sQuote{ws://10.75.32.70:5555} with
 #'     \code{n = 6} will automatically append a sequence to the path, listening
-#'     to the URLs 'ws://10.75.32.70:5555/1' through 'ws://110.75.32.70:5555/6'.
+#'     to the URLs \sQuote{ws://10.75.32.70:5555/1} through
+#'     \sQuote{ws://110.75.32.70:5555/6}.
 #'
 #'     Alternatively, specify a vector of URLs to listen to arbitrary port
 #'     numbers / paths. In this case it is optional to supply \sQuote{n} as this
@@ -174,17 +176,18 @@
 #'
 #'     Alternatively, supplying a single TCP URL will listen at a block of URLs
 #'     with ports starting from the supplied port number and incrementing by one
-#'     for \sQuote{n} specified e.g. the host URL 'tcp://10.75.32.70:5555' with
-#'     \code{n = 6} listens to the contiguous block of ports 5555 through 5560.
+#'     for \sQuote{n} specified e.g. the host URL
+#'     \sQuote{tcp://10.75.32.70:5555} with \code{n = 6} listens to the
+#'     contiguous block of ports 5555 through 5560.
 #'
 #'     \strong{Without Dispatcher}
 #'
 #'     A TCP URL may be used in this case as the host listens at only one
 #'     address, utilising a single port.
 #'
-#'     The network topology is such that daemons (started with \code{\link{daemon}})
-#'     or indeed dispatchers (started with \code{\link{dispatcher}}) dial into
-#'     the same host URL.
+#'     The network topology is such that daemons (started with
+#'     \code{\link{daemon}}) or indeed dispatchers (started with
+#'     \code{\link{dispatcher}}) dial into the same host URL.
 #'
 #'     \sQuote{n} is not required in this case, and disregarded if supplied, as
 #'     network resources may be added or removed at any time. The host
@@ -278,8 +281,7 @@
 #' @export
 #'
 daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
-                    resilience = TRUE, seed = NULL, tls = NULL, pass = NULL,
-                    .compute = "default") {
+                    seed = NULL, tls = NULL, pass = NULL, .compute = "default") {
 
   missing(n) && missing(url) && return(status(.compute))
 
@@ -290,30 +292,34 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
     if (is.null(envir)) {
       envir <- new.env(hash = FALSE, parent = ..)
       tls <- check_create_tls(url = url, tls = tls, envir = envir)
-      cv <- cv()
       create_stream(n = n, seed = seed, envir = envir)
       if (dispatcher) {
         n <- if (missing(n)) length(url) else if (is.numeric(n) && n >= 1L) as.integer(n) else stop(._[["n_one"]])
         if (length(tls)) tls_config(server = tls, pass = pass)
+        cv <- cv()
         dots <- parse_dots(...)
         output <- attr(dots, "output")
         urld <- local_url()
-        urlc <- strcat(urld, "c")
-        sock <- req_socket(urld, resend = 0L)
-        sockc <- req_socket(urlc, resend = 0L)
+        urlc <- sprintf("%s%s", urld, "c")
+        sock <- req_socket(urld)
+        sockc <- req_socket(urlc)
         launch_and_sync_daemon(sock, wa5(urld, dots, n, urlc, url), output, tls, pass) || stop(._[["sync_timeout"]])
         init_monitor(sockc = sockc, envir = envir)
+        `[[<-`(envir, "cv", cv)
       } else {
-        sock <- req_socket(url, tls = if (length(tls)) tls_config(server = tls, pass = pass), resend = resilience * .intmax)
+        sock <- req_socket(url, tls = if (length(tls)) tls_config(server = tls, pass = pass))
         store_urls(sock = sock, envir = envir)
         n <- 0L
       }
-      `[[<-`(.., .compute, `[[<-`(`[[<-`(`[[<-`(envir, "sock", sock), "n", n), "cv", cv))
+      `[[<-`(.., .compute, `[[<-`(`[[<-`(envir, "sock", sock), "n", n))
       remotes <- substitute(remote)
       if (!is.symbol(remotes)) remote <- remotes
       if (length(remote))
         launch_remote(url = envir[["urls"]], remote = remote, tls = envir[["tls"]], ..., .compute = .compute)
       serialization_refhook()
+    } else {
+      daemons(n = 0L, .compute = .compute)
+      return(daemons(n = n, url = url, remote = remote, dispatcher = dispatcher, ..., seed = seed, tls = tls, pass = pass, .compute = .compute))
     }
 
   } else {
@@ -336,25 +342,29 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
       n > 0L || stop(._[["n_zero"]])
       envir <- new.env(hash = FALSE, parent = ..)
       urld <- local_url()
-      cv <- cv()
       create_stream(n = n, seed = seed, envir = envir)
       dots <- parse_dots(...)
       output <- attr(dots, "output")
       if (dispatcher) {
-        sock <- req_socket(urld, resend = 0L)
-        urlc <- strcat(urld, "c")
-        sockc <- req_socket(urlc, resend = 0L)
+        cv <- cv()
+        sock <- req_socket(urld)
+        urlc <- sprintf("%s%s", urld, "c")
+        sockc <- req_socket(urlc)
         launch_and_sync_daemon(sock, wa4(urld, dots, envir[["stream"]], n, urlc), output) || stop(._[["sync_timeout"]])
         for (i in seq_len(n)) next_stream(envir)
         init_monitor(sockc = sockc, envir = envir)
+        `[[<-`(envir, "cv", cv)
       } else {
-        sock <- req_socket(urld, resend = resilience * .intmax)
+        sock <- req_socket(urld)
         for (i in seq_len(n))
           launch_and_sync_daemon(sock, wa3(urld, dots, next_stream(envir)), output)
         `[[<-`(envir, "urls", urld)
       }
-      `[[<-`(.., .compute, `[[<-`(`[[<-`(`[[<-`(envir, "sock", sock), "n", n), "cv", cv))
+      `[[<-`(.., .compute, `[[<-`(`[[<-`(envir, "sock", sock), "n", n))
       serialization_refhook()
+    } else {
+      daemons(n = 0L, .compute = .compute)
+      return(daemons(n = n, url = url, remote = remote, dispatcher = dispatcher, ..., seed = seed, tls = tls, pass = pass, .compute = .compute))
     }
 
   }
@@ -418,7 +428,7 @@ with.miraiDaemons <- function(data, expr, ...) {
 #' @param .compute [default 'default'] character compute profile (each compute
 #'     profile has its own set of daemons for connecting to different resources).
 #'
-#'     \strong{or} a 'miraiCluster' to obtain its status.
+#'     \strong{or} a \sQuote{miraiCluster} to obtain its status.
 #'
 #' @return A named list comprising:
 #'     \itemize{
@@ -427,7 +437,8 @@ with.miraiDaemons <- function(data, expr, ...) {
 #'     dispatcher, which connects to the daemons in turn.
 #'     \item \strong{daemons} - of variable type.
 #'     \cr Using dispatcher: a status matrix (see Status Matrix section below),
-#'     or else an integer 'errorValue' if communication with dispatcher failed.
+#'     or else an integer \sQuote{errorValue} if communication with dispatcher
+#'     failed.
 #'     \cr Not using dispatcher: the character host URL.
 #'     \cr Not set: 0L.
 #'     }
@@ -557,7 +568,7 @@ create_stream <- function(n, seed, envir) {
 
 tokenized_url <- function(url) sprintf("%s/%s", url, random(12L))
 
-req_socket <- function(url, tls = NULL, resend = .intmax)
+req_socket <- function(url, tls = NULL, resend = 0L)
   `opt<-`(socket(protocol = "req", listen = url, tls = tls), "req:resend-time", resend)
 
 parse_dots <- function(...) {
@@ -566,7 +577,7 @@ parse_dots <- function(...) {
   for (dot in dots)
     is.numeric(dot) || is.logical(dot) || stop(._[["wrong_dots"]])
   dnames <- names(dots)
-  out <- strcat(",", paste(dnames, dots, sep = "=", collapse = ","))
+  out <- sprintf(",%s", paste(dnames, dots, sep = "=", collapse = ","))
   pos <- dnames == "output"
   any(pos) && as.logical(dots[pos])[1L] && return(`attr<-`(out, "output", ""))
   out
@@ -575,7 +586,7 @@ parse_dots <- function(...) {
 parse_tls <- function(tls)
   switch(length(tls) + 1L, "", sprintf(",tls='%s'", tls), sprintf(",tls=c('%s','%s')", tls[1L], tls[2L]))
 
-mirai_lp <- function(lp = .libPaths()) lp[file.exists(file.path(lp, "mirai"))][1L]
+libp <- function(lp = .libPaths()) lp[file.exists(file.path(lp, "mirai"))][1L]
 
 wa2 <- function(url, dots, tls = NULL)
   shQuote(sprintf("mirai::daemon('%s'%s%s)", url, dots, parse_tls(tls)))
@@ -584,10 +595,10 @@ wa3 <- function(url, dots, rs, tls = NULL)
   shQuote(sprintf("mirai::daemon('%s'%s%s,rs=c(%s))", url, dots, parse_tls(tls), paste0(rs, collapse = ",")))
 
 wa4 <- function(urld, dots, rs, n, urlc)
-  shQuote(sprintf(".libPaths(c('%s',.libPaths()));mirai::dispatcher('%s',n=%d,rs=c(%s),monitor='%s'%s)", mirai_lp(), urld, n, paste0(rs, collapse= ","), urlc, dots))
+  shQuote(sprintf(".libPaths(c('%s',.libPaths()));mirai::dispatcher('%s',n=%d,rs=c(%s),monitor='%s'%s)", libp(), urld, n, paste0(rs, collapse= ","), urlc, dots))
 
 wa5 <- function(urld, dots, n, urlc, url)
-  shQuote(sprintf(".libPaths(c('%s',.libPaths()));mirai::dispatcher('%s',c('%s'),n=%d,monitor='%s'%s)", mirai_lp(), urld, paste0(url, collapse = "','"), n, urlc, dots))
+  shQuote(sprintf(".libPaths(c('%s',.libPaths()));mirai::dispatcher('%s',c('%s'),n=%d,monitor='%s'%s)", libp(), urld, paste0(url, collapse = "','"), n, urlc, dots))
 
 launch_daemon <- function(args, output)
   system2(command = .command, args = c("-e", args), stdout = output, stderr = output, wait = FALSE)
@@ -615,7 +626,9 @@ launch_and_sync_daemon <- function(sock, args, output, tls = NULL, pass = NULL) 
     }
   }
   launch_daemon(args, output)
-  until(cv, .limit_long)
+  res <- until(cv, .limit_long)
+  pipe_notify(sock, cv = NULL, add = TRUE)
+  res
 }
 
 init_monitor <- function(sockc, envir) {

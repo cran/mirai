@@ -99,12 +99,12 @@
 make_cluster <- function(n, url = NULL, remote = NULL, ...) {
 
   id <- sprintf("`%d`", length(..))
-  cv2 <- cv()
+  cvs <- cv()
 
   if (is.character(url)) {
 
     length(url) == 1L || stop(._[["single_url"]])
-    daemons(url = url, remote = remote, dispatcher = FALSE, resilience = FALSE, cleanup = FALSE, ..., .compute = id)
+    daemons(url = url, remote = remote, dispatcher = FALSE, cleanup = FALSE, ..., .compute = id)
 
     if (is.null(remote)) {
       if (missing(n)) n <- 1L
@@ -119,10 +119,10 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
   } else {
     is.numeric(n) || stop(._[["numeric_n"]])
     n >= 1L || stop(._[["n_one"]])
-    daemons(n = n, dispatcher = FALSE, resilience = FALSE, cleanup = FALSE, ..., .compute = id)
+    daemons(n = n, dispatcher = FALSE, cleanup = FALSE, ..., .compute = id)
   }
 
-  `[[<-`(`[[<-`(..[[id]], "cv2", cv2), "swapped", FALSE)
+  `[[<-`(..[[id]], "cvs", cvs)
 
   cl <- lapply(seq_len(n), create_node, id = id)
   `attributes<-`(cl, list(class = c("miraiCluster", "cluster"), id = id))
@@ -139,7 +139,7 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
 #' @export
 #'
 stop_cluster <- function(cl)
-  daemons(0L, .compute = attr(cl, "id")) || return(invisible())
+  daemons(n = 0L, .compute = attr(cl, "id")) || return(invisible())
 
 #' @exportS3Method parallel::stopCluster
 #'
@@ -155,7 +155,7 @@ sendData.miraiNode <- function(node, data) {
 
   value <- data[["data"]]
   tagged <- !is.null(value[["tag"]])
-  tagged && (envir[["swapped"]] || cv_swap(envir, TRUE)) || (envir[["swapped"]] && cv_swap(envir, FALSE))
+  if (tagged) set_cv(envir) else unset_cv(envir)
 
   m <- mirai(do.call(node, data, quote = TRUE), node = value[["fun"]], data = value[["args"]], .compute = id)
   if (tagged) assign("tag", value[["tag"]], m)
@@ -215,11 +215,7 @@ print.miraiNode <- function(x, ...) {
 #'     function relies on iis currently only available in R-devel (4.5).
 #'
 #' @examples
-#' tryCatch(
-#'
-#' mirai::register_cluster()
-#'
-#' , error = identity)
+#' tryCatch(mirai::register_cluster(), error = identity)
 #'
 #' @keywords internal
 #' @export
@@ -240,12 +236,9 @@ create_node <- function(node, id)
     list(class = "miraiNode", node = node, id = id)
   )
 
-cv_swap <- function(envir, state) {
-  cv <- envir[["cv"]]
-  envir[["cv"]] <- envir[["cv2"]]
-  envir[["cv2"]] <- cv
-  envir[["swapped"]] <- state
-}
+set_cv <- function(envir) `[[<-`(envir, "cv", envir[["cvs"]])
+
+unset_cv <- function(envir) `[[<-`(envir, "cv", NULL)
 
 node_unresolved <- function(node) {
   m <- .subset2(node, "mirai")
