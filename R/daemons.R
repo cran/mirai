@@ -312,11 +312,9 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
         n <- 0L
       }
       `[[<-`(.., .compute, `[[<-`(`[[<-`(envir, "sock", sock), "n", n))
-      remotes <- substitute(remote)
-      if (!is.symbol(remotes)) remote <- remotes
       if (length(remote))
         launch_remote(url = envir[["urls"]], remote = remote, tls = envir[["tls"]], ..., .compute = .compute)
-      serialization_refhook()
+      check_register_everywhere()
     } else {
       daemons(n = 0L, .compute = .compute)
       return(daemons(n = n, url = url, remote = remote, dispatcher = dispatcher, ..., seed = seed, tls = tls, pass = pass, .compute = .compute))
@@ -357,11 +355,11 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
       } else {
         sock <- req_socket(urld)
         for (i in seq_len(n))
-          launch_and_sync_daemon(sock, wa3(urld, dots, next_stream(envir)), output)
+          launch_and_sync_daemon(sock, wa3(urld, dots, next_stream(envir)), output) || stop(._[["sync_timeout"]])
         `[[<-`(envir, "urls", urld)
       }
       `[[<-`(.., .compute, `[[<-`(`[[<-`(envir, "sock", sock), "n", n))
-      serialization_refhook()
+      check_register_everywhere()
     } else {
       daemons(n = 0L, .compute = .compute)
       return(daemons(n = n, url = url, remote = remote, dispatcher = dispatcher, ..., seed = seed, tls = tls, pass = pass, .compute = .compute))
@@ -489,58 +487,62 @@ status <- function(.compute = "default") {
 #' Custom Serialization Functions
 #'
 #' Registers custom serialization and unserialization functions for sending and
-#'     receiving external pointer reference objects.
+#'     receiving reference objects.
 #'
-#' @param refhook \strong{either} a list or pairlist of two functions: the
-#'     signature for the first must accept a reference object inheriting from
-#'     'class' (or a list of such objects) and return a raw vector, and the
-#'     second must accept a raw vector and return reference objects (or a list
-#'     of such objects), \cr \strong{or else} NULL to reset.
-#' @param class [default ""] a character string representing the class of object
-#'     that these serialization function will be applied to, e.g. 'ArrowTabular'
-#'     or 'torch_tensor'.
-#' @param vec [default FALSE] the serialization functions accept and return
-#'     reference object individually e.g. \code{arrow::write_to_raw} and
-#'     \code{arrow::read_ipc_stream}. If TRUE, the serialization functions are
-#'     vectorized and accept and return a list of reference objects, e.g.
+#' @param fns \strong{either} a list comprising 2 functions: \cr serialization
+#'     function: must accept a reference object (or list of objects) inheriting
+#'     from \sQuote{class} and return a raw vector.\cr unserialization function:
+#'     must accept a raw vector and return a reference object (or list of
+#'     reference objects).\cr \strong{or else} NULL to reset.
+#' @param class the class of reference object (as a character string) that these
+#'     functions are applied to, e.g. 'ArrowTabular' or 'torch_tensor'.
+#' @param vec [default FALSE] if FALSE the functions must accept and return
+#'     reference objects individually e.g. \code{arrow::write_to_raw} and
+#'     \code{arrow::read_ipc_stream}. If TRUE, the functions are vectorized and
+#'     must accept and return a list of reference objects, e.g.
 #'     \code{torch::torch_serialize} and \code{torch::torch_load}.
 #'
-#' @return Invisibly, the pairlist of currently-registered 'refhook' functions.
-#'     A message is printed to the console when functions are successfully
-#'     registered or reset.
+#' @return Invisibly, a list comprising 'fns', class', and 'vec', or else NULL
+#'     if supplied to 'fns'.
 #'
-#' @details Calling without any arguments returns the pairlist of
-#'     currently-registered 'refhook' functions.
+#' @details Registering new functions replaces any existing registered functions.
 #'
 #'     This function may be called prior to or after setting daemons, with the
 #'     registered functions applying across all compute profiles.
 #'
+#'     Calling without any arguments returns a list comprising the registered
+#'     values for 'fns', class', and 'vec', or else NULL if not registered.
+#'
 #' @examples
-#' r <- serialization(list(function(x) serialize(x, NULL), unserialize))
-#' print(serialization())
-#' serialization(r)
+#' reg <- serialization(
+#'   list(function(x) serialize(x, NULL), base::unserialize),
+#'   class = "example_class"
+#' )
+#' reg
 #'
 #' serialization(NULL)
 #' print(serialization())
 #'
 #' @export
 #'
-serialization <- function(refhook = list(), class = "", vec = FALSE) {
+serialization <- function(fns, class, vec = FALSE) {
 
-  register <- !missing(refhook)
-  cfg <- next_config(refhook = refhook, class = class, vec = vec)
+  missing(fns) && return(.[["serial"]])
 
-  if (register) {
-    if (is.list(refhook) && length(refhook) == 2L && is.function(refhook[[1L]]) && is.function(refhook[[2L]]))
-      cat("mirai serialization functions registered\n", file = stderr()) else
-        if (is.null(refhook))
-          cat("mirai serialization functions cancelled\n", file = stderr()) else
-            stop(._[["refhook_invalid"]])
-    `[[<-`(., "refhook", list(refhook, class, vec))
-    register_everywhere(refhook = refhook, class = class, vec = vec)
+  if (is.null(fns)) {
+    serial <- NULL
+    next_config(NULL)
+  } else if (length(fns) == 2L && is.function(fns[[1L]]) && is.function(fns[[2L]])) {
+    is.character(class) || stop(._[["character_class"]])
+    serial <- list(fns, class, vec)
+    next_config(fns, class = class, vec = vec)
+  } else {
+    stop(._[["serial_invalid"]])
   }
 
-  invisible(cfg)
+  `[[<-`(., "serial", serial)
+  register_everywhere(serial)
+  invisible(serial)
 
 }
 
@@ -584,21 +586,21 @@ parse_dots <- function(...) {
 }
 
 parse_tls <- function(tls)
-  switch(length(tls) + 1L, "", sprintf(",tls='%s'", tls), sprintf(",tls=c('%s','%s')", tls[1L], tls[2L]))
+  switch(length(tls) + 1L, "", sprintf(",tls=\"%s\"", tls), sprintf(",tls=c(\"%s\",\"%s\")", tls[1L], tls[2L]))
 
 libp <- function(lp = .libPaths()) lp[file.exists(file.path(lp, "mirai"))][1L]
 
 wa2 <- function(url, dots, tls = NULL)
-  shQuote(sprintf("mirai::daemon('%s'%s%s)", url, dots, parse_tls(tls)))
+  shQuote(sprintf("mirai::daemon(\"%s\"%s%s)", url, dots, parse_tls(tls)))
 
 wa3 <- function(url, dots, rs, tls = NULL)
-  shQuote(sprintf("mirai::daemon('%s'%s%s,rs=c(%s))", url, dots, parse_tls(tls), paste0(rs, collapse = ",")))
+  shQuote(sprintf("mirai::daemon(\"%s\"%s%s,rs=c(%s))", url, dots, parse_tls(tls), paste0(rs, collapse = ",")))
 
 wa4 <- function(urld, dots, rs, n, urlc)
-  shQuote(sprintf(".libPaths(c('%s',.libPaths()));mirai::dispatcher('%s',n=%d,rs=c(%s),monitor='%s'%s)", libp(), urld, n, paste0(rs, collapse= ","), urlc, dots))
+  shQuote(sprintf(".libPaths(c(\"%s\",.libPaths()));mirai::dispatcher(\"%s\",n=%d,rs=c(%s),monitor=\"%s\"%s)", libp(), urld, n, paste0(rs, collapse= ","), urlc, dots))
 
 wa5 <- function(urld, dots, n, urlc, url)
-  shQuote(sprintf(".libPaths(c('%s',.libPaths()));mirai::dispatcher('%s',c('%s'),n=%d,monitor='%s'%s)", libp(), urld, paste0(url, collapse = "','"), n, urlc, dots))
+  shQuote(sprintf(".libPaths(c(\"%s\",.libPaths()));mirai::dispatcher(\"%s\",c(\"%s\"),n=%d,monitor=\"%s\"%s)", libp(), urld, paste0(url, collapse = "','"), n, urlc, dots))
 
 launch_daemon <- function(args, output)
   system2(command = .command, args = c("-e", args), stdout = output, stderr = output, wait = FALSE)
@@ -660,13 +662,15 @@ query_status <- function(envir) {
                            dimnames = list(envir[["urls"]], c("i", "online", "instance", "assigned", "complete"))))
 }
 
-register_everywhere <- function(refhook, class, vec)
+register_everywhere <- function(serial)
   for (.compute in names(..))
-    everywhere(mirai::serialization(refhook = refhook, class = class, vec = vec),
-               refhook = refhook, class = class, vec = vec, .compute = .compute)
+    everywhere(
+      mirai::serialization(serial[[1L]], class = serial[[2L]], vec = serial[[3L]]),
+      .args = list(serial = serial),
+      .compute = .compute
+    )
 
-serialization_refhook <- function(refhook = .[["refhook"]])
-  if (length(refhook[[1L]]))
-    register_everywhere(refhook = refhook[[1L]], class = refhook[[2L]], vec = refhook[[3L]])
+check_register_everywhere <- function(serial = .[["serial"]])
+  if (length(serial[[1L]])) register_everywhere(serial)
 
 ._scm_. <- as.raw(c(0x07, 0x00, 0x00, 0x00, 0x42, 0x0a, 0x03, 0x00, 0x00, 0x00, 0x02, 0x03, 0x04, 0x00, 0x00, 0x05, 0x03, 0x00, 0x05, 0x00, 0x00, 0x00, 0x55, 0x54, 0x46, 0x2d, 0x38, 0xfc, 0x00, 0x00, 0x00))

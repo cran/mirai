@@ -182,7 +182,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
   envir <- ..[[.compute]]
   if (is.null(envir)) {
     sock <- ephemeral_daemon(local_url())
-    aio <- request(.context(sock), data = data, send_mode = 1L, recv_mode = 1L, timeout = .timeout)
+    aio <- request(.context(sock), data = data, send_mode = 1L, recv_mode = 1L, timeout = .timeout, cv = NA)
     `attr<-`(.subset2(aio, "aio"), "sock", sock)
   } else {
     aio <- request(.context(envir[["sock"]]), data = data, send_mode = 3L,
@@ -315,7 +315,7 @@ everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
 #'
 #' @export
 #'
-call_mirai <- function(x) call_aio(x)
+call_mirai <- call_aio
 
 #' mirai (Call Value)
 #'
@@ -325,7 +325,7 @@ call_mirai <- function(x) call_aio(x)
 #' @rdname call_mirai
 #' @export
 #'
-call_mirai_ <- function(x) call_aio_(x)
+call_mirai_ <- call_aio_
 
 #' mirai (Collect Value)
 #'
@@ -397,7 +397,7 @@ collect_mirai <- collect_aio
 #'
 #' @export
 #'
-stop_mirai <- function(x) stop_aio(x)
+stop_mirai <- stop_aio
 
 #' Query if a mirai is Unresolved
 #'
@@ -431,9 +431,7 @@ stop_mirai <- function(x) stop_aio(x)
 #'
 #' @export
 #'
-unresolved <- function(x) unresolved_impl(x)
-
-unresolved_impl <- nanonext::unresolved
+unresolved <- unresolved
 
 #' Is mirai
 #'
@@ -558,7 +556,7 @@ print.miraiInterrupt <- function(x, ...) {
 
 ephemeral_daemon <- function(url) {
   sock <- req_socket(url)
-  system2(command = .command, args = c("-e", shQuote(sprintf("mirai::.daemon('%s')", url))), stdout = FALSE, stderr = FALSE, wait = FALSE)
+  system2(command = .command, args = c("-e", shQuote(sprintf("mirai::.daemon(\"%s\")", url))), stdout = FALSE, stderr = FALSE, wait = FALSE)
   sock
 }
 

@@ -1,3 +1,11 @@
+# mirai 1.1.1
+
+* `serialization()` function signature and return value slightly modified for clarity. Successful registration / cancellation mesasges are no longer printed to the console.
+* `dispatcher()` argument 'retry' now defaults to FALSE for consistency with non-dispatcher behaviour.
+* `remote_config()` gains argument 'quote' to control whether or not to quote the daemon launch commmand, and now works with Slurm (thanks @michaelmayer2 #119).
+* Ephemeral daemons now exit as soon as permissible, eiliminating the 2s linger period.
+* Requires `nanonext` >= 1.1.1.
+
 # mirai 1.1.0
 
 * Adds `mirai_map()` for asynchronous parallel/distributed map using `mirai`, with `promises` integration. Allows recovery from partial failure or else early stopping, together with optional progress reporting.

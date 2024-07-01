@@ -185,18 +185,15 @@ m[]
 <pre><code class="language-r">library(mirai)
 daemons(8, dispatcher = FALSE)
 #&gt; [1] 8
-</code></pre>
-<pre><code class="language-r">r &lt;- 0
+r &lt;- 0
 start &lt;- Sys.time()
 m &lt;- mirai_map(1:1000, \(x) x, .promise = \(x) r &lt;&lt;- r + x)
 Sys.time() - start
-#&gt; Time difference of 0.3151205 secs
-</code></pre>
-<pre><code class="language-r">later::run_now()
+#&gt; Time difference of 0.2646537 secs
+later::run_now()
 r
 #&gt; [1] 500500
-</code></pre>
-<pre><code class="language-r">daemons(0)
+daemons(0)
 #&gt; [1] 0
 </code></pre>
 <p>The one million promises challenge took 6 mins 25 secs to complete using an Intel i7 11th gen mobile processor with 16GB RAM.</p>

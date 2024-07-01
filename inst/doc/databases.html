@@ -152,8 +152,7 @@ section.footnotes::before {
 library(mirai)
 daemons(2)
 #&gt; [1] 2
-</code></pre>
-<pre><code class="language-r">everywhere({
+everywhere({
   library(DBI)
   con &lt;&lt;- dbConnect(RSQLite::SQLite(), file)
 }, file = file)
@@ -162,12 +161,10 @@ daemons(2)
 <pre><code class="language-r">m &lt;- mirai(dbWriteTable(con, &quot;iris&quot;, iris))
 m[]
 #&gt; [1] TRUE
-</code></pre>
-<pre><code class="language-r">m &lt;- mirai(dbListTables(con))
+m &lt;- mirai(dbListTables(con))
 m[]
 #&gt; [1] &quot;iris&quot;
-</code></pre>
-<pre><code class="language-r">m &lt;- mirai(dbGetQuery(con, 'SELECT * FROM iris WHERE &quot;Sepal.Length&quot; &lt; 4.6'))
+m &lt;- mirai(dbGetQuery(con, 'SELECT * FROM iris WHERE &quot;Sepal.Length&quot; &lt; 4.6'))
 m[]
 #&gt;   Sepal.Length Sepal.Width Petal.Length Petal.Width Species
 #&gt; 1          4.4         2.9          1.4         0.2  setosa
@@ -188,14 +185,15 @@ daemons(0)
 <pre><code class="language-r">library(mirai)
 daemons(1)
 #&gt; [1] 1
-</code></pre>
-<pre><code class="language-r">everywhere({
+everywhere({
   library(DBI) # `adbi` and `adbcsqlite` packages must also be installed
   con &lt;&lt;- dbConnect(adbi::adbi(&quot;adbcsqlite&quot;), uri = &quot;:memory:&quot;)
 })
 serialization(
-  refhook = list(arrow::write_to_raw,
-                 function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)),
+  list(
+    arrow::write_to_raw,
+    function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)
+  ),
   class = &quot;nanoarrow_array_stream&quot;
 )
 </code></pre>
@@ -203,8 +201,7 @@ serialization(
 <pre><code class="language-r">m &lt;- mirai(dbWriteTableArrow(con, &quot;iris&quot;, iris))
 m[]
 #&gt; [1] TRUE
-</code></pre>
-<pre><code class="language-r">m &lt;- mirai(dbReadTableArrow(con, &quot;iris&quot;))
+m &lt;- mirai(dbReadTableArrow(con, &quot;iris&quot;))
 m[]
 #&gt; Table
 #&gt; 150 rows x 5 columns
@@ -213,8 +210,7 @@ m[]
 #&gt; $Petal.Length &lt;double&gt;
 #&gt; $Petal.Width &lt;double&gt;
 #&gt; $Species &lt;string&gt;
-</code></pre>
-<pre><code class="language-r">m &lt;- mirai(dbGetQueryArrow(con, 'SELECT * FROM iris WHERE &quot;Sepal.Length&quot; &lt; 4.6'))
+m &lt;- mirai(dbGetQueryArrow(con, 'SELECT * FROM iris WHERE &quot;Sepal.Length&quot; &lt; 4.6'))
 m[]
 #&gt; Table
 #&gt; 5 rows x 5 columns
@@ -361,7 +357,7 @@ server &lt;- function(input, output, session) {
 
 # serialization() specifies the native Arrow serialization functions
 serialization(
-  refhook = list(arrow::write_to_raw, nanoarrow::read_nanoarrow),
+  list(arrow::write_to_raw, nanoarrow::read_nanoarrow),
   class = &quot;nanoarrow_array_stream&quot;
 )
 

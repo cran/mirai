@@ -7,6 +7,8 @@
 
 [![CRAN
 status](https://www.r-pkg.org/badges/version/mirai?color=171d41)](https://CRAN.R-project.org/package=mirai)
+[![R-multiverse
+status](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fcommunity.r-multiverse.org%2Fapi%2Fpackages%2Fmirai&query=%24.Version&label=r-multiverse)](https://community.r-multiverse.org/mirai)
 [![R-universe
 status](https://shikokuchuo.r-universe.dev/badges/mirai?color=2dab18)](https://shikokuchuo.r-universe.dev/mirai)
 [![R-CMD-check](https://github.com/shikokuchuo/mirai/workflows/R-CMD-check/badge.svg)](https://github.com/shikokuchuo/mirai/actions)
@@ -17,18 +19,18 @@ status](https://shikokuchuo.r-universe.dev/badges/mirai?color=2dab18)](https://s
 ### ミライ
 
 <br /> ( 未来 ) <br /><br /> Minimalist Async Evaluation Framework for R
-<br /><br /> High performance parallel code execution and distributed
+<br /><br /> High-performance parallel code execution and distributed
 computing. <br /><br /> Designed for simplicity, a ‘mirai’ evaluates an
 R expression asynchronously, on local or network resources, resolving
 automatically upon completion. <br /><br /> Modern networking and
 concurrency built on [nanonext](https://doi.org/10.5281/zenodo.7903429)
 and [NNG (Nanomsg Next Gen)](https://nng.nanomsg.org/) ensures reliable
 and efficient scheduling, over fast inter-process communications or
-TCP/IP secured by TLS. <br /><br />
+TCP/IP secured by TLS.
+
+### Scale Up in Production
 
 > *mirai パッケージを試してみたところ、かなり速くて驚きました*
-
-### Production-Grade Compute
 
 [<img alt="Joe Cheng on mirai with Shiny" src="https://img.youtube.com/vi/GhX0PcEm3CY/hqdefault.jpg" width = "300" height="225" />](https://youtu.be/GhX0PcEm3CY?t=1740)
  
@@ -65,9 +67,6 @@ yields an ‘unresolved’ logical NA.
 ``` r
 m
 #> < mirai [] >
-```
-
-``` r
 m$data
 #> 'unresolved' logi NA
 ```
@@ -84,7 +83,7 @@ method:
 
 ``` r
 m[]
-#> [1] 47.60447
+#> [1] 48.09123
 ```
 
 It is not necessary to wait, as the mirai resolves automatically
@@ -94,11 +93,8 @@ available at `$data`.
 ``` r
 m
 #> < mirai [$data] >
-```
-
-``` r
 m$data
-#> [1] 47.60447
+#> [1] 48.09123
 ```
 
 ### Daemons
@@ -177,7 +173,7 @@ services.
 [<img alt="crew.cluster" src="https://github.com/wlandau/crew.cluster/raw/main/man/figures/logo.png" width="40" height="46" />](https://wlandau.github.io/crew.cluster/)
   `crew.cluster` enables mirai-based workflows on traditional
 high-performance computing clusters using LFS, PBS/TORQUE, SGE and
-SLURM.
+Slurm.
 
 [<img alt="crew.aws.batch" src="https://github.com/wlandau/crew.aws.batch/raw/main/man/figures/logo.png" width="40" height="46" />](https://wlandau.github.io/crew.aws.batch/)
   `crew.aws.batch` extends `mirai` to cloud computing using AWS Batch.
@@ -216,13 +212,13 @@ provide secure connections in `mirai`.
 
 ### Installation
 
-Install the latest release from CRAN:
+Install the latest release from CRAN or R-multiverse:
 
 ``` r
 install.packages("mirai")
 ```
 
-Or the development version from R-universe:
+The current development version is available from R-universe:
 
 ``` r
 install.packages("mirai", repos = "https://shikokuchuo.r-universe.dev")

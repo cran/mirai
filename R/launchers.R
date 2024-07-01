@@ -126,9 +126,9 @@ launch_remote <- function(url, remote = remote_config(), ..., tls = NULL, .compu
   url <- process_url(url, .compute = .compute)
 
   ulen <- length(url)
-  if (is.language(remote)) remote <- eval(remote)
   command <- remote[["command"]]
   rscript <- remote[["rscript"]]
+  quote <- remote[["quote"]]
 
   if (length(command)) {
 
@@ -144,11 +144,14 @@ launch_remote <- function(url, remote = remote_config(), ..., tls = NULL, .compu
         arglen <- length(args)
         cmds <- character(arglen)
         for (i in seq_along(args))
-          cmds[i] <- sprintf("%s -e %s", rscript, if (is.null(envir[["stream"]]))
-            wa2(url[min(i, ulen)], dots, tls) else wa3(url[min(i, ulen)], dots, next_stream(envir), tls))
+          cmds[i] <- sprintf(
+            "%s -e %s",
+            rscript,
+            if (is.null(envir[["stream"]])) wa2(url[min(i, ulen)], dots, tls) else wa3(url[min(i, ulen)], dots, next_stream(envir), tls)
+          )
 
         for (i in seq_along(args))
-          system2(command = command, args = `[<-`(args[[i]], find_dot(args[[i]]), shQuote(cmds[i])), wait = FALSE)
+          system2(command = command, args = `[<-`(args[[i]], find_dot(args[[i]]), if (quote) shQuote(cmds[i]) else cmds[i]), wait = FALSE)
 
         return(`class<-`(cmds, "miraiLaunchCmd"))
 
@@ -161,12 +164,15 @@ launch_remote <- function(url, remote = remote_config(), ..., tls = NULL, .compu
 
   cmds <- character(ulen)
   for (i in seq_along(url))
-    cmds[i] <- sprintf("%s -e %s", rscript, if (is.null(envir[["stream"]]))
-      wa2(url[i], dots, tls) else wa3(url[i], dots, next_stream(envir), tls))
+    cmds[i] <- sprintf(
+      "%s -e %s",
+      rscript,
+      if (is.null(envir[["stream"]])) wa2(url[i], dots, tls) else wa3(url[i], dots, next_stream(envir), tls)
+    )
 
   if (length(command))
     for (cmd in cmds)
-      system2(command = command, args = `[<-`(args, find_dot(args), shQuote(cmd)), wait = FALSE)
+      system2(command = command, args = `[<-`(args, find_dot(args), if (quote) shQuote(cmd) else cmd), wait = FALSE)
 
   `class<-`(cmds, "miraiLaunchCmd")
 
@@ -192,20 +198,35 @@ launch_remote <- function(url, remote = remote_config(), ..., tls = NULL, .compu
 #'     machine. The default assumes \sQuote{Rscript} is on the executable search
 #'     path. Prepend the full path if necessary. If launching on Windows,
 #'     \sQuote{Rscript} should be replaced with \sQuote{Rscript.exe}.
+#' @param quote [default FALSE] logical value whether or not to quote the daemon
+#'     launch command (not required for Slurm \sQuote{srun} for example, but
+#'     required for \sQuote{ssh}).
 #'
 #' @return A list in the required format to be supplied to the \sQuote{remote}
 #'     argument of \code{\link{launch_remote}}, \code{\link{daemons}}, or
 #'     \code{\link{make_cluster}}.
 #'
 #' @examples
-#' remote_config(command = "ssh", args = c("-fTp 22 10.75.32.90", "."))
+#' # for Slurm
+#' remote_config(
+#'   command = "srun",
+#'   args = c("--mem 512", "-n 1", "."),
+#'   rscript = file.path(R.home("bin"), "Rscript")
+#' )
+#'
+#' # commands like SSH require quoting of the daemon launch command
+#' remote_config(
+#'   command = "/usr/bin/ssh",
+#'   args = c("-fTp 22 10.75.32.90", "."),
+#'   quote = TRUE
+#' )
 #'
 #' @export
 #'
-remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript") {
+remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript", quote = FALSE) {
 
   if (is.list(args)) lapply(args, find_dot) else find_dot(args)
-  list(command = command, args = args, rscript = rscript)
+  list(command = command, args = args, rscript = rscript, quote = quote)
 
 }
 
@@ -327,7 +348,7 @@ ssh_config <- function(remotes, tunnel = FALSE, timeout = 10, command = "ssh", r
     )
   }
 
-  list(command = command, args = args, rscript = rscript)
+  list(command = command, args = args, rscript = rscript, quote = TRUE)
 
 }
 
