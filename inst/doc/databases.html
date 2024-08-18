@@ -181,20 +181,23 @@ daemons(0)
 <h3 id="database-hosting-using-arrow-database-connectivity">Database Hosting - Using Arrow Database Connectivity</h3>
 <p>It is possible using the <code>DBI</code> interface to access and manipulate data in the Apache Arrow data format efficiently through ABDC (Arrow Database Connectivity).</p>
 <p>The example below creates an in-memory SQLite connection using the <code>adbcsqlite</code> backend.</p>
-<p>Serialization is set up with the relevant serialization and deserialization functions from the <code>arrow</code> package. Note that the format class is ‘nanoarrow_array_stream’ as <code>nanoarrow</code> is the backend for all queries made by the DBI <code>db*Arrow()</code> functions.</p>
+<p>Serialization is set up with the relevant serialization functions from the <code>arrow</code> package as part of the <code>everywhere()</code> call. Note that the specified class is ‘nanoarrow_array_stream’ as <code>nanoarrow</code> is the backend for all queries made by the DBI <code>db*Arrow()</code> functions.</p>
 <pre><code class="language-r">library(mirai)
 daemons(1)
 #&gt; [1] 1
-everywhere({
-  library(DBI) # `adbi` and `adbcsqlite` packages must also be installed
-  con &lt;&lt;- dbConnect(adbi::adbi(&quot;adbcsqlite&quot;), uri = &quot;:memory:&quot;)
-})
-serialization(
-  list(
-    arrow::write_to_raw,
-    function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)
-  ),
-  class = &quot;nanoarrow_array_stream&quot;
+
+cfg &lt;- serial_config(
+  class = &quot;nanoarrow_array_stream&quot;,
+  sfunc = arrow::write_to_raw,
+  ufunc = function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)
+)
+
+everywhere(
+  {
+    library(DBI) # `adbi` and `adbcsqlite` packages must also be installed
+    con &lt;&lt;- dbConnect(adbi::adbi(&quot;adbcsqlite&quot;), uri = &quot;:memory:&quot;)
+  },
+  .serial = cfg
 )
 </code></pre>
 <p><code>mirai()</code> calls may then be used to write to or query the database all in the Arrow format.</p>
@@ -284,6 +287,13 @@ library(secretbase)
 library(shiny)
 library(bslib)
 
+# create an Arrow serialization configuration
+cfg &lt;- serial_config(
+  class = &quot;nanoarrow_array_stream&quot;,
+  sfunc = arrow::write_to_raw,
+  ufunc = nanoarrow::read_nanoarrow
+)
+
 # write 'iris' dataset to temp database file (for this demonstration)
 file &lt;- tempfile()
 con &lt;- DBI::dbConnect(adbi::adbi(&quot;adbcsqlite&quot;), uri = file)
@@ -313,19 +323,21 @@ server &lt;- function(input, output, session) {
   # create unique session id by hashing current time with a random key
   id &lt;- secretbase::siphash13(Sys.time(), key = nanonext::random(4L))
 
-  # create new daemon for each session (set dispatcher = FALSE)
+  # create new (non-dispatcher) daemon for each session
   daemons(1L, dispatcher = FALSE, .compute = id)
 
   # tear down daemon when session ends
   session$onEnded(function() daemons(0L, .compute = id))
 
   # everywhere() loads DBI and creates ADBC connection in each daemon
+  # and sets up serialization
   everywhere(
     {
       library(DBI) # `adbi` and `adbcsqlite` packages must also be installed
       con &lt;&lt;- dbConnect(adbi::adbi(&quot;adbcsqlite&quot;), uri = file)
     },
     file = file,
+    .serial = cfg,
     .compute = id
   )
 
@@ -354,12 +366,6 @@ server &lt;- function(input, output, session) {
   output$table &lt;- renderTable(task$result())
 
 }
-
-# serialization() specifies the native Arrow serialization functions
-serialization(
-  list(arrow::write_to_raw, nanoarrow::read_nanoarrow),
-  class = &quot;nanoarrow_array_stream&quot;
-)
 
 # run Shiny app
 shinyApp(ui = ui, server = server)

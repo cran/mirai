@@ -211,8 +211,8 @@
 #'
 #'     \strong{cpu / gpu} some tasks may require access to different types of
 #'     daemon, such as those with GPUs. In this case, \code{daemons()} may be
-#'     called twice to set up host URLs for CPU-only daemons and for those
-#'     with GPUs, specifying the \sQuote{.compute} argument as \sQuote{cpu} and
+#'     called to set up host URLs for CPU-only daemons and for those with GPUs,
+#'     specifying the \sQuote{.compute} argument as \sQuote{cpu} and
 #'     \sQuote{gpu} respectively. By supplying the \sQuote{.compute} argument to
 #'     subsequent \code{\link{mirai}} calls, tasks may be sent to either
 #'     \sQuote{cpu} or \sQuote{gpu} daemons as appropriate.
@@ -303,7 +303,7 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
         urlc <- sprintf("%s%s", urld, "c")
         sock <- req_socket(urld)
         sockc <- req_socket(urlc)
-        launch_and_sync_daemon(sock, wa5(urld, dots, n, urlc, url), output, tls, pass) || stop(._[["sync_timeout"]])
+        launch_sync_dispatcher(sock, wa5(urld, dots, n, urlc, url), output, tls, pass) || stop(._[["sync_timeout"]])
         init_monitor(sockc = sockc, envir = envir)
         `[[<-`(envir, "cv", cv)
       } else {
@@ -314,10 +314,10 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
       `[[<-`(.., .compute, `[[<-`(`[[<-`(envir, "sock", sock), "n", n))
       if (length(remote))
         launch_remote(url = envir[["urls"]], remote = remote, tls = envir[["tls"]], ..., .compute = .compute)
-      check_register_everywhere()
     } else {
       daemons(n = 0L, .compute = .compute)
-      return(daemons(n = n, url = url, remote = remote, dispatcher = dispatcher, ..., seed = seed, tls = tls, pass = pass, .compute = .compute))
+      return(daemons(n = n, url = url, remote = remote, dispatcher = dispatcher, ...,
+                     seed = seed, tls = tls, pass = pass, .compute = .compute))
     }
 
   } else {
@@ -348,29 +348,26 @@ daemons <- function(n, url = NULL, remote = NULL, dispatcher = TRUE, ...,
         sock <- req_socket(urld)
         urlc <- sprintf("%s%s", urld, "c")
         sockc <- req_socket(urlc)
-        launch_and_sync_daemon(sock, wa4(urld, dots, envir[["stream"]], n, urlc), output) || stop(._[["sync_timeout"]])
+        launch_sync_dispatcher(sock, wa4(urld, dots, envir[["stream"]], n, urlc), output) || stop(._[["sync_timeout"]])
         for (i in seq_len(n)) next_stream(envir)
         init_monitor(sockc = sockc, envir = envir)
         `[[<-`(envir, "cv", cv)
       } else {
         sock <- req_socket(urld)
-        for (i in seq_len(n))
-          launch_and_sync_daemon(sock, wa3(urld, dots, next_stream(envir)), output) || stop(._[["sync_timeout"]])
+        launch_sync_daemons(seq_len(n), sock, urld, dots, envir, output) || stop(._[["sync_timeout"]])
         `[[<-`(envir, "urls", urld)
       }
       `[[<-`(.., .compute, `[[<-`(`[[<-`(envir, "sock", sock), "n", n))
-      check_register_everywhere()
     } else {
       daemons(n = 0L, .compute = .compute)
-      return(daemons(n = n, url = url, remote = remote, dispatcher = dispatcher, ..., seed = seed, tls = tls, pass = pass, .compute = .compute))
+      return(daemons(n = n, url = url, remote = remote, dispatcher = dispatcher, ...,
+                     seed = seed, tls = tls, pass = pass, .compute = .compute))
     }
 
   }
 
-  if (is.null(envir)) 0L else `class<-`(
-    if (envir[["n"]]) envir[["n"]] else envir[["urls"]],
-    c("miraiDaemons", .compute)
-  )
+  is.null(envir) && return(0L)
+  `class<-`(if (envir[["n"]]) envir[["n"]] else envir[["urls"]], c("miraiDaemons", .compute))
 
 }
 
@@ -484,10 +481,46 @@ status <- function(.compute = "default") {
 
 }
 
+#' Create Serialization Configuration
+#'
+#' Returns a serialization configuration, which may be set to perform custom
+#'     serialization and unserialization of normally non-exportable reference
+#'     objects, allowing these to be used seamlessly between different R
+#'     sessions. This feature utilises the 'refhook' system of R native
+#'     serialization. Once set, the functions apply to all mirai requests for a
+#'     specific compute profile.
+#'
+#' @param class character string of the class of object custom serialization
+#'     functions are applied to, e.g. \sQuote{ArrowTabular} or
+#'     \sQuote{torch_tensor}.
+#' @param sfunc a function that accepts a reference object inheriting from
+#'     \sQuote{class} (or a list of such objects) and returns a raw vector.
+#' @param ufunc a function that accepts a raw vector and returns a reference
+#'     object (or list of such objects).
+#' @param vec [default FALSE] whether or not the serialization functions are
+#'     vectorized. If FALSE, they should accept and return reference objects
+#'     individually e.g. \code{arrow::write_to_raw} and
+#'     \code{arrow::read_ipc_stream}. If TRUE, they should accept and return a
+#'     list of reference objects, e.g. \code{torch::torch_serialize} and
+#'     \code{torch::torch_load}.
+#'
+#' @return A list comprising the configuration. This should be passed to the
+#'     \sQuote{.serial} argument of \code{\link{everywhere}}.
+#'
+#' @examples
+#' cfg <- serial_config("test_cls", function(x) serialize(x, NULL), unserialize)
+#' cfg
+#'
+#' @export
+#'
+serial_config <- serial_config
+
 #' Custom Serialization Functions
 #'
-#' Registers custom serialization and unserialization functions for sending and
-#'     receiving reference objects.
+#' [Deprecated in favour of the '.serial' argument to \code{\link{everywhere}}]
+#'     Registers custom serialization and unserialization functions for sending
+#'     and receiving reference objects. Settings apply to an individual compute
+#'     profile, and daemons must have been set beforehand.
 #'
 #' @param fns \strong{either} a list comprising 2 functions: \cr serialization
 #'     function: must accept a reference object (or list of objects) inheriting
@@ -495,53 +528,46 @@ status <- function(.compute = "default") {
 #'     must accept a raw vector and return a reference object (or list of
 #'     reference objects).\cr \strong{or else} NULL to reset.
 #' @param class the class of reference object (as a character string) that these
-#'     functions are applied to, e.g. 'ArrowTabular' or 'torch_tensor'.
-#' @param vec [default FALSE] if FALSE the functions must accept and return
-#'     reference objects individually e.g. \code{arrow::write_to_raw} and
-#'     \code{arrow::read_ipc_stream}. If TRUE, the functions are vectorized and
-#'     must accept and return a list of reference objects, e.g.
-#'     \code{torch::torch_serialize} and \code{torch::torch_load}.
+#'     functions are applied to, e.g. 'ArrowTabular' or 'torch_tensor'
+#' @param vec [default FALSE] whether or not the serialization functions are
+#'     vectorized and accept and return a list of reference objects, e.g.
+#'     \code{torch::torch_serialize} and \code{torch::torch_load}, or if FALSE
+#'     return reference objects individually e.g. \code{arrow::write_to_raw} and
+#'     \code{arrow::read_ipc_stream}.
 #'
-#' @return Invisibly, a list comprising 'fns', class', and 'vec', or else NULL
-#'     if supplied to 'fns'.
+#' @return Invisibly, a list comprising the currently-registered serialization
+#'     configuration for the \sQuote{default} compute profile (an empty list if
+#'     not registered).
 #'
-#' @details Registering new functions replaces any existing registered functions.
+#' @details Registering new functions replaces any existing registered
+#'     functions.
 #'
-#'     This function may be called prior to or after setting daemons, with the
-#'     registered functions applying across all compute profiles.
-#'
-#'     Calling without any arguments returns a list comprising the registered
-#'     values for 'fns', class', and 'vec', or else NULL if not registered.
+#' @note This function is deprecated and will be removed in a later package
+#'     version. Use \code{\link{serial_config}} to create a configuration to
+#'     pass directly to the '.serial' argument of \code{\link{everywhere}}.
 #'
 #' @examples
+#' daemons(url = local_url())
+#'
 #' reg <- serialization(
-#'   list(function(x) serialize(x, NULL), base::unserialize),
-#'   class = "example_class"
+#'   fns = list(function(x) serialize(x, NULL), unserialize),
+#'   class = "custom_class"
 #' )
 #' reg
 #'
-#' serialization(NULL)
-#' print(serialization())
+#' reg <- serialization(NULL)
+#' reg
 #'
+#' daemons(0)
+#'
+#' @keywords internal
 #' @export
 #'
 serialization <- function(fns, class, vec = FALSE) {
 
-  missing(fns) && return(.[["serial"]])
-
-  if (is.null(fns)) {
-    serial <- NULL
-    next_config(NULL)
-  } else if (length(fns) == 2L && is.function(fns[[1L]]) && is.function(fns[[2L]])) {
-    is.character(class) || stop(._[["character_class"]])
-    serial <- list(fns, class, vec)
-    next_config(fns, class = class, vec = vec)
-  } else {
-    stop(._[["serial_invalid"]])
-  }
-
-  `[[<-`(., "serial", serial)
-  register_everywhere(serial)
+  is.null(..[["default"]]) && return(invisible(list()))
+  serial <- if (is.null(fns)) list() else serial_config(class, fns[[1L]], fns[[2L]], vec)
+  everywhere({}, .serial = serial, .compute = "default")
   invisible(serial)
 
 }
@@ -550,8 +576,8 @@ serialization <- function(fns, class, vec = FALSE) {
 
 check_create_tls <- function(url, tls, envir) {
   purl <- parse_url(url)
-  sch <- substr(purl[["scheme"]], 1L, 3L)
-  if ((sch == "wss" || sch == "tls") && is.null(tls)) {
+  sch <- purl[["scheme"]]
+  if ((startsWith(sch, "wss") || startsWith(sch, "tls")) && is.null(tls)) {
     cert <- write_cert(cn = purl[["hostname"]])
     `[[<-`(envir, "tls", cert[["client"]])
     tls <- cert[["server"]]
@@ -560,7 +586,7 @@ check_create_tls <- function(url, tls, envir) {
 }
 
 create_stream <- function(n, seed, envir) {
-  rexp(1L)
+  .advance()
   oseed <- .GlobalEnv[[".Random.seed"]]
   RNGkind("L'Ecuyer-CMRG")
   if (length(seed)) set.seed(seed)
@@ -577,7 +603,7 @@ parse_dots <- function(...) {
   missing(...) && return("")
   dots <- list(...)
   for (dot in dots)
-    is.numeric(dot) || is.logical(dot) || stop(._[["wrong_dots"]])
+    is.numeric(dot) || is.logical(dot) || stop(._[["wrong_dots"]], call. = FALSE)
   dnames <- names(dots)
   out <- sprintf(",%s", paste(dnames, dots, sep = "=", collapse = ","))
   pos <- dnames == "output"
@@ -605,7 +631,7 @@ wa5 <- function(urld, dots, n, urlc, url)
 launch_daemon <- function(args, output)
   system2(command = .command, args = c("-e", args), stdout = output, stderr = output, wait = FALSE)
 
-launch_and_sync_daemon <- function(sock, args, output, tls = NULL, pass = NULL) {
+launch_sync_dispatcher <- function(sock, args, output, tls = NULL, pass = NULL) {
   cv <- cv()
   pipe_notify(sock, cv = cv, add = TRUE)
   if (is.character(tls)) {
@@ -627,10 +653,22 @@ launch_and_sync_daemon <- function(sock, args, output, tls = NULL, pass = NULL) 
       Sys.setenv(MIRAI_TEMP_VAR = pass)
     }
   }
-  launch_daemon(args, output)
+  on.exit(Sys.unsetenv("MIRAI_DEF_PKGS"), add = TRUE)
+  Sys.setenv(MIRAI_DEF_PKGS = Sys.getenv("R_DEFAULT_PACKAGES"))
+  system2(command = .command, args = c("--default-packages=NULL", "--vanilla", "-e", args), stdout = output, stderr = output, wait = FALSE)
   res <- until(cv, .limit_long)
   pipe_notify(sock, cv = NULL, add = TRUE)
   res
+}
+
+launch_sync_daemons <- function(seq, sock, urld, dots, envir, output) {
+  cv <- cv()
+  pipe_notify(sock, cv = cv, add = TRUE)
+  for (i in seq)
+    launch_daemon(wa3(urld, dots, next_stream(envir)), output)
+  for (i in seq)
+    until(cv, .limit_long) || return(pipe_notify(sock, cv = NULL, add = TRUE))
+  !pipe_notify(sock, cv = NULL, add = TRUE)
 }
 
 init_monitor <- function(sockc, envir) {
@@ -658,19 +696,13 @@ send_signal <- function(envir) {
 query_status <- function(envir) {
   res <- query_dispatcher(sock = envir[["sockc"]], command = 0L, mode = 5L)
   is.object(res) && return(res)
-  `attributes<-`(res, list(dim = c(envir[["n"]], 5L),
-                           dimnames = list(envir[["urls"]], c("i", "online", "instance", "assigned", "complete"))))
+  `attributes<-`(
+    res,
+    list(
+      dim = c(envir[["n"]], 5L),
+      dimnames = list(envir[["urls"]], c("i", "online", "instance", "assigned", "complete"))
+    )
+  )
 }
 
-register_everywhere <- function(serial)
-  for (.compute in names(..))
-    everywhere(
-      mirai::serialization(serial[[1L]], class = serial[[2L]], vec = serial[[3L]]),
-      .args = list(serial = serial),
-      .compute = .compute
-    )
-
-check_register_everywhere <- function(serial = .[["serial"]])
-  if (length(serial[[1L]])) register_everywhere(serial)
-
-._scm_. <- as.raw(c(0x07, 0x00, 0x00, 0x00, 0x42, 0x0a, 0x03, 0x00, 0x00, 0x00, 0x02, 0x03, 0x04, 0x00, 0x00, 0x05, 0x03, 0x00, 0x05, 0x00, 0x00, 0x00, 0x55, 0x54, 0x46, 0x2d, 0x38, 0xfc, 0x00, 0x00, 0x00))
+._scm_. <- as.raw(c(0x42, 0x0a, 0x03, 0x00, 0x00, 0x00, 0x02, 0x03, 0x04, 0x00, 0x00, 0x05, 0x03, 0x00, 0x05, 0x00, 0x00, 0x00, 0x55, 0x54, 0x46, 0x2d, 0x38, 0xfc, 0x00, 0x00, 0x00))

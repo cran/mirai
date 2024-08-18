@@ -14,39 +14,47 @@ must accept a raw vector and return a reference object (or list of
 reference objects).\cr \strong{or else} NULL to reset.}
 
 \item{class}{the class of reference object (as a character string) that these
-functions are applied to, e.g. 'ArrowTabular' or 'torch_tensor'.}
+functions are applied to, e.g. 'ArrowTabular' or 'torch_tensor'}
 
-\item{vec}{[default FALSE] if FALSE the functions must accept and return
-reference objects individually e.g. \code{arrow::write_to_raw} and
-\code{arrow::read_ipc_stream}. If TRUE, the functions are vectorized and
-must accept and return a list of reference objects, e.g.
-\code{torch::torch_serialize} and \code{torch::torch_load}.}
+\item{vec}{[default FALSE] whether or not the serialization functions are
+vectorized and accept and return a list of reference objects, e.g.
+\code{torch::torch_serialize} and \code{torch::torch_load}, or if FALSE
+return reference objects individually e.g. \code{arrow::write_to_raw} and
+\code{arrow::read_ipc_stream}.}
 }
 \value{
-Invisibly, a list comprising 'fns', class', and 'vec', or else NULL
-    if supplied to 'fns'.
+Invisibly, a list comprising the currently-registered serialization
+    configuration for the \sQuote{default} compute profile (an empty list if
+    not registered).
 }
 \description{
-Registers custom serialization and unserialization functions for sending and
-    receiving reference objects.
+[Deprecated in favour of the '.serial' argument to \code{\link{everywhere}}]
+    Registers custom serialization and unserialization functions for sending
+    and receiving reference objects. Settings apply to an individual compute
+    profile, and daemons must have been set beforehand.
 }
 \details{
-Registering new functions replaces any existing registered functions.
-
-    This function may be called prior to or after setting daemons, with the
-    registered functions applying across all compute profiles.
-
-    Calling without any arguments returns a list comprising the registered
-    values for 'fns', class', and 'vec', or else NULL if not registered.
+Registering new functions replaces any existing registered
+    functions.
+}
+\note{
+This function is deprecated and will be removed in a later package
+    version. Use \code{\link{serial_config}} to create a configuration to
+    pass directly to the '.serial' argument of \code{\link{everywhere}}.
 }
 \examples{
+daemons(url = local_url())
+
 reg <- serialization(
-  list(function(x) serialize(x, NULL), base::unserialize),
-  class = "example_class"
+  fns = list(function(x) serialize(x, NULL), unserialize),
+  class = "custom_class"
 )
 reg
 
-serialization(NULL)
-print(serialization())
+reg <- serialization(NULL)
+reg
+
+daemons(0)
 
 }
+\keyword{internal}

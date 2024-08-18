@@ -1,13 +1,17 @@
 library(mirai)
 
-nanotest <- function(x) invisible(x || stop("is not TRUE when expected to be TRUE"))
-nanotestn <- function(x) invisible(is.null(x) || stop("is not NULL when expected to be NULL"))
-nanotestz <- function(x) invisible(x == 0L || stop("does not equal 0L as expected"))
-nanotesto <- function(x) invisible(x == 1L || stop("does not equal 1L as expected"))
-nanotesti <- function(a, b) invisible(identical(a, b) || stop("the arguments are not identical as expected"))
+nanotest <- function(x) invisible(isTRUE(x) || {print(x); stop("the above was returned instead of TRUE")})
+nanotestn <- function(x) invisible(is.null(x) || {print(x); stop("the above was returned instead of NULL")})
+nanotestz <- function(x) invisible(x == 0L || {print(x); stop("the above was returned instead of 0L")})
+nanotesto <- function(x) invisible(x == 1L || {print(x); stop("the above was returned instead of 1L")})
+nanotesti <- function(a, b) invisible(identical(a, b) || {print(a); print(b); stop("the above arguments were not identical")})
 nanotestp <- function(x) invisible(is.character(capture.output(print(x))) || stop("print output of expression cannot be captured as a character value"))
-nanotesterr <- function(x, e = "") invisible(grepl(e, tryCatch(x, error = identity)[["message"]], fixed = TRUE) || stop("expected error message '", e, "' not generated"))
-connection <- !is_error_value(call_mirai(mirai(TRUE, .timeout = 2000L))[["data"]])
+nanotesterr <- function(x, e = "") {
+  x <- tryCatch(x, error = identity)
+  inherits(x, "error") && grepl(e, x[["message"]], fixed = TRUE) || stop("expected error message containing '", e, "' was not generated")
+  invisible(TRUE)
+}
+connection <- !is_error_value(collect_mirai(mirai(TRUE, .timeout = 2000L)))
 
 # core tests
 nanotest(is.list(status()))
@@ -27,13 +31,9 @@ nanotestp(mlc)
 nanotesterr(launch_remote("ws://[::1]:5555", remote = remote_config(command = "echo", args = "invalid")), "must be an element")
 nanotesterr(launch_remote(c("tcp://localhost:5555", "tcp://localhost:6666", "tcp://localhost:7777"), remote = remote_config(command = "echo", args = list(c("test", "."), c("test", ".")))), "must be of length 1 or the same length")
 nanotesterr(launch_local(1L), "requires daemons to be set")
-nanotestn(everywhere(mirai::serialization()))
-nanotestn(serialization())
-nanotesterr(serialization(list(NULL)), "must be a list of 2 functions or NULL")
-nanotesterr(serialization(list(identity, identity), class = NA), "must be a character string")
 nanotest(is.character(host_url()))
-nanotest(substr(host_url(ws = TRUE, tls = TRUE), 1L, 3L) == "wss")
-nanotest(substr(host_url(tls = TRUE), 1L, 3L) == "tls")
+nanotest(startsWith(host_url(ws = TRUE, tls = TRUE), "wss"))
+nanotest(startsWith(host_url(tls = TRUE), "tls"))
 nanotest(grepl("5555", host_url(port = 5555), fixed = TRUE))
 nanotest(is.list(ssh_config("ssh://remotehost")))
 nanotest(is.list(ssh_config("ssh://remotehost", tunnel = TRUE, host = "tls+tcp://127.0.0.1:5555")))
@@ -47,9 +47,9 @@ nanotest(mirai:::.DollarNames.miraiError(NULL, "s") == "stack.trace")
 nanotest(mirai:::is.promising.mirai())
 nanotestn(nextstream())
 nanotestn(nextget("pid"))
-Sys.sleep(1L)
 # mirai and daemons tests
 connection && {
+  Sys.sleep(1L)
   n <- function() m
   m <- mirai({
     Sys.sleep(0.1)
@@ -95,11 +95,10 @@ connection && {
   Sys.sleep(1L)
   nanotest(is.integer(status(.compute = "new")[["connections"]]))
   nanotestz(daemons(0L, .compute = "new"))
-  Sys.sleep(1L)
-  NA
 }
 # additional daemons tests
 connection && .Platform[["OS.type"]] != "windows" && {
+  Sys.sleep(1L)
   nanotest(daemons(url = value <- local_url(), dispatcher = FALSE) == value)
   nanotesti(status()$daemons, nextget("urls"))
   nanotestz(daemons(0L))
@@ -115,17 +114,19 @@ connection && .Platform[["OS.type"]] != "windows" && {
     if (is.null(tryCatch(mirai_map(list(1, "a", 2), sum, .compute = "ml")[.stop], error = function(e) NULL)))
       mirai_map(1:3, rnorm, .args = list(mean = 20, 2), .compute = "ml")[.progress]
   })
-  nanotest(is.list(m) && length(m) == 3L && all(as.logical(lapply(m, is.numeric))))
+  nanotest(!is_mirai_map(m) && is.list(m) && length(m) == 3L && all(as.logical(lapply(m, is.numeric))))
+  Sys.sleep(1L)
   nanotestp(mp <- mirai_map(list(x = "a"), function(...) do(...), do = function(x, y) sprintf("%s%s", x, y), .args = list("b")))
   nanotesti(collect_mirai(mp)[["x"]], "ab")
   nanotesti(call_mirai(mp)[["x"]][["data"]], "ab")
-  Sys.sleep(1L)
-  NA
+  nanotest(all(mirai_map(list(1:3, 3:1), sum, .args = list(3L))[.flat] == 7L))
+  nanotest(all(mirai_map(list(c(a = 1, b = 1, c = 1), 3), sum)[.flat] == 3))
 }
 # parallel cluster tests
 library(parallel)
 nanotestn(tryCatch(mirai::register_cluster(), error = function(e) NULL))
 connection && {
+  Sys.sleep(1L)
   cluster <- make_cluster(1)
   nanotest(inherits(cluster, "miraiCluster"))
   nanotest(inherits(cluster, "cluster"))
@@ -181,21 +182,22 @@ connection && {
   Sys.sleep(1L)
   nanotestp(cl <- make_cluster(n = 1, url = local_url(), remote = remote_config()))
   nanotestn(stopCluster(cl))
-  Sys.sleep(1L)
-  NA
 }
 # advanced daemons and dispatcher tests
 connection && .Platform[["OS.type"]] != "windows" && Sys.getenv("NOT_CRAN") == "true" && {
+  Sys.sleep(1L)
   nanotesto(daemons(url = local_url(), dispatcher = TRUE))
   nanotest(grepl("://", launch_remote(1L), fixed = TRUE))
   nanotestn(launch_local(nextget("urls")))
   Sys.sleep(1L)
-  if (requireNamespace("promises", quietly = TRUE)) {
+  requireNamespace("promises", quietly = TRUE) && {
     nanotest(promises::is.promise(p1 <- promises::as.promise(mirai("completed"))))
     nanotest(promises::is.promise(p2 <- promises::`%...>%`(mirai("completed"), identity())))
     nanotest(promises::is.promise(p3 <- promises::as.promise(call_mirai(mirai("completed")))))
     nanotestz(mirai_map(0:1, function(x) x, .promise = identity)[][[1L]])
-    nanotesto(mirai_map(1, function(x) x, .promise = list(identity))[][[1L]])
+    nanotest(is_mirai_map(mp <- mirai_map(matrix(1:4, nrow = 2L), function(x, y) x + y, .promise = list(identity))))
+    nanotest(all(mp[.flat] == c(4L, 6L)))
+    nanotest(is.null(names(mp[])))
     nanotest(is_error_value(mirai_map(1, function(x) stop(x), .promise = list(identity, identity))[][[1L]]))
   }
   Sys.sleep(1L)
@@ -228,6 +230,7 @@ connection && .Platform[["OS.type"]] != "windows" && Sys.getenv("NOT_CRAN") == "
   nanotest(daemons(n = 2, "tcp://127.0.0.1:45555") == 2L)
   Sys.sleep(1L)
   nanotestn(launch_local(nextget("urls", .compute = "default")[1L], maxtasks = 1L))
+  nanotestn(launch_local(2, maxtasks = 1L))
   Sys.sleep(2L)
   tstatus <- status()[["daemons"]]
   nanotest(is.matrix(tstatus))
@@ -236,27 +239,31 @@ connection && .Platform[["OS.type"]] != "windows" && Sys.getenv("NOT_CRAN") == "
   nanotest(is.character(tparse2 <- nanonext::parse_url(tdn1[2L])))
   nanotest(tparse1[["port"]] == "45555")
   nanotest(tparse2[["port"]] == "45556")
-  nanotesto(sum(tstatus[, "online"]))
-  nanotesto(sum(tstatus[, "instance"]))
+  nanotest(sum(tstatus[, "online"]) == 2L)
+  nanotest(sum(tstatus[, "instance"]) == 2L)
   nanotestz(sum(tstatus[, "assigned"]))
   nanotestz(sum(tstatus[, "complete"]))
+  nanotest(is.double(res <- mirai_map(c(1,1), rnorm)[.flat]))
+  nanotest(res[1L] != res[2L])
   nanotestz(daemons(0))
-  nanotest(is.list(serialization(fns = list(function(x) serialize(x, NULL), unserialize), class = "tst_cls")))
-  nanotest(is.function(serialization()[[1L]][[2L]]))
   nanotesto(daemons(url = "wss://127.0.0.1:0", token = TRUE, pass = "test"))
+  nanotest(is.list(serialization(list(function(x) serialize(x, NULL), unserialize), "tst_cls")))
   nanotestn(launch_local(1L))
   Sys.sleep(1L)
   nanotest(grepl("CERTIFICATE", launch_remote(1L), fixed = TRUE))
   q <- quote(list2env(list(b = 2), envir = .GlobalEnv))
-  nanotestn(everywhere(q))
+  cfg <- serial_config("custom", function(x) serialize(x, NULL), unserialize)
+  nanotestn(everywhere(q, .serial = cfg))
   m <- mirai(b, .timeout = 1000)
   nanotest(m[] == 2L || is_error_value(m[]))
   nanotestn(saisei(1))
   nanotesterr(launch_local(0:1), "out of bounds")
   nanotesterr(launch_remote(1:2), "out of bounds")
-  nanotestn(serialization(NULL))
+  nanotest(!length(serialization(NULL)))
   option <- 15L
+  Sys.setenv(R_DEFAULT_PACKAGES = "stats,utils")
   nanotesto(daemons(1, dispatcher = TRUE, maxtasks = 10L, timerstart = 1L, walltime = 1000L, seed = 1546, token = TRUE, cleanup = option, autoexit = tools::SIGCONT))
+  Sys.unsetenv("R_DEFAULT_PACKAGES")
   Sys.sleep(1L)
   mq <- mirai("daemon", .timeout = 1000)
   nanotest(call_mirai(mq)$data == "daemon" || is_error_value(mq$data))
@@ -272,6 +279,5 @@ connection && .Platform[["OS.type"]] != "windows" && Sys.getenv("NOT_CRAN") == "
     daemons(url = "tls+tcp://127.0.0.1:0", tls = file) == 1L && daemons(0L) == 0L
   }
   nanotest(test_tls(nanonext::write_cert(cn = "127.0.0.1")))
-  Sys.sleep(1L)
-  NA
 }
+Sys.sleep(1L)

@@ -85,6 +85,9 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
   n <- if (is.numeric(n)) as.integer(n) else length(url)
   n > 0L || stop(._[["missing_url"]])
 
+  pkgs <- Sys.getenv("MIRAI_DEF_PKGS")
+  Sys.unsetenv("MIRAI_DEF_PKGS")
+  if (nzchar(pkgs)) Sys.setenv(R_DEFAULT_PACKAGES = pkgs) else Sys.unsetenv("R_DEFAULT_PACKAGES")
   cv <- cv()
   sock <- socket(protocol = "rep")
   on.exit(reap(sock))
@@ -144,6 +147,10 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
   }
 
   on.exit(lapply(servers, reap), add = TRUE, after = TRUE)
+
+  if (auto)
+    for (i in seq_n)
+      until(cv, .limit_long) || stop(._[["sync_timeout"]])
 
   ctrchannel <- is.character(monitor)
   if (ctrchannel) {
@@ -205,10 +212,10 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
       for (i in seq_n)
         if (length(queue[[i]]) > 2L && !unresolved(queue[[i]][["req"]])) {
           req <- .subset2(queue[[i]][["req"]], "value")
-          if (is.object(req)) req <- serialize(req, NULL)
+          if (is.object(req)) req <- serialize(req, connection = NULL, xdr = FALSE)
           send(queue[[i]][["ctx"]], data = req, mode = 2L, block = TRUE)
           q <- queue[[i]][["daemon"]]
-          if (req[3L]) {
+          if (req[4L]) {
             send(queue[[i]][["rctx"]], NULL, mode = 2L, block = TRUE)
             reap(queue[[i]][["rctx"]])
           } else {
@@ -225,7 +232,8 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
           for (i in seq_n) {
             if (length(queue[[i]]) == 2L && !unresolved(queue[[i]][["req"]])) {
               queue[[i]][["rctx"]] <- .context(servers[[q]])
-              queue[[i]][["req"]] <- request(queue[[i]][["rctx"]], data = .subset2(queue[[i]][["req"]], "value"), send_mode = 2L, recv_mode = 8L, cv = cv)
+              queue[[i]][["req"]] <- request(queue[[i]][["rctx"]], data = .subset2(queue[[i]][["req"]], "value"),
+                                             send_mode = 2L, recv_mode = 8L, cv = cv)
               queue[[i]][["daemon"]] <- q
               serverfree[q] <- FALSE
               assigned[q] <- assigned[q] + 1L
@@ -296,7 +304,7 @@ saisei <- function(i, force = FALSE, .compute = "default") {
 
   envir <- ..[[.compute]]
   i <- as.integer(i[1L])
-  length(envir[["sockc"]]) && i > 0L && i <= envir[["n"]] && substr(envir[["urls"]][i], 1L, 1L) != "t" || return()
+  length(envir[["sockc"]]) && i > 0L && i <= envir[["n"]] && !startsWith(envir[["urls"]][i], "t") || return()
   r <- query_dispatcher(sock = envir[["sockc"]], command = if (force) -i else i, mode = 9L)
   is.character(r) && nzchar(r) || return()
   envir[["urls"]][i] <- r
@@ -307,7 +315,7 @@ saisei <- function(i, force = FALSE, .compute = "default") {
 # internals --------------------------------------------------------------------
 
 get_ports <- function(baseurl, n)
-  if (substr(baseurl[["scheme"]], 1L, 1L) == "t") {
+  if (startsWith(baseurl[["scheme"]], "t")) {
     if (baseurl[["port"]] == "0") integer(n) else seq.int(baseurl[["port"]], length.out = n)
   }
 
@@ -320,8 +328,8 @@ get_and_reset_env <- function(x) {
 }
 
 get_tls <- function(baseurl, tls, pass) {
-  sch <- substr(baseurl[["scheme"]], 1L, 3L)
-  if ((sch == "wss" || sch == "tls") && is.null(tls)) {
+  sch <- baseurl[["scheme"]]
+  if ((startsWith(sch, "wss") || startsWith(sch, "tls")) && is.null(tls)) {
     tls <- get_and_reset_env("MIRAI_TEMP_FIELD1")
     if (length(tls)) tls <- c(tls, get_and_reset_env("MIRAI_TEMP_FIELD2"))
   }

@@ -158,7 +158,7 @@ section.footnotes::before {
 
 cl &lt;- make_cluster(4)
 cl
-#&gt; &lt; miraiCluster | ID: `4` nodes: 4 active: TRUE &gt;
+#&gt; &lt; miraiCluster | ID: `0` nodes: 4 active: TRUE &gt;
 parallel::parLapply(cl, iris, mean)
 #&gt; $Sepal.Length
 #&gt; [1] 5.843333
@@ -181,7 +181,7 @@ parallel::parLapply(cl, iris, mean)
 #&gt; [1] 4
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://1af7af3881982aa3a528ee0e&quot;
+#&gt; [1] &quot;abstract://84c8107ee842139796c7f87f&quot;
 stop_cluster(cl)
 </code></pre>
 <p>Making a cluster specifying ‘url’ without ‘remote’ causes the shell commands for manual deployment of nodes to be printed to the console.</p>
@@ -189,10 +189,10 @@ stop_cluster(cl)
 #&gt; Shell commands for deployment on nodes:
 #&gt; 
 #&gt; [1]
-#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:39081',rs=c(10407,399751828,-1885737851,-1144379518,-865780453,239553952,1537886497))&quot;
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://kumamoto:42603&quot;,rs=c(10407,-2096125748,1743292253,-1955520902,-2036622925,1260071768,-1320342151))'
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e &quot;mirai::daemon('tcp://hostname:39081',rs=c(10407,1247122786,1508345779,-1660073377,1594894979,-1919945611,-1646144461))&quot;
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://kumamoto:42603&quot;,rs=c(10407,-1702861686,161023499,1803127216,-1397060724,-897111933,-129599054))'
 stop_cluster(cl)
 </code></pre>
 <h3 id="foreach-integration">Foreach Integration</h3>
@@ -209,9 +209,9 @@ m &lt;- matrix(rnorm(9), 3, 3)
 foreach(i = 1:nrow(m), .combine = rbind) %dopar%
   (m[i, ] / mean(m[i, ]))
 #&gt;                [,1]       [,2]      [,3]
-#&gt; result.1  1.1086890  3.6172602 -1.725949
-#&gt; result.2 -4.1152027  4.8586848  2.256518
-#&gt; result.3  0.8223401 -0.6849304  2.862590
+#&gt; result.1  0.3487084 -0.4731823 3.1244739
+#&gt; result.2  1.3038052  1.5895562 0.1066386
+#&gt; result.3 -0.3771049  1.5104437 1.8666612
 # simple parallel matrix multiply
 a &lt;- matrix(1:16, 4, 4)
 b &lt;- t(a)

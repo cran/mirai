@@ -189,7 +189,7 @@ r &lt;- 0
 start &lt;- Sys.time()
 m &lt;- mirai_map(1:1000, \(x) x, .promise = \(x) r &lt;&lt;- r + x)
 Sys.time() - start
-#&gt; Time difference of 0.2646537 secs
+#&gt; Time difference of 0.2506421 secs
 later::run_now()
 r
 #&gt; [1] 500500

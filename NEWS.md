@@ -1,9 +1,23 @@
+# mirai 1.2.0
+
+* `everywhere()` adds argument '.serial' to accept serialization configurations created by `serial_config()`. These allow normally non-exportable reference objects such as Arrow Tables or torch tensors to be used seamlessly across parallel processes without additional marshalling steps. Configurations apply on a per compute profile basis.
+* `serialization()` is now deprecated in favour of the above usage of `everywhere()`, and will be removed in a future version.
+* `mirai_map()` enhanced to perform multiple map over 2D lists/vectors, allowing advanced patterns such as mapping over the rows of a dataframe or matrix.
+* 'mirai_map' `[]` method gains the option `[.flat]` to collect and flatten results, avoiding coercion.
+* Collecting a 'mirai_map' no longer spuriously introduces empty names where none were present originally.
+* Faster local `daemons(dispatcher = FALSE)` and `make_cluster()` by using asynchronous launches (thanks @mtmorgan #123).
+* Local dispatcher daemons now synchronize with host, the same as non-dispatcher daemons (prevents use before all have connected).
+* Fixes rare cases of `everywhere()` not reaching all daemons when using dispatcher.
+* More efficient dispatcher startup by only loading the base package, in addition to not reading startup configurations (thanks @krlmlr).
+* Removes hard dependency on `stats` and `utils` base packages.
+* Requires `nanonext` >= 1.2.0.
+
 # mirai 1.1.1
 
-* `serialization()` function signature and return value slightly modified for clarity. Successful registration / cancellation mesasges are no longer printed to the console.
+* `serialization()` function signature and return value slightly modified for clarity. Successful registration / cancellation messages are no longer printed to the console.
 * `dispatcher()` argument 'retry' now defaults to FALSE for consistency with non-dispatcher behaviour.
-* `remote_config()` gains argument 'quote' to control whether or not to quote the daemon launch commmand, and now works with Slurm (thanks @michaelmayer2 #119).
-* Ephemeral daemons now exit as soon as permissible, eiliminating the 2s linger period.
+* `remote_config()` gains argument 'quote' to control whether or not to quote the daemon launch command, and now works with Slurm (thanks @michaelmayer2 #119).
+* Ephemeral daemons now exit as soon as permissible, eliminating the 2s linger period.
 * Requires `nanonext` >= 1.1.1.
 
 # mirai 1.1.0

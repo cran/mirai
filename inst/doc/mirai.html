@@ -157,58 +157,49 @@ section.footnotes::before {
 <li><a href="#compute-profiles">Compute Profiles</a></li>
 <li><a href="#errors-interrupts-and-timeouts">Errors, Interrupts and Timeouts</a></li>
 <li><a href="#serialization-arrow-polars-and-beyond">Serialization - Arrow, polars and beyond</a></li>
-<li><a href="#map-functions">Map Functions</a></li>
+<li><a href="#asynchronous-parallel-map">Asynchronous Parallel Map</a></li>
 </ol>
 <h3 id="example-1-compute-intensive-operations">Example 1: Compute-intensive Operations</h3>
 <p>Use case: minimise execution times by performing long-running tasks concurrently in separate processes.</p>
 <p>Multiple long computes (model fits etc.) can be performed in parallel on available computing cores.</p>
 <p>Use <code>mirai()</code> to evaluate an expression asynchronously in a separate, clean R process.</p>
-<p>A ‘mirai’ object is returned immediately.</p>
+<p>The following mimics an expensive calculation that eventually returns a random value.</p>
 <pre><code class="language-r">library(mirai)
 
-input &lt;- list(x = 2, y = 5, z = double(1e8))
+x &lt;- list(time = 2L, mean = 4)
 
-m &lt;- mirai(
-  {
-    res &lt;- rnorm(1e8, mean = mean, sd = sd)
-    max(res) - min(res)
-  },
-  mean = input$x,
-  sd = input$y
-)
+m &lt;- mirai({Sys.sleep(time); rnorm(5L, mean)}, time = x$time, mean = x$mean)
 </code></pre>
-<p>Above, all <code>name = value</code> pairs are passed through to the mirai via the <code>...</code> argument.</p>
-<p>Whilst the async operation is ongoing, attempting to access the data yields an ‘unresolved’ logical NA.</p>
+<p>The mirai expression is evaluated in another process and hence must be self-contained, not referring to variables that do not already exist there. Above, the variables <code>time</code> and <code>mean</code> are passed as part of the <code>mirai()</code> call.</p>
+<p>A ‘mirai’ object is returned immediately - creating a mirai never blocks the session.</p>
+<p>Whilst the async operation is ongoing, attempting to access a mirai’s data yields an ‘unresolved’ logical NA.</p>
 <pre><code class="language-r">m
 #&gt; &lt; mirai [] &gt;
 m$data
 #&gt; 'unresolved' logi NA
 </code></pre>
-<p>To check whether a mirai has resolved:</p>
+<p>To check whether a mirai remains unresolved (yet to complete):</p>
 <pre><code class="language-r">unresolved(m)
 #&gt; [1] TRUE
 </code></pre>
-<p>To wait for and collect the evaluated result, use the mirai’s <code>[]</code> method:</p>
+<p>To wait for and collect the return value, use the mirai’s <code>[]</code> method:</p>
 <pre><code class="language-r">m[]
-#&gt; [1] 58.47676
+#&gt; [1] 4.686698 3.649466 5.643721 5.237069 3.828488
 </code></pre>
-<p>It is not necessary to wait, as the mirai resolves automatically whenever the async operation completes, the evaluated result then available at <code>$data</code>.</p>
+<p>As a mirai represents an async operation, it is never necessary to wait for it. Other code can continue to be run. Once it completes, the return value automatically becomes available at <code>$data</code>.</p>
 <pre><code class="language-r">m
 #&gt; &lt; mirai [$data] &gt;
 m$data
-#&gt; [1] 58.47676
+#&gt; [1] 4.686698 3.649466 5.643721 5.237069 3.828488
 </code></pre>
 <p>For easy programmatic use of <code>mirai()</code>, ‘.expr’ accepts a pre-constructed language object, and also a list of named arguments passed via ‘.args’. So, the following would be equivalent to the above:</p>
-<pre><code class="language-r">expr &lt;- quote({
-  res &lt;- rnorm(1e8, mean = mean, sd = sd)
-  max(res) - min(res)
-})
+<pre><code class="language-r">expr &lt;- quote({Sys.sleep(time); rnorm(5L, mean)})
 
-args &lt;- list(mean = input$x, sd = input$y)
+args &lt;- list(time = x$time, mean = x$mean)
 
 m &lt;- mirai(.expr = expr, .args = args)
 m[]
-#&gt; [1] 58.44681
+#&gt; [1] 4.812297 4.021603 3.333087 4.998890 3.676835
 </code></pre>
 <p><a href="#table-of-contents">« Back to ToC</a></p>
 <h3 id="example-2-i-o-bound-operations">Example 2: I/O-bound Operations</h3>
@@ -280,6 +271,7 @@ for (i in 1:10) {
 <h3 id="daemons-local-persistent-processes">Daemons: Local Persistent Processes</h3>
 <p>Daemons, or persistent background processes, may be set to receive ‘mirai’ requests.</p>
 <p>This is potentially more efficient as new processes no longer need to be created on an <em>ad hoc</em> basis.</p>
+<p>Daemons inherit the default system configuration and read in the relevant ‘.Renviron’ and ‘.Rprofile’ etc. on startup. They also load the default packages. To instead only load the <code>base</code> package (which cuts out more than half of R’s startup time), the environment variable <code>R_SCRIPT_DEFAULT_PACKAGES=NULL</code> may be set prior to launching daemons.</p>
 <h4 id="with-dispatcher-default">With Dispatcher (default)</h4>
 <p>Call <code>daemons()</code> specifying the number of daemons to launch.</p>
 <pre><code class="language-r">daemons(6)
@@ -292,12 +284,12 @@ for (i in 1:10) {
 #&gt; 
 #&gt; $daemons
 #&gt;                                     i online instance assigned complete
-#&gt; abstract://97c9b9931341ea8a4b70b6c8 1      1        1        0        0
-#&gt; abstract://5e216a9efcd8d5a15e5eb4a9 2      1        1        0        0
-#&gt; abstract://3d01bf6f661fb4382a6683d6 3      1        1        0        0
-#&gt; abstract://c91ef6028dfc652329f4c159 4      1        1        0        0
-#&gt; abstract://f56375e4bc132cad42a40a01 5      1        1        0        0
-#&gt; abstract://21f4692550e10ab4e2f233b4 6      1        1        0        0
+#&gt; abstract://a0b81e5334b04e1434e37552 1      1        1        0        0
+#&gt; abstract://8ff80f924503294749199213 2      1        1        0        0
+#&gt; abstract://b082aab5aad836d568dac23a 3      1        1        0        0
+#&gt; abstract://6ff7d4056fb2d0d447fcad00 4      1        1        0        0
+#&gt; abstract://67005db15f4748b788093372 5      1        1        0        0
+#&gt; abstract://3a1ba8fb052d8544585e7c0b 6      1        1        0        0
 </code></pre>
 <p>The default <code>dispatcher = TRUE</code> creates a <code>dispatcher()</code> background process that connects to individual daemon processes on the local machine. This ensures that tasks are dispatched efficiently on a first-in first-out (FIFO) basis to daemons for processing. Tasks are queued at the dispatcher and sent to a daemon as soon as it can accept the task for immediate execution.</p>
 <p>Dispatcher uses synchronisation primitives from <a href="https://doi.org/10.5281/zenodo.7903429"><code>nanonext</code></a>, waiting upon rather than polling for tasks, which is efficient both in terms of consuming no resources while waiting, and also being fully synchronised with events (having no latency).</p>
@@ -316,7 +308,7 @@ for (i in 1:10) {
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://df872fae5724c6e97d38f77e&quot;
+#&gt; [1] &quot;abstract://1561773b749829cf1e118973&quot;
 </code></pre>
 <p>This implementation sends tasks immediately, and ensures that tasks are evenly-distributed amongst daemons. This means that optimal scheduling is not guaranteed as the duration of tasks cannot be known <em>a priori</em>. As an example, tasks could be queued at a daemon behind a long-running task, whilst other daemons are idle having already completed their tasks.</p>
 <p>The advantage of this approach is that it is low-level and does not require an additional dispatcher process. It is well-suited to working with similar-length tasks, or where the number of concurrent tasks typically does not exceed available daemons.</p>
@@ -333,11 +325,11 @@ everywhere(con &lt;&lt;- dbConnect(RSQLite::SQLite(), file), file = file)
 m[]
 #&gt; [1] &quot;Formal class 'SQLiteConnection' [package \&quot;RSQLite\&quot;] with 8 slots&quot; 
 #&gt; [2] &quot;  ..@ ptr                :&lt;externalptr&gt; &quot;                           
-#&gt; [3] &quot;  ..@ dbname             : chr \&quot;/tmp/RtmpD0gU3W/file5bbd58866397\&quot;&quot;
+#&gt; [3] &quot;  ..@ dbname             : chr \&quot;/tmp/RtmpKgiYbm/file6ecd76c526ac\&quot;&quot;
 #&gt; [4] &quot;  ..@ loadable.extensions: logi TRUE&quot;                               
 #&gt; [5] &quot;  ..@ flags              : int 70&quot;                                  
 #&gt; [6] &quot;  ..@ vfs                : chr \&quot;\&quot;&quot;                                
-#&gt; [7] &quot;  ..@ ref                :&lt;environment: 0x5b2fe9a99b70&gt; &quot;           
+#&gt; [7] &quot;  ..@ ref                :&lt;environment: 0x5c4ae4950318&gt; &quot;           
 #&gt; [8] &quot;  ..@ bigint             : chr \&quot;integer64\&quot;&quot;                       
 #&gt; [9] &quot;  ..@ extended_types     : logi FALSE&quot;
 </code></pre>
@@ -397,7 +389,7 @@ daemons(0)
 <h4 id="connecting-to-remote-daemons-directly">Connecting to Remote Daemons Directly</h4>
 <p>By specifying <code>dispatcher = FALSE</code>, remote daemons connect directly to the host process. The host listens at a single URL, and distributes tasks to all connected daemons.</p>
 <pre><code class="language-r">daemons(url = host_url(), dispatcher = FALSE)
-#&gt; [1] &quot;tcp://hostname:42563&quot;
+#&gt; [1] &quot;tcp://hostname:40369&quot;
 </code></pre>
 <p>Note that above, calling <code>host_url()</code> without a port value uses the default of ‘0’. This is a wildcard value that will automatically cause a free ephemeral port to be assigned. The actual assigned port is provided in the return value of the call, or it may be queried at any time via <code>status()</code>.</p>
 <p>The number of daemons connecting to the host URL is not limited and network resources may be added or removed at any time, with tasks automatically distributed to all connected daemons.</p>
@@ -407,7 +399,7 @@ daemons(0)
 #&gt; [1] 0
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;tcp://hostname:42563&quot;
+#&gt; [1] &quot;tcp://hostname:40369&quot;
 </code></pre>
 <p>To reset all connections and revert to default behaviour:</p>
 <pre><code class="language-r">daemons(0)
@@ -466,10 +458,10 @@ daemons(0)
 #&gt; [1] 2
 launch_remote(1:2)
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:35767&quot;,rs=c(10407,759990225,-1325441186,330638407,523020252,-484141267,1462196234))'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:42061&quot;,rs=c(10407,65206378,-1681371421,978039496,964317737,-1891049514,1351556191))'
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:43679&quot;,rs=c(10407,-714514434,-395272110,69901107,-741022113,1467565944,-1430404455))'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:42401&quot;,rs=c(10407,-789354243,-1756126780,-884928208,-2037464012,-229484652,-49442703))'
 daemons(0)
 #&gt; [1] 0
 </code></pre>
@@ -486,37 +478,37 @@ daemons(0)
 <p>The generated self-signed certificate is available via <code>launch_remote()</code>. This function conveniently constructs the full shell command to launch a daemon, including the correctly specified ‘tls’ argument to <code>daemon()</code>.</p>
 <pre><code class="language-r">launch_remote(1)
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;wss://hostname:40215/1&quot;,tls=c(&quot;-----BEGIN CERTIFICATE-----
+#&gt; Rscript -e 'mirai::daemon(&quot;wss://hostname:45045/1&quot;,tls=c(&quot;-----BEGIN CERTIFICATE-----
 #&gt; MIIFNzCCAx+gAwIBAgIBATANBgkqhkiG9w0BAQsFADAzMREwDwYDVQQDDAhrdW1h
 #&gt; bW90bzERMA8GA1UECgwITmFub25leHQxCzAJBgNVBAYTAkpQMB4XDTAxMDEwMTAw
 #&gt; MDAwMFoXDTMwMTIzMTIzNTk1OVowMzERMA8GA1UEAwwIa3VtYW1vdG8xETAPBgNV
 #&gt; BAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDCCAiIwDQYJKoZIhvcNAQEBBQADggIP
-#&gt; ADCCAgoCggIBAKvUq1MOkbPiBfSsSMZsJChPOjHieSt7gWNGJIfh6812SLnu5LDV
-#&gt; e/2lz2uu/jF8U0ruenqT8XdgOdZm8x1enJPjWwnNVRag+iS4oynUr5kcFPf2qYr3
-#&gt; mCSA4LIfx0TeDkplUmunmqb9U7GBNLyOFKwYFNX75mBb47pZtUafz0CYx6dIn8Dy
-#&gt; yxgVIdy7rk1GcPfMVJwNjSKmXTvHXjr64mN2AhkekqyGLJCJDxw6cZdlGpi+FWdx
-#&gt; 7vYhEDanfhAJ/kjgJ0A/Nc5WR2Gj2SqXZLRhPz7i6mb1/zdq+MD+2Xyi1s3xXOP1
-#&gt; s4WwVXkbHzIAR0TpoFfJj8Djosy5PM2E0DiLd36wbGluXnGK8jBLtW6JtHV8equP
-#&gt; bZDdRtY/2dfcEvpnqjPY6ISS7cvy7GU7Zud8+MktFMw/vbGOfIH6a9WlEFs0JOeZ
-#&gt; tN0RU19UU7Ysl7zfrRmipEYHsyPnAbrvUS9u6nN3F8qtxOOjiFzMwWaT2cSRaZcR
-#&gt; V9FS5c+ucfcBNwNIDCJvb+PASwajjm3YKNNO5Y+gmbAj6Odwnf2MBRChgdKRvii7
-#&gt; W9VY1r7PY53o/5DHf7jDzjITaBlFbjP74q4x+JvatYm7aN69+AnP+WE+ByA1vUJf
-#&gt; mvkKNQ3t5wQhcYWm5OB5bOk5/oyGZyRK944uENbXi/5Q0mtfR+GatAaJAgMBAAGj
-#&gt; VjBUMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFK8Sq6mw5G+3uG6mXiXh
-#&gt; TCIF/2VAMB8GA1UdIwQYMBaAFK8Sq6mw5G+3uG6mXiXhTCIF/2VAMA0GCSqGSIb3
-#&gt; DQEBCwUAA4ICAQBuhUUoRi7mlVoZW/aApkPi1kiocRz68Cz4+Uip/4ZcOd1+NKmm
-#&gt; HJmFwvWueAZcrfDrWpCWCADB7sh4pWkwqbwQQ7kYmUdRpCGkM6LceYmQk+f1AMQI
-#&gt; AGBTUKaTG2gErQl8E+98iQuCyxce48GT/ETXDmEMOvpyYuKxn+EkFrFD5db4i61a
-#&gt; DlFmHMH9JnHhxy+E+AN3P3BxQZBbmllUQl7pT1pz00IiSGcrf5imAkM0Rhk4KMcF
-#&gt; v1iTcz7nro6oKGDfZk/WNUEbdthnm4we41IJLFKavLOBoBY7X0WvtNQTymGKBUWY
-#&gt; y+2CITzgPxcqS1vz3Uf1EIrE70FsBNy4Bzvce88cmOf4Z44ixPNvhCRLwlCP1GuP
-#&gt; utnEoSB+PUIapnDdnsYOYeuZOIHDHJ0fdDalHb7alXRLfjw/mO2H2TQ406eveWRo
-#&gt; oLF51Uej78lZEn9f0gpgOb9r/WdCK4D+Qrw2ONisaZEx7ILfLSOCLdQbbFcIhf0f
-#&gt; n802jHg+TrEQDiJWNQC6qkdR8+GNdIlqx3zlfwH+FgaoaJyqAmgBB/qr5eiYinRT
-#&gt; vvVtY5dn8/1VTvI6g/nRzK2pqf1wxKJWTQjGOcThYb8RJ7EBLMvQHtJmbuQGZPHf
-#&gt; DDF8ZqYxCffiXjH5UQ3dGnrBkVBKnhFJ7vgrfU81W2sR4uNaRgymPhoF/g==
+#&gt; ADCCAgoCggIBANSOJw8VRLIH4khckb+sTb6ZpEPffP3eshk618DYLmxeDPd+i657
+#&gt; 6YVVCkeqNcOFs2ECnn6pCpBSQRQ2ESB5Q51/ivBpGuOUndtYY+LHL3Q5hQGNfPGm
+#&gt; Gt3bvexeoEt6odqzujufVLzWRXG+5x6ZT0YA+rgQJFElnD3M7exCPOocryid3coC
+#&gt; XWtqvrdjAg9cuND3BwlqMEAS0+xq8UQnJ7Bp3/Tj0eefz2afv+NI1WvWJPcU7/ei
+#&gt; yh1sDsdEGdo3RDtRAxTcYN8/thAecWCJ5cHsIn5LpGZJtOcwtnpseZR++imu6EJJ
+#&gt; mxxwyJzmK45MjuR7dg/Oh7bohAZZHkA//pdJ8X9C7FY/d60XRVI4q6U/NhKwEZJu
+#&gt; aAPWwMwEk/3JEsWf9tR8LN0CvA1nL4mdtJOjQAJqmPqtULF6rkEkTtIDbKhUriGz
+#&gt; zW5jf3v2MdQnXrLEHMwobuQJ03RbcuMeglKeSoMKeqE3nbBR47BvZIEkc38I5X9o
+#&gt; 9cPDkVZ8ufIT63fjjv2/6DAb7x1SbbVXuj/78zvAzm7SnN44siBqQG45wwiJWRuQ
+#&gt; jbnbME3CCVVagVX/7EASxw9npfJ1K8xoJHtx3QNuu9dbTCwL51MrAkrEOtCKmR/Y
+#&gt; 9wRlv5UaimZ8fvkBGR5I+yLwh9A9MjCJLQ3WjaUHSkSOdB//lSdt8oplAgMBAAGj
+#&gt; VjBUMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFB8Aqw5F7Jcln6PzU9ZV
+#&gt; Aiw5HiSCMB8GA1UdIwQYMBaAFB8Aqw5F7Jcln6PzU9ZVAiw5HiSCMA0GCSqGSIb3
+#&gt; DQEBCwUAA4ICAQAPgcjF428G/AzD4H9lmAzKLRIj+4m9s9JwX3fvXc8GjGFQp0ej
+#&gt; gtw+CDAls7EgrF1vB2Hgx2BeqdOK2oW2JBvTWqubMxkGkgjs7frF/ANhTG45pvcd
+#&gt; gY525bKbSYpL4P4wb0C31WoA0832HpMduJztjW/qFBsknOvqpZunf6mywvr1lgtL
+#&gt; lI2Vt0KtqqgAGvwRrhzuiJ5gQbzX4D244OKAU5CWq3F9ER63nL9/Fe9D4LbwmHYd
+#&gt; Y7a021gQGyiXoqj1FLp9sq11HxWgL6oAVfklHF8RI01BUiqSKRJ05y1p2pIJAgH6
+#&gt; XkrM86SGLYoxQQ/zoAcek1aPRWMYGYLOng+FejvjVbunaazq9+evzN8bZEuM8fTH
+#&gt; JCyg6omOF6gS+Dkvub8QLZUFOA43pJ1GWuSwcEadX4HR7mZ1Gog8a2jQ8UnTHg6m
+#&gt; 0K+GIP2SvwcMcSX/4t0zUpwHBm4+UD66wMCS7RDDt0fExTALyDSMA+80OmDRDott
+#&gt; 6v9YLQ4ILm8TZvsLAn+hSR32MzMbMkPh19sG+thBAwbYRByTvX86Y1m+o6biVu+n
+#&gt; alJeEYJNSxVBCG6HoMOFsqIItjyVdGNu5YtRcxOL1cCDXtz+9i/WJb3HRgoQtFCu
+#&gt; jQem+uQorPXNjESw5WjLg4UPLRS9d4WGQo9Sa4xPyOPPB4Q8CZ6OeIdgmw==
 #&gt; -----END CERTIFICATE-----
-#&gt; &quot;,&quot;&quot;),rs=c(10407,1366533281,-1114111506,-1933532777,537727212,1698597117,-922383462))'
+#&gt; &quot;,&quot;&quot;),rs=c(10407,526850812,2095802317,1687455786,-1643828317,-117557112,-2063979287))'
 </code></pre>
 <p>The printed value may be deployed directly on a remote machine.</p>
 <p><a href="#table-of-contents">« Back to ToC</a></p>
@@ -625,15 +617,16 @@ m &lt;- mirai(list(a = head(x), b = &quot;some text&quot;), x = x)
 m[]
 #&gt; 'miraiError' chr Error: Invalid &lt;Table&gt;, external pointer to null
 </code></pre>
-<p>However it is possible to register custom serialization and unserialization functions that hook into R’s native serialization mechanism for reference objects (‘refhooks’).</p>
-<p><code>serialization()</code> registers these for the rest of the R session, or until cancelled or new functions are registered.</p>
-<pre><code class="language-r">serialization(
-  list(
-    arrow::write_to_raw,
-    function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)
-  ),
-  class = &quot;ArrowTabular&quot;
+<p>However, <code>serial_config()</code> can be used to create custom serialization configurations, specifying functions that hook into R’s native serialization mechanism for reference objects (‘refhooks’). This configuration can then be specified as part of an <code>everywhere()</code> call via its ‘.serial’ argument.</p>
+<pre><code class="language-r">cfg &lt;- serial_config(
+  class = &quot;ArrowTabular&quot;,
+  sfunc = arrow::write_to_raw,
+  ufunc = function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)
 )
+
+daemons(2)
+#&gt; [1] 2
+everywhere(library(arrow), .serial = cfg)
 
 m &lt;- mirai(list(a = head(x), b = &quot;some text&quot;), x = x)
 m[]
@@ -652,13 +645,14 @@ m[]
 #&gt; [1] &quot;some text&quot;
 </code></pre>
 <p>It can be seen that this time, the arrow table is seamlessly handled in the ‘mirai’ process. This is the case even when the object is deeply nested inside lists or other structures.</p>
-<p>To change registered serialization functions, just call <code>serialization()</code> again supplying the new functions. As an example, we can switch to using <a href="https://pola-rs.github.io/r-polars/"><code>polars</code></a>, a ‘lightning fast’ dataframe library written in Rust (requires <code>polars</code> &gt;= 0.16.4).</p>
-<pre><code class="language-r">serialization(
-  list(
-    function(x) polars::as_polars_df(x)$to_raw_ipc(),
-    polars::pl$read_ipc
-  ),
-  class = &quot;RPolarsDataFrame&quot;
+<p>To change registered serialization functions, just call <code>everywhere()</code> again supplying the new functions. As an example, we can switch to using <a href="https://pola-rs.github.io/r-polars/"><code>polars</code></a>, a ‘lightning fast’ dataframe library written in Rust (requires <code>polars</code> &gt;= 0.16.4).</p>
+<pre><code class="language-r">everywhere(
+  {},
+  .serial = serial_config(
+    class = &quot;RPolarsDataFrame&quot;,
+    sfunc = function(x) polars::as_polars_df(x)$to_raw_ipc(),
+    ufunc = polars::pl$read_ipc
+  )
 )
 
 x &lt;- polars::as_polars_df(iris)
@@ -683,8 +677,8 @@ m[]
 #&gt; $b
 #&gt; [1] &quot;some text&quot;
 </code></pre>
-<p>To cancel serialization functions entirely:</p>
-<pre><code class="language-r">serialization(NULL)
+<p>To cancel serialization functions entirely, supply an empty list to the ‘.serial’ argument of <code>everywhere()</code>:</p>
+<pre><code class="language-r">everywhere({}, .serial = list())
 
 daemons(0)
 #&gt; [1] 0
@@ -692,9 +686,9 @@ daemons(0)
 <p>The ‘vec’ argument to <code>serialization()</code> may be specified as <code>TRUE</code> if the serialization functions are vectorized and take lists of objects, as is the case for <a href="https://mlverse.github.io/safetensors/"><code>safetensors</code></a>, used for serialization in <a href="https://torch.mlverse.org/"><code>torch</code></a>.</p>
 <p>Please refer to the <a href="https://shikokuchuo.net/mirai/articles/torch.html">torch vignette</a> for further examples.</p>
 <p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="map-functions">Map Functions</h3>
+<h3 id="asynchronous-parallel-map">Asynchronous Parallel Map</h3>
 <p><code>mirai_map()</code> performs asynchronous parallel/distributed map using <code>mirai</code>.</p>
-<p>This function is analogous to <code>purrr:map()</code>, but returns a ‘mirai_map’ object.</p>
+<p>This function is similar to <code>purrr::map()</code>, but returns a ‘mirai_map’ object. It is also more advanced as it allows multiple map over 2D lists/vectors - for example mapping over the rows of a datafram or matrix.</p>
 <p>The results of a mirai_map <code>x</code> may be collected using <code>x[]</code>. This waits for all asynchronous operations to complete if still in progress.</p>
 <p>Key advantages of <code>mirai_map()</code>:</p>
 <ol>
@@ -711,10 +705,10 @@ daemons(4)
 vec &lt;- c(1, 1, 4, 4, 1, 1, 1, 1)
 system.time(mirai_map(vec, Sys.sleep)[])
 #&gt;    user  system elapsed 
-#&gt;   0.004   0.001   4.008
+#&gt;   0.005   0.002   4.006
 system.time(parLapply(cl, vec, Sys.sleep))
 #&gt;    user  system elapsed 
-#&gt;   0.009   0.005   8.010
+#&gt;   0.010   0.000   8.012
 </code></pre>
 <p><code>.args</code> is used to specify further constant arguments to <code>.f</code> - the ‘mean’ and ‘sd’ in the example below:</p>
 <pre><code class="language-r">with(
@@ -722,13 +716,13 @@ system.time(parLapply(cl, vec, Sys.sleep))
   mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
 )
 #&gt; [[1]]
-#&gt; [1] 21.02448
+#&gt; [1] 18.72358
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] 19.33405 20.56202
+#&gt; [1] 21.81064 20.25435
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] 19.53189 19.11855 21.52990
+#&gt; [1] 20.00686 19.66549 18.66953
 </code></pre>
 <p>Use <code>...</code> to further specify objects referenced but not defined in <code>.f</code> - the ‘do’ in the anonymous function below:</p>
 <pre><code class="language-r">ml &lt;- mirai_map(
@@ -736,43 +730,37 @@ system.time(parLapply(cl, vec, Sys.sleep))
   function(x) do(x, as.logical(x %% 2)),
   do = nanonext::random
 )
-#&gt; Warning in mirai_map(c(a = 1, b = 2, c = 3), function(x) do(x, as.logical(x%%2)), : launching one local daemon as none
-#&gt; previously set
+#&gt; Warning: mirai_map(): launching one local daemon as none previously set
 ml
-#&gt; &lt; mirai map [1/3] &gt;
+#&gt; &lt; mirai map [3/3] &gt;
 ml[]
 #&gt; $a
-#&gt; [1] &quot;1c&quot;
+#&gt; [1] &quot;e0&quot;
 #&gt; 
 #&gt; $b
-#&gt; [1] d4 c2
+#&gt; [1] 84 de
 #&gt; 
 #&gt; $c
-#&gt; [1] &quot;1ab0a6&quot;
+#&gt; [1] &quot;4d73ce&quot;
 </code></pre>
 <p>Use of <code>mirai_map()</code> assumes that <code>daemons()</code> have previously been set. If not then one (non-dispatcher) daemon is set to allow the function to proceed. This ensures safe behaviour, but is unlikely to be optimal, so please ensure daemons are set beforehand.</p>
-<p>When collecting the results, optionally specify <code>.progress</code> or <code>.stop</code> to <code>[]</code>:</p>
+<p>When collecting the results, optionally specify <code>.flat</code>, <code>.progress</code> or <code>.stop</code> to <code>[]</code>:</p>
 <ul>
+<li><code>x[.flat]</code> collects and flattens the results, checking that they are of the same type to avoid coercion.</li>
 <li><code>x[.progress]</code> collects results whilst showing a simple text progress indicator.</li>
-<li><code>x[.stop]</code> collects the results with early stopping, which stops at the first failure and aborts all remaining in-progress computations.</li>
+<li><code>x[.stop]</code> collects the results applying early stopping, which stops at the first failure and cancels remaining computations (note: computations already in progress continue to completion, but their results are not collected).</li>
 </ul>
+<p>Combinations of the above may be supplied in the fashion of <code>x[c(.stop, .progress)]</code>.</p>
 <pre><code class="language-r">tryCatch(
-  mirai_map(list(a = 1, b = &quot;a&quot;, c = 3), sum)[.stop],
+  mirai_map(list(list(1, &quot;a&quot;, 3), 3:1), sum)[.stop],
   error = identity
 )
-#&gt; &lt;simpleError: Error in .Primitive(&quot;sum&quot;)(&quot;a&quot;): invalid 'type' (character) of argument&gt;
+#&gt; &lt;simpleError: Error in .Primitive(&quot;sum&quot;)(&quot;a&quot;, 2): invalid 'type' (character) of argument&gt;
 
 with(
   daemons(4, dispatcher = FALSE),
-  mirai_map(c(0.1, 0.2, 0.3), Sys.sleep)[.progress]
+  mirai_map(c(0.1, 0.2, 0.3), Sys.sleep)[c(.progress, .flat)]
 )
-#&gt; [[1]]
-#&gt; NULL
-#&gt; 
-#&gt; [[2]]
-#&gt; NULL
-#&gt; 
-#&gt; [[3]]
 #&gt; NULL
 
 daemons(0)

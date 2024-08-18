@@ -16,12 +16,16 @@
 
 #' mirai: Minimalist Async Evaluation Framework for R
 #'
-#' High-performance parallel code execution and distributed computing. Designed
-#'     for simplicity, a 'mirai' evaluates an R expression asynchronously, on
-#'     local or network resources, resolving automatically upon completion.
-#'     Modern networking and concurrency built on 'nanonext' and 'NNG' (Nanomsg
-#'     Next Gen) ensures reliable and efficient scheduling, over fast
-#'     inter-process communications or TCP/IP secured by TLS.
+#' Designed for simplicity, a 'mirai' evaluates an R expression asynchronously
+#'     in a parallel process, locally or distributed over the network, with the
+#'     result automatically available upon completion. Modern networking and
+#'     concurrency built on 'nanonext' and 'NNG' (Nanomsg Next Gen) ensures
+#'     reliable and efficient scheduling, over fast inter-process communications
+#'     or TCP/IP secured by TLS. Advantages include being inherently queued thus
+#'     handling many more tasks than available processes, no storage on the file
+#'     system, support for otherwise non-exportable reference objects, an
+#'     event-driven promises implementation, and built-in asynchronous parallel
+#'     map.
 #'
 #' @section Notes:
 #'
@@ -42,13 +46,11 @@
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
-#' @importFrom nanonext collect_aio collect_aio_ call_aio call_aio_ .context cv
-#'     cv_value dial is_error_value listen lock mclock msleep next_config
+#' @importFrom nanonext .advance collect_aio collect_aio_ call_aio call_aio_
+#'     .context cv cv_value dial is_error_value listen lock .mark mclock msleep
 #'     nng_error opt opt<- parse_url pipe_notify random reap recv recv_aio
-#'     request send set_promise_context socket stat stop_aio tls_config
-#'     unresolved .unresolved until wait write_cert
-#' @importFrom stats rexp
-#' @importFrom utils .DollarNames
+#'     request send serial_config set_promise_context socket stat stop_aio
+#'     tls_config unresolved .unresolved until wait write_cert
 #'
 "_PACKAGE"
 
@@ -85,11 +87,10 @@
 ._ <- list2env(
   list(
     arglen = "'args' and/or 'url' must be of length 1 or the same length",
-    character_class = "'class' must be a character string",
     cluster_inactive = "cluster is no longer active",
     correct_context = "'host' must be specified if not using directly in a function argument",
-    daemons_unset = "a numeric value for 'url' requires daemons to be set",
-    dot_required = "'.' must be an element of the character vector(s) supplied to 'args'",
+    daemons_unset = "launch_*(): a numeric value for 'url' requires daemons to be set",
+    dot_required = "remote_config(): '.' must be an element of the character vector(s) supplied to 'args'",
     missing_expression = "missing expression, perhaps wrap in {}?",
     missing_url = "at least one URL must be supplied for 'url' or 'n' must be at least 1",
     named_args = "all '...' arguments must be named, unless supplying an environment",
@@ -97,13 +98,12 @@
     n_zero = "the number of daemons must be zero or greater",
     numeric_n = "'n' must be numeric, did you mean to provide 'url'?",
     register_cluster = "this function requires a more recent version of R",
-    requires_daemons = "launching one local daemon as none previously set",
-    requires_local = "SSH tunnelling requires 'url' hostname to be '127.0.0.1' or 'localhost'",
-    serial_invalid = "'fns' must be a list of 2 functions or NULL",
+    requires_daemons = "mirai_map(): launching one local daemon as none previously set",
+    requires_local = "ssh_config(): SSH tunnelling requires 'url' hostname to be '127.0.0.1' or 'localhost'",
     single_url = "only one 'url' should be specified",
     sync_timeout = "initial sync with dispatcher/daemon timed out after 10s",
-    url_spec = "numeric value for 'url' is out of bounds",
-    wrong_dots = "'...' arguments should only be of integer, numeric or logical type"
+    url_spec = "launch_*(): numeric value for 'url' is out of bounds",
+    wrong_dots = "daemons(): '...' arguments should only be of integer, numeric or logical type"
   ),
   hash = TRUE
 )

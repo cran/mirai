@@ -7,13 +7,15 @@
 mirai_map(.x, .f, ..., .args = list(), .promise = NULL, .compute = "default")
 }
 \arguments{
-\item{.x}{a list or atomic vector.}
+\item{.x}{a list or atomic vector. If a 2D list (i.e. list of lists/vectors
+of the same length), multiple map is performed over a slice of the list.
+If a matrix, multiple map is performed over the rows of the matrix.}
 
-\item{.f}{a function to be applied to each element of \code{.x}.}
+\item{.f}{a function to be applied to each element of \code{.x}, or across
+all sub-elements of \code{.x} as the case may be.}
 
 \item{...}{(optional) named arguments (name = value pairs) specifying objects
-referenced, but not defined, in \code{.f}, or an environment containing
-such objects.}
+referenced, but not defined, in \code{.f}.}
 
 \item{.args}{(optional) further constant arguments to \code{.f}, provided as
 a list.}
@@ -32,21 +34,22 @@ to use (each compute profile has its own independent set of daemons).}
 A \sQuote{mirai_map} (list of \sQuote{mirai} objects).
 }
 \description{
-Asynchronous parallel / distributed map of a function over a list or vector
-    using \pkg{mirai}, with optional \pkg{promises} integration.
+Asynchronous parallel map of a function over a list or vector using
+    \pkg{mirai}, with optional \pkg{promises} integration. Performs multiple
+    map over 2D lists/vectors, allowing advanced patterns such as map over
+    the rows of a dataframe or matrix.
 }
 \details{
 Sends each application of function \code{.f} on an element of
-    \code{.x} for computation in a separate \code{\link{mirai}} call.
+    \code{.x} (or each application of \code{.f} on a slice of \code{.x}) for
+    computation in a separate \code{\link{mirai}} call.
 
     This simple and transparent behaviour is designed to make full use of
     \pkg{mirai} scheduling to minimise overall execution time.
 
     Facilitates recovery from partial failure by returning all
     \sQuote{miraiError} / \sQuote{errorValue} as the case may be, thus
-    allowing only the failures to be re-run. If using dispatcher,
-    \sQuote{retry} should be specified as FALSE to ensure crashes are
-    returned as errors.
+    allowing only the failures to be re-run.
 
     Note: requires daemons to have previously been set. If not, then one
     local daemon is set before the function propceeds.
@@ -54,18 +57,25 @@ Sends each application of function \code{.f} on an element of
 \section{Results}{
 
 
-    \code{x[]} collects the results of a mirai_map \code{x}. This will wait
-    for all asynchronous operations to complete if still in progress,
-    blocking but user-interruptible.
+    \code{x[]} collects the results of a \sQuote{mirai_map} \code{x} and
+    returns a list. This will wait for all asynchronous operations to
+    complete if still in progress, blocking but user-interruptible.
 
-    \code{x[.progress]} collects the results whilst showing a text progress
+    \code{x[.flat]} collects and flattens map results to a vector, checking
+    that they are of the same type to avoid coercion. Note: errors if an
+    \sQuote{errorValue} has been returned or results are of differing type.
+
+    \code{x[.progress]} collects map results whilst showing a text progress
     indicator.
 
-    \code{x[.stop]} collects the results applying early stopping, which stops
-    at the first failure and aborts all remaining in-progress operations.
+    \code{x[.stop]} collects map results applying early stopping, which stops
+    at the first failure and cancels remaining operations. Note: operations
+    already in progress continue to completion, although their results are
+    not collected.
 
-    \code{x[c(.stop, .progress)]} combines early stopping with a progress
-    indicator.
+    The options above may be combined in a vector, for example: \cr
+    \code{x[c(.stop, .progress)]} applies early stopping together with a
+    progress indicator.
 }
 
 \examples{
@@ -74,20 +84,41 @@ if (interactive()) {
 
 daemons(4, dispatcher = FALSE)
 
-res <- mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
-res
+# map with constant args specified via '.args'
+mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
 
+# flatmap with function definition passed via '...'
+mirai_map(1:3, function(x) func(1L, x, x + 1L), func = stats::runif)[.flat]
+
+# sum slices of a list of vectors
+(listvec <- list(1:3, c(4, 3, 2)))
+mirai_map(listvec, sum)[.flat]
+
+# sum rows of a matrix
+(mat <- matrix(1:4, nrow = 2L))
+mirai_map(mat, sum)[.flat]
+
+# map over rows of a dataframe
+df <- data.frame(a = c("Aa", "Bb"), b = c(1L, 4L))
+mirai_map(df, function(...) sprintf("\%s: \%d", ...))[.flat]
+
+# indexed map over a vector
+v <- c("egg", "got", "ten", "nap", "pie")
+mirai_map(list(1:length(v), v), sprintf, .args = list(fmt = "\%d_\%s"))[.flat]
+
+# return a 'mirai_map' object, check for resolution, collect later
 mp <- mirai_map(
   c(a = 2, b = 3, c = 4),
-  function(x) do(x, as.logical(x \%\% 2)),
-  do = nanonext::random
+  function(x, y) do(x, as.logical(x \%\% y)),
+  do = nanonext::random,
+  .args = list(y = 2)
 )
 unresolved(mp)
 mp
 mp[]
 unresolved(mp)
 
-# progress indicator counts up to 4 seconds
+# progress indicator counts up from 0 to 4 seconds
 res <- mirai_map(1:4, Sys.sleep)[.progress]
 
 daemons(0)
@@ -95,7 +126,7 @@ daemons(0)
 # generates warning as daemons not set
 # stops early when second element returns an error
 tryCatch(
-  mirai_map(list(a = 1, b = "a", c = 3), sum)[.stop],
+  mirai_map(list(list(1, "a", 3), 3:1), sum)[.stop],
   error = identity
 )
 

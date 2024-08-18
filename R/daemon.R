@@ -115,6 +115,7 @@ daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
   cv <- cv()
   sock <- socket(protocol = "rep")
   on.exit(reap(sock))
+  `[[<-`(., "sock", sock)
   autoexit && pipe_notify(sock, cv = cv, remove = TRUE, flag = as.integer(autoexit))
   if (length(tls)) tls <- tls_config(client = tls)
   dial_and_sync_socket(sock = sock, url = url, asyncdial = !autoexit, tls = tls)
@@ -153,14 +154,14 @@ daemon <- function(url, autoexit = TRUE, cleanup = TRUE, output = FALSE,
     count <- count + 1L
 
     (count >= maxtasks || count > timerstart && mclock() - start >= walltime) && {
-      next_config(mark = TRUE)
-      send(ctx, data = data, mode = 3L, block = TRUE)
+      .mark()
+      send(ctx, data = data, mode = 1L, block = TRUE)
       aio <- recv_aio(ctx, mode = 8L, cv = cv)
       wait(cv)
       break
     }
 
-    send(ctx, data = data, mode = 3L, block = TRUE)
+    send(ctx, data = data, mode = 1L, block = TRUE)
     perform_cleanup(cleanup)
     if (count <= timerstart) start <- mclock()
 
@@ -231,5 +232,5 @@ perform_cleanup <- function(cleanup) {
   if (cleanup[4L]) gc(verbose = FALSE)
 }
 
+register <- function(x) `opt<-`(.[["sock"]], "serial", x)
 snapshot <- function() `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", names(.GlobalEnv))
-block <- function() msleep(500L)

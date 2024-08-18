@@ -162,31 +162,38 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 
   expr <- substitute(.expr)
   globals <- list(...)
-  glen <- length(globals)
-  if (glen) {
+  length(globals) && {
     gn <- names(globals)
     if (is.null(gn)) {
-      glen == 1L && is.environment(globals[[1L]]) || stop(._[["named_args"]])
+      is.environment(globals[[1L]]) || stop(._[["named_args"]])
       globals <- as.list.environment(globals[[1L]])
     }
     all(nzchar(gn)) || stop(._[["named_args"]])
   }
   arglist <- list(
     ._mirai_globals_. = globals,
-    .expr = if (is.symbol(expr) && exists(expr, where = parent.frame()) && is.language(.expr)) .expr else expr
+    .expr = if (is.symbol(expr) && exists(expr, parent.frame()) && is.language(.expr)) .expr else expr
   )
   if (length(.args))
-    arglist <- c(if (is.environment(.args)) as.list.environment(.args) else .args, arglist)
+    arglist <- c(
+      if (is.environment(.args)) as.list.environment(.args) else .args,
+      arglist
+    )
   data <- list2env(arglist, envir = NULL, parent = .GlobalEnv)
 
   envir <- ..[[.compute]]
   if (is.null(envir)) {
     sock <- ephemeral_daemon(local_url())
-    aio <- request(.context(sock), data = data, send_mode = 1L, recv_mode = 1L, timeout = .timeout, cv = NA)
+    aio <- request(
+      .context(sock), data = data, send_mode = 1L, recv_mode = 1L,
+      timeout = .timeout, cv = NA
+    )
     `attr<-`(.subset2(aio, "aio"), "sock", sock)
   } else {
-    aio <- request(.context(envir[["sock"]]), data = data, send_mode = 3L,
-                   recv_mode = 1L, timeout = .timeout, cv = envir[["cv"]])
+    aio <- request(
+      .context(envir[["sock"]]), data = data, send_mode = 1L, recv_mode = 1L,
+      timeout = .timeout, cv = envir[["cv"]]
+    )
   }
 
   aio
@@ -197,11 +204,18 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 #' Evaluate an expression \sQuote{everywhere} on all connected daemons for the
 #'     specified compute profile. Designed for performing setup operations
-#'     across daemons or exporting common data, resultant changes to the global
-#'     environment, loaded packages or options are persisted regardless of a
+#'     across daemons by loading packages, exporting common data, or registering
+#'     custom serialization functions. Resultant changes to the global
+#'     environment, loaded packages and options are persisted regardless of a
 #'     daemon's \sQuote{cleanup} setting.
 #'
 #' @inheritParams mirai
+#' @param .serial [default NULL] (optional) a configuration created by
+#'     \code{\link{serial_config}} to register serialization and unserialization
+#'     functions for normally non-exportable reference objects, such as Arrow
+#'     Tables or torch tensors. Updating with a new configuration replaces any
+#'     existing registered functions. To remove the configuration, provide an
+#'     empty list.
 #'
 #' @return Invisible NULL.
 #'
@@ -214,14 +228,18 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #' daemons(1)
 #' # export common data by a super-assignment expression:
 #' everywhere(y <<- 3)
-#' # '...' variables are assigned to the global environment:
+#' # '...' variables are assigned to the global environment
+#' # '.expr' may be specified as an empty {} in such cases:
 #' everywhere({}, a = 1, b = 2)
 #' m <- mirai(a + b - y == 0L)
 #' call_mirai(m)$data
 #' daemons(0)
 #'
+#' # loading a package on all daemons and also
+#' # registering custom serialization functions:
+#' cfg <- serial_config("cls_name", function(x) serialize(x, NULL), unserialize)
 #' daemons(1, dispatcher = FALSE)
-#' everywhere(library(parallel))
+#' everywhere(library(parallel), .serial = cfg)
 #' m <- mirai("package:parallel" %in% search())
 #' call_mirai(m)$data
 #' daemons(0)
@@ -230,7 +248,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 #' @export
 #'
-everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
+everywhere <- function(.expr, ..., .args = list(), .serial = NULL, .compute = "default") {
 
   envir <- ..[[.compute]]
 
@@ -238,18 +256,28 @@ everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
 
     expr <- substitute(.expr)
     .expr <- c(
-      as.expression(if (is.symbol(expr) && exists(expr, where = parent.frame()) && is.language(.expr)) .expr else expr),
+      as.expression(if (is.symbol(expr) && exists(expr, parent.frame()) && is.language(.expr)) .expr else expr),
       .snapshot
     )
 
+    if (is.list(.serial)) {
+      .expr <- c(.register, .expr)
+      .args <- c(.args, list(.serial = .serial))
+      `opt<-`(envir[["sock"]], "serial", .serial)
+    }
+
     if (is.null(envir[["sockc"]])) {
-      for (i in seq_len(max(stat(envir[["sock"]], "pipes"), envir[["n"]])))
-        mirai(.expr = .expr, ..., .args = .args, .compute = .compute)
+      vec <- vector(mode = "list", length = max(stat(envir[["sock"]], "pipes"), envir[["n"]]))
+      for (i in seq_along(vec))
+        vec[[i]] <- mirai(.expr = .expr, ..., .args = .args, .compute = .compute)
     } else {
       .expr <- c(.expr, .block)
-      for (i in seq_len(envir[["n"]]))
-        mirai(.expr = .expr, ..., .args = .args, .compute = .compute)
+      vec <- vector(mode = "list", length = envir[["n"]])
+      for (i in seq_along(vec))
+        vec[[i]] <- mirai(.expr = .expr, ..., .args = .args, .compute = .compute)
     }
+    `[[<-`(envir, "everywhere", vec)
+    invisible()
 
   }
 
@@ -433,29 +461,40 @@ stop_mirai <- stop_aio
 #'
 unresolved <- unresolved
 
-#' Is mirai
+#' Is mirai / mirai_map
 #'
-#' Is the object a \sQuote{mirai}.
+#' Is the object a \sQuote{mirai} or \sQuote{mirai_map}.
 #'
 #' @param x an object.
 #'
-#' @return Logical TRUE if \sQuote{x} is of class \sQuote{mirai}, FALSE
-#'     otherwise.
+#' @return Logical TRUE if \sQuote{x} is of class \sQuote{mirai} or
+#'     \sQuote{mirai_map} respectively, FALSE otherwise.
 #'
 #' @examples
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
+#' daemons(1, dispatcher = FALSE)
 #' df <- data.frame()
 #' m <- mirai(as.matrix(df), df = df)
 #' is_mirai(m)
 #' is_mirai(df)
+#'
+#' mp <- mirai_map(1:3, runif)
+#' is_mirai_map(mp)
+#' is_mirai_map(mp[])
+#' daemons(0)
 #'
 #' }
 #'
 #' @export
 #'
 is_mirai <- function(x) inherits(x, "mirai")
+
+#' @rdname is_mirai
+#' @export
+#'
+is_mirai_map <- function(x) inherits(x, "mirai_map")
 
 #' Error Validators
 #'
@@ -547,10 +586,10 @@ print.miraiInterrupt <- function(x, ...) {
 `$.miraiError` <- function(x, name)
   attr(x, name, exact = FALSE)
 
-#' @export
+#' @exportS3Method utils::.DollarNames
 #'
 .DollarNames.miraiError <- function(x, pattern = "")
-  grep(pattern, "stack.trace", value = TRUE, fixed = TRUE)
+  if (startsWith("stack.trace", pattern)) "stack.trace" else character()
 
 # internals --------------------------------------------------------------------
 
@@ -585,5 +624,6 @@ mk_mirai_error <- function(e, sc) {
 }
 
 .miraiInterrupt <- `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))
-.snapshot <- expression(mirai:::snapshot())
-.block <- expression(mirai:::block())
+.register <- expression(mirai:::register(.serial), NULL)
+.snapshot <- expression(mirai:::snapshot(), NULL)
+.block <- expression(nanonext::msleep(500L))

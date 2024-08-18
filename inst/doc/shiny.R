@@ -26,10 +26,10 @@ knitr::opts_chunk$set(
 #    })
 #  
 #    extended_task <- ExtendedTask$new(
-#      function(x, y) mirai({Sys.sleep(y); runif(x)}, environment())
+#      function(...) mirai({Sys.sleep(y); runif(x)}, ...)
 #    ) |> bind_task_button("btn")
 #  
-#    observeEvent(input$btn, extended_task$invoke(input$n, input$delay))
+#    observeEvent(input$btn, extended_task$invoke(x = input$n, y = input$delay))
 #  
 #    output$plot <- renderPlot(hist(extended_task$result()))
 #  
@@ -45,11 +45,11 @@ knitr::opts_chunk$set(
 
 ## ----shinystep2, eval=FALSE---------------------------------------------------
 #  extended_task <- ExtendedTask$new(
-#      function(x, y) mirai({Sys.sleep(y); runif(x)}, environment())
+#      function(...) mirai({Sys.sleep(y); runif(x)}, ...)
 #    ) |> bind_task_button("btn")
 
 ## ----shinystep3, eval=FALSE---------------------------------------------------
-#  observeEvent(input$btn, extended_task$invoke(input$n, input$delay))
+#  observeEvent(input$btn, extended_task$invoke(x = input$n, y = input$delay))
 
 ## ----shinystep4, eval=FALSE---------------------------------------------------
 #  output$plot <- renderPlot(hist(extended_task$result()))
@@ -95,11 +95,11 @@ knitr::opts_chunk$set(
 #      id,
 #      function(input, output, session) {
 #        extended_task <- ExtendedTask$new(
-#          function(...) mirai(run(x), ...)
+#          function(time, run) mirai(run(time), environment())
 #        ) |> bind_task_button("resample")
 #  
 #        observeEvent(input$resample,
-#                     extended_task$invoke(x = calc_time, run = run_task))
+#                     extended_task$invoke(calc_time, run_task))
 #  
 #        output$plot <- renderPlot(plot_result(extended_task$result()))
 #  
@@ -136,11 +136,11 @@ knitr::opts_chunk$set(
 
 ## ----shinystep22, eval=FALSE--------------------------------------------------
 #  extended_task <- ExtendedTask$new(
-#    function(x, run = run_task) mirai(run(x), environment())
+#    function(time, run) mirai(run(time), environment())
 #  ) |> bind_task_button("resample")
 
 ## ----shinystep23, eval=FALSE--------------------------------------------------
-#  observeEvent(input$resample, extended_task$invoke(calc_time))
+#  observeEvent(input$resample, extended_task$invoke(calc_time, run_task))
 
 ## ----shinystep24, eval=FALSE--------------------------------------------------
 #  output$plot <- renderPlot(plot_result(extended_task$result()))

@@ -6,12 +6,16 @@
 \alias{mirai-package}
 \title{mirai: Minimalist Async Evaluation Framework for R}
 \description{
-High-performance parallel code execution and distributed computing. Designed
-    for simplicity, a 'mirai' evaluates an R expression asynchronously, on
-    local or network resources, resolving automatically upon completion.
-    Modern networking and concurrency built on 'nanonext' and 'NNG' (Nanomsg
-    Next Gen) ensures reliable and efficient scheduling, over fast
-    inter-process communications or TCP/IP secured by TLS.
+Designed for simplicity, a 'mirai' evaluates an R expression asynchronously
+    in a parallel process, locally or distributed over the network, with the
+    result automatically available upon completion. Modern networking and
+    concurrency built on 'nanonext' and 'NNG' (Nanomsg Next Gen) ensures
+    reliable and efficient scheduling, over fast inter-process communications
+    or TCP/IP secured by TLS. Advantages include being inherently queued thus
+    handling many more tasks than available processes, no storage on the file
+    system, support for otherwise non-exportable reference objects, an
+    event-driven promises implementation, and built-in asynchronous parallel
+    map.
 }
 \section{Notes}{
 

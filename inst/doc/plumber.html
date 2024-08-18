@@ -146,15 +146,14 @@ section.footnotes::before {
 </div>
 <div class="body">
 <h3 id="plumber-integration">Plumber Integration</h3>
-<p><code>mirai</code> may be used as an asynchronous / distributed backend for <a href="https://www.rplumber.io/"><code>plumber</code></a> pipelines.</p>
+<p><code>mirai</code> may be used as an asynchronous backend for <a href="https://www.rplumber.io/"><code>plumber</code></a> pipelines.</p>
 <p>Example usage is provided below for different types of endpoint.</p>
 <h4 id="example-get-endpoint">Example GET Endpoint</h4>
 <p>The plumber router code is run in a daemon process itself so that it does not block the interactive process.</p>
 <p>The /echo endpoint takes a GET request, sleeps for 1 second (simulating an expensive computation) and simply returns the ‘msg’ request header together with a timestamp and the process ID of the process it is run on.</p>
 <pre><code class="language-r">library(mirai)
 
-# important to supply SIGINT so the plumber server is interrupted and exits
-# cleanly when torn down
+# supply SIGINT so the plumber server is interrupted and exits cleanly when finished
 daemons(1L, dispatcher = FALSE, autoexit = tools::SIGINT)
 #&gt; [1] 1
 
@@ -163,7 +162,7 @@ m &lt;- mirai({
   library(promises) # to provide the promise pipe
   library(mirai)
 
-  # does not use dispatcher (suitable when all requests require similar compute)
+  # more efficient not to use dispatcher if all requests are similar length
   daemons(4L, dispatcher = FALSE) # handles 4 requests simultaneously
 
   pr() |&gt;
@@ -173,9 +172,12 @@ m &lt;- mirai({
         mirai(
           {
             Sys.sleep(1L)
-            list(status = 200L, body = list(time = format(Sys.time()),
-                                            msg = msg,
-                                            pid = Sys.getpid()))
+            list(
+              status = 200L,
+              body = list(
+                time = format(Sys.time()), msg = msg, pid = Sys.getpid()
+              )
+            )
           },
           msg = req[[&quot;HEADERS&quot;]][[&quot;msg&quot;]]
         ) %...&gt;% (function(x) {
@@ -190,33 +192,37 @@ m &lt;- mirai({
 <p>The API can be queried using an async HTTP client such as <code>nanonext::ncurl_aio()</code>.</p>
 <p>Here, all 8 requests are submitted at once, but we note that that responses have differing timestamps as only 4 can be processed at any one time (limited by the number of daemons set).</p>
 <pre><code class="language-r">library(nanonext)
-res &lt;- lapply(1:8,
-              function(i) ncurl_aio(&quot;http://127.0.0.1:8985/echo&quot;,
-                                    headers = c(msg = as.character(i))))
+res &lt;- lapply(
+  1:8,
+  function(i) ncurl_aio(
+    &quot;http://127.0.0.1:8985/echo&quot;,
+    headers = c(msg = as.character(i))
+  )
+)
 collect_aio(res)
 #&gt; [[1]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:41\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[39397]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:27\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[38085]}&quot;
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:41\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[39442]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:27\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[38077]}&quot;
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:41\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[39487]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:27\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[38082]}&quot;
 #&gt; 
 #&gt; [[4]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:41\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[39532]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:27\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[38079]}&quot;
 #&gt; 
 #&gt; [[5]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:42\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[39442]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:28\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[38079]}&quot;
 #&gt; 
 #&gt; [[6]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:42\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[39532]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:28\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[38085]}&quot;
 #&gt; 
 #&gt; [[7]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:42\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[39487]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:28\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[38082]}&quot;
 #&gt; 
 #&gt; [[8]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:42\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[39397]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:28\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[38077]}&quot;
 
 daemons(0)
 #&gt; [1] 0
@@ -226,7 +232,7 @@ daemons(0)
 <p>Note that <code>req$postBody</code> should always be accessed in the router process and passed in as an argument to the ‘mirai’, as this is retrieved using a connection that is not serializable.</p>
 <pre><code class="language-r">library(mirai)
 
-# important to supply SIGINT so the plumber server is interrupted and exits cleanly when torn down
+# supply SIGINT so the plumber server is interrupted and exits cleanly when finished
 daemons(1L, dispatcher = FALSE, autoexit = tools::SIGINT)
 #&gt; [1] 1
 
@@ -235,7 +241,7 @@ m &lt;- mirai({
   library(promises) # to provide the promise pipe
   library(mirai)
 
-  # uses dispatcher (suitable for requests with differing compute lengths)
+  # uses dispatcher - suitable when requests take differing times to complete
   daemons(4L, dispatcher = TRUE) # handles 4 requests simultaneously
 
   pr() |&gt;
@@ -245,10 +251,14 @@ m &lt;- mirai({
         mirai(
           {
             Sys.sleep(1L) # simulate expensive computation
-            list(status = 200L,
-                 body = list(time = format(Sys.time()),
-                             msg = jsonlite::fromJSON(data)[[&quot;msg&quot;]],
-                             pid = Sys.getpid()))
+            list(
+              status = 200L,
+              body = list(
+                time = format(Sys.time()),
+                msg = jsonlite::fromJSON(data)[[&quot;msg&quot;]],
+                pid = Sys.getpid()
+              )
+            )
           },
           data = req$postBody
         ) %...&gt;% (function(x) {
@@ -262,34 +272,38 @@ m &lt;- mirai({
 </code></pre>
 <p>Querying the endpoint produces the same set of outputs as the previous example.</p>
 <pre><code class="language-r">library(nanonext)
-res &lt;- lapply(1:8,
-              function(i) ncurl_aio(&quot;http://127.0.0.1:8986/echo&quot;,
-                                    method = &quot;POST&quot;,
-                                    data = sprintf('{&quot;msg&quot;:&quot;%d&quot;}', i)))
+res &lt;- lapply(
+  1:8,
+  function(i) ncurl_aio(
+    &quot;http://127.0.0.1:8986/echo&quot;,
+    method = &quot;POST&quot;,
+    data = sprintf('{&quot;msg&quot;:&quot;%d&quot;}', i)
+  )
+)
 collect_aio(res)
 #&gt; [[1]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:45\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[39674]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:31\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[38347]}&quot;
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:45\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[39679]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:31\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[38349]}&quot;
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:45\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[39684]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:31\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[38355]}&quot;
 #&gt; 
 #&gt; [[4]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:45\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[39677]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:31\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[38352]}&quot;
 #&gt; 
 #&gt; [[5]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:46\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[39674]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:32\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[38347]}&quot;
 #&gt; 
 #&gt; [[6]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:46\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[39684]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:32\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[38349]}&quot;
 #&gt; 
 #&gt; [[7]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:46\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[39679]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:32\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[38355]}&quot;
 #&gt; 
 #&gt; [[8]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-06-10 10:33:46\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[39677]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-08-09 10:54:32\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[38352]}&quot;
 
 daemons(0)
 #&gt; [1] 0

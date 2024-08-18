@@ -151,26 +151,29 @@ section.footnotes::before {
 <h4 id="setup-steps">Setup Steps</h4>
 <ol>
 <li>
-<p>Register the serialization and unserialization functions as a list supplied to <code>serialization()</code>, specifying ‘class’ as ‘torch_tensor’ and ‘vec’ as TRUE.</p>
+<p>Set up dameons.</p>
 </li>
 <li>
-<p>Set up dameons - this may be done before or after setting <code>serialization()</code>.</p>
+<p>Create the serialization configuration, specifying ‘class’ as ‘torch_tensor’ and ‘vec’ as TRUE.</p>
 </li>
 <li>
-<p>Use <code>everywhere()</code> to make the <code>torch</code> package available on all daemons for convenience (optional).</p>
+<p>Use <code>everywhere()</code>, supplying the configuration to the ‘.serial’ argument, and (optionally) making the <code>torch</code> package available on all daemons for convenience.</p>
 </li>
 </ol>
 <pre><code class="language-r">library(mirai)
 library(torch)
 
-serialization(
-  fns = list(torch:::torch_serialize, torch::torch_load),
-  class = &quot;torch_tensor&quot;,
-  vec = TRUE
-)
 daemons(1)
 #&gt; [1] 1
-everywhere(library(torch))
+
+cfg &lt;- serial_config(
+  class = &quot;torch_tensor&quot;,
+  sfunc = torch:::torch_serialize,
+  ufunc = torch::torch_load,
+  vec = TRUE
+)
+
+everywhere(library(torch), .serial = cfg)
 </code></pre>
 <h4 id="example-usage">Example Usage</h4>
 <p>The below example creates a convolutional neural network using <code>torch::nn_module()</code>.</p>
@@ -197,7 +200,7 @@ m &lt;- mirai(do.call(model, params), model = model, params = params)
 m[]
 #&gt; An `nn_module` containing 1,040 parameters.
 #&gt; 
-#&gt; ── Modules ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+#&gt; ── Modules ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 #&gt; • conv1: &lt;nn_conv2d&gt; #520 parameters
 #&gt; • conv2: &lt;nn_conv2d&gt; #520 parameters
 </code></pre>
@@ -205,35 +208,35 @@ m[]
 <pre><code class="language-r">m$data$parameters$conv1.weight
 #&gt; torch_tensor
 #&gt; (1,1,.,.) = 
-#&gt;   0.0036 -0.1690 -0.0054 -0.0737  0.0405
-#&gt;  -0.1940  0.0497 -0.0239 -0.0711 -0.0887
-#&gt;   0.0222 -0.0865  0.0335  0.1846  0.0207
-#&gt;  -0.1871 -0.1136 -0.0798 -0.0665  0.1499
-#&gt;   0.1467 -0.0570  0.1022  0.0297 -0.0931
+#&gt;   0.0893  0.1619  0.0775 -0.1471 -0.0133
+#&gt;   0.0879  0.0147 -0.0174  0.1419  0.1484
+#&gt;  -0.0018  0.1977  0.1937  0.1783  0.0327
+#&gt;   0.0323 -0.0875  0.0986 -0.0839 -0.1093
+#&gt;   0.0711  0.0961 -0.1584  0.1479 -0.1896
 #&gt; 
 #&gt; (2,1,.,.) = 
-#&gt;  -0.1554  0.0485  0.1436 -0.0879  0.0130
-#&gt;  -0.0645 -0.1229 -0.1542  0.1748  0.1307
-#&gt;  -0.1204  0.1478 -0.1953  0.1549  0.1258
-#&gt;   0.0021 -0.1870 -0.1074  0.1557  0.1262
-#&gt;  -0.0639 -0.1681  0.1661  0.0434 -0.0977
+#&gt;  -0.0290 -0.1286  0.1438 -0.1308 -0.1262
+#&gt;  -0.1404 -0.0477  0.1990  0.1335  0.1378
+#&gt;   0.1169  0.1017 -0.0328 -0.0272  0.1104
+#&gt;  -0.0706  0.0792 -0.1670 -0.1186  0.0755
+#&gt;   0.1990 -0.1033 -0.1669  0.1652 -0.0643
 #&gt; 
 #&gt; (3,1,.,.) = 
-#&gt;   0.0967 -0.1134  0.0304 -0.1387  0.1591
-#&gt;  -0.1895 -0.0770  0.1698  0.0947 -0.1564
-#&gt;  -0.1388  0.1359  0.0015  0.0263 -0.0827
-#&gt;  -0.0109  0.1353  0.1361 -0.1883 -0.1535
-#&gt;   0.1822 -0.0902 -0.1004 -0.0488 -0.0424
+#&gt;  -0.0433  0.1686  0.0648  0.1092  0.1720
+#&gt;  -0.1340  0.1695  0.1466  0.1327 -0.0690
+#&gt;  -0.1999 -0.1581  0.0452 -0.0751 -0.0983
+#&gt;   0.1954 -0.0091 -0.1512  0.1844  0.0244
+#&gt;   0.1317 -0.1157 -0.0928  0.0231  0.1436
 #&gt; 
 #&gt; (4,1,.,.) = 
-#&gt;  -0.0888 -0.1550 -0.0758  0.0335  0.0973
-#&gt;   0.0543  0.1521 -0.1543  0.0261  0.1008
-#&gt;   0.1672  0.1190  0.0217 -0.0420  0.1000
-#&gt;   0.1382 -0.0775  0.0186  0.1861 -0.0804
-#&gt;   0.0449  0.1972 -0.1447  0.1425  0.1872
+#&gt;  -0.1073 -0.1389 -0.0121  0.0768  0.0314
+#&gt;   0.1249 -0.1564 -0.1910 -0.1824 -0.1843
+#&gt;   0.0146 -0.1667  0.0274  0.0109 -0.1467
+#&gt;  -0.0004  0.1380  0.1295 -0.1585 -0.0241
+#&gt;  -0.0741 -0.0961 -0.1936  0.0706 -0.0795
 #&gt; 
 #&gt; (5,1,.,.) = 
-#&gt;  -0.1344 -0.0403  0.1268  0.0706  0.0973
+#&gt;   0.0961  0.1492  0.1756 -0.0292  0.0832
 #&gt; ... [the output was truncated (use n=-1 to disable)]
 #&gt; [ CPUFloatType{20,1,5,5} ][ requires_grad = TRUE ]
 </code></pre>
