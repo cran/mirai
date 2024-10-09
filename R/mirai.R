@@ -165,38 +165,26 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
   length(globals) && {
     gn <- names(globals)
     if (is.null(gn)) {
-      is.environment(globals[[1L]]) || stop(._[["named_args"]])
+      is.environment(globals[[1L]]) || stop(._[["named_dots"]])
       globals <- as.list.environment(globals[[1L]])
     }
-    all(nzchar(gn)) || stop(._[["named_args"]])
+    all(nzchar(gn)) || stop(._[["named_dots"]])
   }
-  arglist <- list(
+  data <- list(
     ._mirai_globals_. = globals,
-    .expr = if (is.symbol(expr) && exists(expr, parent.frame()) && is.language(.expr)) .expr else expr
+    .expr = if (is.symbol(expr) && exists(as.character(expr), parent.frame()) && is.language(.expr)) .expr else expr
   )
-  if (length(.args))
-    arglist <- c(
-      if (is.environment(.args)) as.list.environment(.args) else .args,
-      arglist
-    )
-  data <- list2env(arglist, envir = NULL, parent = .GlobalEnv)
+  if (length(.args)) {
+    if (is.environment(.args))
+      .args <- as.list.environment(.args) else
+        length(names(.args)) && all(nzchar(names(.args))) || stop(._[["named_args"]])
+    data <- c(.args, data)
+  }
 
   envir <- ..[[.compute]]
-  if (is.null(envir)) {
-    sock <- ephemeral_daemon(local_url())
-    aio <- request(
-      .context(sock), data = data, send_mode = 1L, recv_mode = 1L,
-      timeout = .timeout, cv = NA
-    )
-    `attr<-`(.subset2(aio, "aio"), "sock", sock)
-  } else {
-    aio <- request(
-      .context(envir[["sock"]]), data = data, send_mode = 1L, recv_mode = 1L,
-      timeout = .timeout, cv = envir[["cv"]]
-    )
-  }
-
-  aio
+  is.null(envir) && return(ephemeral_daemon(data = data, timeout = .timeout))
+  request(.context(envir[["sock"]]), data = data, send_mode = 1L, recv_mode = 1L,
+          timeout = .timeout, cv = envir[["cv"]])
 
 }
 
@@ -217,7 +205,8 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'     existing registered functions. To remove the configuration, provide an
 #'     empty list.
 #'
-#' @return Invisible NULL.
+#' @return Invisible NULL. Will error if the specified compute profile is not
+#'     found, i.e. not yet set up.
 #'
 #' @inheritSection mirai Evaluation
 #'
@@ -238,7 +227,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #' # loading a package on all daemons and also
 #' # registering custom serialization functions:
 #' cfg <- serial_config("cls_name", function(x) serialize(x, NULL), unserialize)
-#' daemons(1, dispatcher = FALSE)
+#' daemons(1, dispatcher = "none")
 #' everywhere(library(parallel), .serial = cfg)
 #' m <- mirai("package:parallel" %in% search())
 #' call_mirai(m)$data
@@ -252,34 +241,32 @@ everywhere <- function(.expr, ..., .args = list(), .serial = NULL, .compute = "d
 
   envir <- ..[[.compute]]
 
-  if (length(envir)) {
+  is.null(envir) && stop(sprintf(._[["not_found"]], .compute))
 
-    expr <- substitute(.expr)
-    .expr <- c(
-      as.expression(if (is.symbol(expr) && exists(expr, parent.frame()) && is.language(.expr)) .expr else expr),
-      .snapshot
-    )
+  expr <- substitute(.expr)
+  .expr <- c(
+    as.expression(if (is.symbol(expr) && exists(as.character(expr), parent.frame()) && is.language(.expr)) .expr else expr),
+    .snapshot
+  )
 
-    if (is.list(.serial)) {
-      .expr <- c(.register, .expr)
-      .args <- c(.args, list(.serial = .serial))
-      `opt<-`(envir[["sock"]], "serial", .serial)
-    }
-
-    if (is.null(envir[["sockc"]])) {
-      vec <- vector(mode = "list", length = max(stat(envir[["sock"]], "pipes"), envir[["n"]]))
-      for (i in seq_along(vec))
-        vec[[i]] <- mirai(.expr = .expr, ..., .args = .args, .compute = .compute)
-    } else {
-      .expr <- c(.expr, .block)
-      vec <- vector(mode = "list", length = envir[["n"]])
-      for (i in seq_along(vec))
-        vec[[i]] <- mirai(.expr = .expr, ..., .args = .args, .compute = .compute)
-    }
-    `[[<-`(envir, "everywhere", vec)
-    invisible()
-
+  if (is.list(.serial)) {
+    .expr <- c(.register, .expr)
+    .args <- c(.args, list(.serial = .serial))
+    `opt<-`(envir[["sock"]], "serial", .serial)
   }
+
+  if (is.null(envir[["sockc"]])) {
+    vec <- vector(mode = "list", length = max(stat(envir[["sock"]], "pipes"), envir[["n"]]))
+    for (i in seq_along(vec))
+      vec[[i]] <- mirai(.expr = .expr, ..., .args = .args, .compute = .compute)
+  } else {
+    .expr <- c(.expr, .block)
+    vec <- vector(mode = "list", length = envir[["n"]])
+    for (i in seq_along(vec))
+      vec[[i]] <- mirai(.expr = .expr, ..., .args = .args, .compute = .compute)
+  }
+  `[[<-`(envir, "everywhere", vec)
+  invisible()
 
 }
 
@@ -474,7 +461,7 @@ unresolved <- unresolved
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' daemons(1, dispatcher = FALSE)
+#' daemons(1, dispatcher = "none")
 #' df <- data.frame()
 #' m <- mirai(as.matrix(df), df = df)
 #' is_mirai(m)
@@ -593,10 +580,13 @@ print.miraiInterrupt <- function(x, ...) {
 
 # internals --------------------------------------------------------------------
 
-ephemeral_daemon <- function(url) {
+ephemeral_daemon <- function(data, timeout) {
+  url <- local_url()
   sock <- req_socket(url)
-  system2(command = .command, args = c("-e", shQuote(sprintf("mirai::.daemon(\"%s\")", url))), stdout = FALSE, stderr = FALSE, wait = FALSE)
-  sock
+  system2(command = .command, args = c("-e", shQuote(sprintf("mirai:::.daemon(\"%s\")", url))), stdout = FALSE, stderr = FALSE, wait = FALSE)
+  aio <- request(.context(sock), data = data, send_mode = 1L, recv_mode = 1L, timeout = timeout, cv = NA)
+  `attr<-`(.subset2(aio, "aio"), "sock", sock)
+  aio
 }
 
 deparse_safe <- function(x) if (length(x))
@@ -611,11 +601,11 @@ mk_interrupt_error <- function() .miraiInterrupt
 
 mk_mirai_error <- function(e, sc) {
   call <- deparse_safe(.subset2(e, "call"))
-  msg <- if (is.null(call) || call == "eval(expr = ._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = NULL)")
+  msg <- if (is.null(call) || call == "eval(expr = ._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = .GlobalEnv)")
     sprintf("Error: %s", .subset2(e, "message")) else
       sprintf("Error in %s: %s", call, .subset2(e, "message"))
   cat(sprintf("%s\n", msg), file = stderr())
-  idx <- which(as.logical(lapply(sc, identical, quote(eval(expr = ._mirai_.[[".expr"]], envir = ._mirai_., enclos = NULL)))))
+  idx <- which(as.logical(lapply(sc, identical, quote(eval(expr = ._mirai_.[[".expr"]], envir = ._mirai_., enclos = .GlobalEnv)))))
   sc <- sc[(length(sc) - 1L):(idx + 1L)]
   if (sc[[1L]][[1L]] == ".handleSimpleError")
     sc <- sc[-1L]

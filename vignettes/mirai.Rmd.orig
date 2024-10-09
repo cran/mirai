@@ -2,7 +2,7 @@
 title: "mirai - Minimalist Async Evaluation Framework for R"
 vignette: >
   %\VignetteIndexEntry{mirai - Minimalist Async Evaluation Framework for R}
-  %\VignetteEngine{knitr::knitr}
+  %\VignetteEngine{litedown::vignette}
   %\VignetteEncoding{UTF-8}
 ---
 
@@ -26,6 +26,7 @@ knitr::opts_chunk$set(
 9. [Errors, Interrupts and Timeouts](#errors-interrupts-and-timeouts)
 10. [Serialization - Arrow, polars and beyond](#serialization-arrow-polars-and-beyond)
 11. [Asynchronous Parallel Map](#asynchronous-parallel-map)
+12. [Using mirai in a Package](#using-mirai-in-a-package)
 
 ### Example 1: Compute-intensive Operations
 
@@ -173,9 +174,12 @@ To view the current status, `status()` provides the number of active connections
 ```{r daemons3}
 status()
 ```
-The default `dispatcher = TRUE` creates a `dispatcher()` background process that connects to individual daemon processes on the local machine. This ensures that tasks are dispatched efficiently on a first-in first-out (FIFO) basis to daemons for processing. Tasks are queued at the dispatcher and sent to a daemon as soon as it can accept the task for immediate execution.
+The default `dispatcher = "process"` creates a `dispatcher()` background process that connects to individual daemon processes on the local machine. This ensures that tasks are dispatched efficiently on a first-in first-out (FIFO) basis to daemons for processing. Tasks are queued at the dispatcher and sent to a daemon as soon as it can accept the task for immediate execution.
 
 Dispatcher uses synchronisation primitives from [`nanonext`](https://doi.org/10.5281/zenodo.7903429), waiting upon rather than polling for tasks, which is efficient both in terms of consuming no resources while waiting, and also being fully synchronised with events (having no latency).
+
+Alternatively, specifying `dispatcher = "thread"` runs dispatcher logic on a thread, a faster and more efficient alternative to the separate background process. This is a new feature that should be considered experimental.
+
 ```{r daemons4}
 daemons(0)
 ```
@@ -183,9 +187,9 @@ Set the number of daemons to zero to reset. This reverts to the default of creat
 
 #### Without Dispatcher
 
-Alternatively, specifying `dispatcher = FALSE`, the background daemons connect directly to the host process.
+Alternatively, specifying `dispatcher = 'none`, the background daemons connect directly to the host process.
 ```{r daemonsq}
-daemons(6, dispatcher = FALSE)
+daemons(6, dispatcher = "none")
 ```
 ```{r daemonsq2, include=FALSE}
 Sys.sleep(0.5)
@@ -247,7 +251,7 @@ For options on actually launching the daemons, please see the next section.
 
 #### Connecting to Remote Daemons Through Dispatcher
 
-The default `dispatcher = TRUE` creates a background `dispatcher()` process on the local machine, which listens to a vector of URLs that remote `daemon()` processes dial in to, with each daemon having its own unique URL.
+With the default `dispatcher = "process"` or alternatively `dispatcher = "thread"`, dispatcher listens to a vector of URLs that remote `daemon()` processes dial in to, with each daemon having its own unique URL.
 
 It is recommended to use a websocket URL starting `ws://` instead of TCP in this scenario (used interchangeably with `tcp://`). A websocket URL supports a path after the port number, which can be made unique for each daemon. In this way a dispatcher can connect to an arbitrary number of daemons over a single port.
 
@@ -281,18 +285,18 @@ Closing the connection causes the dispatcher to exit automatically, and in turn 
 
 #### Connecting to Remote Daemons Directly
 
-By specifying `dispatcher = FALSE`, remote daemons connect directly to the host process. The host listens at a single URL, and distributes tasks to all connected daemons.
+By specifying `dispatcher = "none"`, remote daemons connect directly to the host process. The host listens at a single URL, and distributes tasks to all connected daemons.
 ```{r remote}
-daemons(url = host_url(), dispatcher = FALSE)
+daemons(url = host_url(), dispatcher = "none")
 ```
-Note that above, calling `host_url()` without a port value uses the default of '0'. This is a wildcard value that will automatically cause a free ephemeral port to be assigned. The actual assigned port is provided in the return value of the call, or it may be queried at any time via `status()`.
-
-The number of daemons connecting to the host URL is not limited and network resources may be added or removed at any time, with tasks automatically distributed to all connected daemons.
-
-`$connections` will show the actual number of connected daemons.
-```{r remotev}
+Note that above, calling `host_url()` without a port value uses the default of '0'. This is a wildcard value that will automatically cause a free ephemeral port to be assigned. The actual assigned port may be queried at any time via `status()`:
+```{r remotestatus}
 status()
 ```
+The number of daemons connecting to the host URL is not limited and network resources may be added or removed at any time, with tasks automatically distributed to all connected daemons.
+
+From the status query above, `$connections` shows the actual number of connected daemons.
+
 To reset all connections and revert to default behaviour:
 ```{r reset}
 daemons(0)
@@ -547,11 +551,11 @@ Please refer to the [torch vignette](https://shikokuchuo.net/mirai/articles/torc
 
 `mirai_map()` performs asynchronous parallel/distributed map using `mirai`.
 
-This function is similar to `purrr::map()`, but returns a 'mirai_map' object. It is also more advanced as it allows multiple map over 2D lists/vectors - for example mapping over the rows of a datafram or matrix.
+This function is similar to `purrr::map()`, but returns a 'mirai_map' object. It is also more advanced as it allows multiple map over the rows of a dataframe or matrix.
 
 The results of a mirai_map `x` may be collected using `x[]`. This waits for all asynchronous operations to complete if still in progress.
 
-Key advantages of `mirai_map()`:
+#### Key advantages:
 
 1. Returns immediately with all evaluations taking place asynchronously. Printing a 'mirai map' object shows the current completion progress.
 1. The '.promise' argument allows a promise to registered against each mirai, which can be used to perform side-effects.
@@ -569,7 +573,7 @@ system.time(parLapply(cl, vec, Sys.sleep))
 `.args` is used to specify further constant arguments to `.f` - the 'mean' and 'sd' in the example below:
 ```{r mmap}
 with(
-  daemons(3, dispatcher = FALSE),
+  daemons(3, dispatcher = "none"),
   mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
 )
 ```
@@ -585,25 +589,72 @@ ml[]
 ```
 Use of `mirai_map()` assumes that `daemons()` have previously been set. If not then one (non-dispatcher) daemon is set to allow the function to proceed. This ensures safe behaviour, but is unlikely to be optimal, so please ensure daemons are set beforehand.
 
-When collecting the results, optionally specify `.flat`, `.progress` or `.stop` to `[]`:
+#### Collecting Results
+
+When collecting the results, optionally specify arguments to `[]`:
 
 - `x[.flat]` collects and flattens the results, checking that they are of the same type to avoid coercion.
-- `x[.progress]` collects results whilst showing a simple text progress indicator.
+- `x[.progress]` collects results whilst showing a simple text progress indicator of parts completed of the total.
+- `x[.progress_cli]` is an alternative that uses `cli` progress bars, where available, showing completion percentage and ETA.
 - `x[.stop]` collects the results applying early stopping, which stops at the first failure and cancels remaining computations (note: computations already in progress continue to completion, but their results are not collected).
 
-Combinations of the above may be supplied in the fashion of `x[c(.stop, .progress)]`.
+Combinations of the above may be supplied in the fashion of `x[.stop, .progress]`.
 ```{r mmapadv}
 tryCatch(
-  mirai_map(list(list(1, "a", 3), 3:1), sum)[.stop],
+  mirai_map(list(a = 1, b = "a", c = 3), sum)[.stop],
   error = identity
 )
 
 with(
-  daemons(4, dispatcher = FALSE),
-  mirai_map(c(0.1, 0.2, 0.3), Sys.sleep)[c(.progress, .flat)]
+  daemons(4, dispatcher = "none"),
+  mirai_map(c(0.1, 0.2, 0.3), Sys.sleep)[.progress, .flat]
 )
-
-daemons(0)
 ```
+
+#### Multiple Map
+
+Multiple map is performed over the **rows** of a dataframe or matrix, as this is most often the desired behaviour.
+
+This allows map over 2 or more arguments by specifying a dataframe. One of those may be an index value for indexed map.
+
+```{r mmapmulti}
+fruit <- c("melon", "grapes", "coconut")
+
+# create a dataframe for indexed map:
+df <- data.frame(i = seq_along(fruit), fruit = fruit)
+
+with(
+  daemons(3, dispatcher = "none"),
+  mirai_map(df, sprintf, .args = list(fmt = "%d. %s"))[.flat]
+)
+```
+As a dataframe often contains columns of differing type, it is unusual to want to map over the **columns**, however this is possible by simply transforming it beforehand into a list using `as.list()`.
+
+Similarly, the behaviour of `lapply()` or `purrr::map()` on a matrix is the same as that for a vector. `mirai_map()` on the other hand does take into account the fact that the matrix has dimensions, and maps over its **rows**, consistent with the behaviour for dataframes. If instead, mapping over the columns is desired, simply take the transpose of the matrix beforehand using `t()`.
+
+[&laquo; Back to ToC](#table-of-contents)
+
+### Using mirai in a Package
+
+mirai as a framework is designed to support completely transparent and inter-operable use within packages. A core design precept of not relying on global options or environment variables minimises the likelihood of conflict between use by different packages.
+
+There are hence few requirements of package authors.
+
+The following may nonetheless be helpful:
+
+- `daemons()` settings should usually be left to end-users. Users may be guided to mirai documentation if desired. If however, a package wishes to set default settings, for example, `daemons()` should always be called specifying `force = FALSE`. This ensures that any prior user settings are respected, and that daemons set elsewhere are not prematurely terminated.
+
+- Calling package functions in a mirai requires namespacing the call, or alternatively exporting the function, i.e.
+```r
+ mirai(mypkg::my_func())
+```
+or
+```r
+ mirai(my_func(), .args = list(myfunc = myfunc))
+```
+
+- The shape and contents of the `status()` daemons matrix must not be relied upon, as this user interface is subject to change at any time. There is a developer interface `nextget()`, for querying values such as 'urls' described in the function documentation. Note: only the specifically-documented values are supported interfaces.
+
+- Testing on CRAN should respect it's 2-core usage limit. This practically means limiting tests to using one daemon (with `dispatcher = "none"`) to ensure that only one additional process is used. Always reset daemons when done and then allow at least a one-second sleep to ensure all background processes have properly exited. These limits only apply to CRAN of course, and it is always possible to run a full suite of tests involving further daemons options in other contexts.
 
 [&laquo; Back to ToC](#table-of-contents)

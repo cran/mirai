@@ -3,72 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="generator" content="litedown 0.2">
 <title>mirai - Parallel Integration</title>
-<style type="text/css">
-/**
- * Prism.s theme ported from highlight.js's xcode style
- */
-pre code {
-  padding: 1em;
-}
-.token.comment {
-  color: #007400;
-}
-.token.punctuation {
-  color: #999;
-}
-.token.tag,
-.token.selector {
-  color: #aa0d91;
-}
-.token.boolean,
-.token.number,
-.token.constant,
-.token.symbol {
-  color: #1c00cf;
-}
-.token.property,
-.token.attr-name,
-.token.string,
-.token.char,
-.token.builtin {
-  color: #c41a16;
-}
-.token.inserted {
-  background-color: #ccffd8;
-}
-.token.deleted {
-  background-color: #ffebe9;
-}
-.token.operator,
-.token.entity,
-.token.url,
-.language-css .token.string,
-.style .token.string {
-  color: #9a6e3a;
-}
-.token.atrule,
-.token.attr-value,
-.token.keyword {
-  color: #836c28;
-}
-.token.function,
-.token.class-name {
-  color: #DD4A68;
-}
-.token.regex,
-.token.important,
-.token.variable {
-  color: #5c2699;
-}
-.token.important,
-.token.bold {
-  font-weight: bold;
-}
-.token.italic {
-  font-style: italic;
-}
-</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.37/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -76,61 +13,81 @@ body {
   margin: auto;
   padding: 1em;
   line-height: 1.5;
-  box-sizing: border-box;
 }
-body, .footnotes, code { font-size: .9em; }
+body, .abstract, code, .footnotes, #refs { font-size: .9em; }
 li li { font-size: .95em; }
-*, *:before, *:after {
-  box-sizing: inherit;
-}
+ul:has(li > input[type="checkbox"]) { list-style: none; padding-left: 1em; }
+*, :before, :after { box-sizing: border-box; }
+a { color: steelblue; }
 pre, img { max-width: 100%; }
-pre, pre:hover {
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-pre code {
-  display: block;
-  overflow-x: auto;
-}
+pre, pre:hover { white-space: pre-wrap; word-break: break-all; }
+pre code { display: block; padding: 1em; overflow-x: auto; }
 code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
-:not(pre) > code, code[class] { background-color: #F8F8F8; }
-code.language-undefined, pre > code:not([class]) {
-  background-color: inherit;
-  border: 1px solid #eee;
+:not(pre) > code, code[class], .box > div { background-color: #f8f8f8; }
+pre > code:not([class]), pre > .language-plain, .box { background-color: inherit; border: 1px solid #eee; }
+pre > .message { border-color: #9eeaf9; }
+pre > .warning { background: #fff3cd; border-color: #fff3cd; }
+pre > .error { background: #f8d7da; border-color: #f8d7da; }
+.fenced-chunk { border-left: 1px solid #666; }
+.code-fence {
+  opacity: .4;
+  border: 1px dashed #666;
+  border-left: 2px solid;
+  &:hover { opacity: inherit; }
 }
+.box { margin: 1em 0; }
+.box > :first-child > p:first-child, .box > :last-child > p:last-child { padding: 1em; }
+.box > :first-child, .box > :first-child > p:first-child { margin-top: 0; }
+.box > :last-child, .box > :last-child > p:last-child { margin-bottom: 0; }
+.figure > p:has(img) { text-align: center; }
 table {
-  margin: auto;
-  border-top: 1px solid #666;
+  margin: auto; border-top: 1px solid #666;
+  thead th { border-bottom: 1px solid #ddd; }
+  th, td { padding: 5px; }
+  thead, tfoot, tr:nth-child(even) { background: #eee; }
 }
-table thead th { border-bottom: 1px solid #ddd; }
-th, td { padding: 5px; }
-thead, tfoot, tr:nth-child(even) { background: #eee; }
 blockquote {
   color: #666;
   margin: 0;
-  padding-left: 1em;
-  border-left: 0.5em solid #eee;
+  padding: 1px 1em;
+  border-left: .5em solid #eee;
 }
 hr, .footnotes::before { border: 1px dashed #ddd; }
 .frontmatter { text-align: center; }
-#TOC .numbered li { list-style: none; }
-#TOC .numbered { padding-left: 0; }
-#TOC .numbered ul { padding-left: 1em; }
+#TOC .numbered {
+  padding-left: 0;
+  li { list-style: none; }
+  ul { padding-left: 1em; }
+}
 table, .body h2 { border-bottom: 1px solid #666; }
 .body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
-.footnote-ref a::before { content: "["; }
-.footnote-ref a::after { content: "]"; }
-section.footnotes::before {
-  content: "";
-  display: block;
-  max-width: 20em;
+.main-number::after { content: "."; }
+.ref-number-fig::after, .ref-number-tab::after { content: ":"; }
+.cross-ref-chp::before { content: "Chapter "; }
+.cross-ref-sec::before { content: "Section "; }
+.cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
+.cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.abstract, #refs {
+  &::before { display: block; margin: 1em auto; font-weight: bold; }
+}
+.abstract::before { content: "Abstract"; text-align: center; }
+#refs::before { content: "Bibliography"; font-size: 1.5em; }
+.ref-paren-open::before { content: "("; }
+.ref-paren-close::after { content: ")"; }
+.ref-semicolon::after { content: "; "; }
+.ref-and::after { content: " and "; }
+.ref-et-al::after { content: " et al."; font-style: italic; }
+.footnote-ref a {
+  &::before { content: "["; }
+  &::after { content: "]"; }
+}
+section.footnotes {
+  margin-top: 2em;
+  &::before { content: ""; display: block; max-width: 20em; }
 }
 
 @media print {
-  body {
-    font-size: 12pt;
-    max-width: 100%;
-  }
+  body { max-width: 100%; }
   tr, img { page-break-inside: avoid; }
 }
 @media only screen and (min-width: 992px) {
@@ -141,11 +98,9 @@ section.footnotes::before {
 <body>
 <div class="frontmatter">
 <div class="title"><h1>mirai - Parallel Integration</h1></div>
-<div class="author"><h2></h2></div>
-<div class="date"><h3></h3></div>
 </div>
 <div class="body">
-<h3 id="parallel-integration">Parallel Integration</h3>
+<h3 id="sec-parallel-integration">Parallel Integration</h3>
 <p><code>mirai</code> provides an alternative communications backend for R. This functionality was developed to fulfil a request by R Core at R Project Sprint 2023.</p>
 <p><code>make_cluster()</code> creates a cluster object of class ‘miraiCluster’, which is fully-compatible with <code>parallel</code> cluster types.</p>
 <ul>
@@ -181,7 +136,7 @@ parallel::parLapply(cl, iris, mean)
 #&gt; [1] 4
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://84c8107ee842139796c7f87f&quot;
+#&gt; [1] &quot;abstract://e755083adb3ac002d81d87c7&quot;
 stop_cluster(cl)
 </code></pre>
 <p>Making a cluster specifying ‘url’ without ‘remote’ causes the shell commands for manual deployment of nodes to be printed to the console.</p>
@@ -189,13 +144,13 @@ stop_cluster(cl)
 #&gt; Shell commands for deployment on nodes:
 #&gt; 
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://kumamoto:42603&quot;,rs=c(10407,-2096125748,1743292253,-1955520902,-2036622925,1260071768,-1320342151))'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:41567&quot;,rs=c(10407,-1229812554,-355079233,-704283916,613800293,-1049741598,-1259508485))'
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://kumamoto:42603&quot;,rs=c(10407,-1702861686,161023499,1803127216,-1397060724,-897111933,-129599054))'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:41567&quot;,rs=c(10407,-936602309,482053993,1829342693,1529156475,2009204106,1430761999))'
 stop_cluster(cl)
 </code></pre>
-<h3 id="foreach-integration">Foreach Integration</h3>
+<h3 id="sec-foreach-integration">Foreach Integration</h3>
 <p>A ‘miraiCluster’ may also be registered by <a href="https://cran.r-project.org/package=doParallel"><code>doParallel</code></a> for use with the <a href="https://cran.r-project.org/package=foreach"><code>foreach</code></a> package.</p>
 <p>Running some parallel examples for the <code>foreach()</code> function:</p>
 <pre><code class="language-r">library(foreach)
@@ -208,10 +163,10 @@ doParallel::registerDoParallel(cl)
 m &lt;- matrix(rnorm(9), 3, 3)
 foreach(i = 1:nrow(m), .combine = rbind) %dopar%
   (m[i, ] / mean(m[i, ]))
-#&gt;                [,1]       [,2]      [,3]
-#&gt; result.1  0.3487084 -0.4731823 3.1244739
-#&gt; result.2  1.3038052  1.5895562 0.1066386
-#&gt; result.3 -0.3771049  1.5104437 1.8666612
+#&gt;               [,1]      [,2]       [,3]
+#&gt; result.1 0.6168828 1.1209518  1.2621654
+#&gt; result.2 1.9631338 0.3970546  0.6398116
+#&gt; result.3 1.8112756 8.5974163 -7.4086918
 # simple parallel matrix multiply
 a &lt;- matrix(1:16, 4, 4)
 b &lt;- t(a)

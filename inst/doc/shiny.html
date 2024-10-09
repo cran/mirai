@@ -3,72 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="generator" content="litedown 0.2">
 <title>mirai - Shiny Integration</title>
-<style type="text/css">
-/**
- * Prism.s theme ported from highlight.js's xcode style
- */
-pre code {
-  padding: 1em;
-}
-.token.comment {
-  color: #007400;
-}
-.token.punctuation {
-  color: #999;
-}
-.token.tag,
-.token.selector {
-  color: #aa0d91;
-}
-.token.boolean,
-.token.number,
-.token.constant,
-.token.symbol {
-  color: #1c00cf;
-}
-.token.property,
-.token.attr-name,
-.token.string,
-.token.char,
-.token.builtin {
-  color: #c41a16;
-}
-.token.inserted {
-  background-color: #ccffd8;
-}
-.token.deleted {
-  background-color: #ffebe9;
-}
-.token.operator,
-.token.entity,
-.token.url,
-.language-css .token.string,
-.style .token.string {
-  color: #9a6e3a;
-}
-.token.atrule,
-.token.attr-value,
-.token.keyword {
-  color: #836c28;
-}
-.token.function,
-.token.class-name {
-  color: #DD4A68;
-}
-.token.regex,
-.token.important,
-.token.variable {
-  color: #5c2699;
-}
-.token.important,
-.token.bold {
-  font-weight: bold;
-}
-.token.italic {
-  font-style: italic;
-}
-</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.37/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -76,61 +13,81 @@ body {
   margin: auto;
   padding: 1em;
   line-height: 1.5;
-  box-sizing: border-box;
 }
-body, .footnotes, code { font-size: .9em; }
+body, .abstract, code, .footnotes, #refs { font-size: .9em; }
 li li { font-size: .95em; }
-*, *:before, *:after {
-  box-sizing: inherit;
-}
+ul:has(li > input[type="checkbox"]) { list-style: none; padding-left: 1em; }
+*, :before, :after { box-sizing: border-box; }
+a { color: steelblue; }
 pre, img { max-width: 100%; }
-pre, pre:hover {
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-pre code {
-  display: block;
-  overflow-x: auto;
-}
+pre, pre:hover { white-space: pre-wrap; word-break: break-all; }
+pre code { display: block; padding: 1em; overflow-x: auto; }
 code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
-:not(pre) > code, code[class] { background-color: #F8F8F8; }
-code.language-undefined, pre > code:not([class]) {
-  background-color: inherit;
-  border: 1px solid #eee;
+:not(pre) > code, code[class], .box > div { background-color: #f8f8f8; }
+pre > code:not([class]), pre > .language-plain, .box { background-color: inherit; border: 1px solid #eee; }
+pre > .message { border-color: #9eeaf9; }
+pre > .warning { background: #fff3cd; border-color: #fff3cd; }
+pre > .error { background: #f8d7da; border-color: #f8d7da; }
+.fenced-chunk { border-left: 1px solid #666; }
+.code-fence {
+  opacity: .4;
+  border: 1px dashed #666;
+  border-left: 2px solid;
+  &:hover { opacity: inherit; }
 }
+.box { margin: 1em 0; }
+.box > :first-child > p:first-child, .box > :last-child > p:last-child { padding: 1em; }
+.box > :first-child, .box > :first-child > p:first-child { margin-top: 0; }
+.box > :last-child, .box > :last-child > p:last-child { margin-bottom: 0; }
+.figure > p:has(img) { text-align: center; }
 table {
-  margin: auto;
-  border-top: 1px solid #666;
+  margin: auto; border-top: 1px solid #666;
+  thead th { border-bottom: 1px solid #ddd; }
+  th, td { padding: 5px; }
+  thead, tfoot, tr:nth-child(even) { background: #eee; }
 }
-table thead th { border-bottom: 1px solid #ddd; }
-th, td { padding: 5px; }
-thead, tfoot, tr:nth-child(even) { background: #eee; }
 blockquote {
   color: #666;
   margin: 0;
-  padding-left: 1em;
-  border-left: 0.5em solid #eee;
+  padding: 1px 1em;
+  border-left: .5em solid #eee;
 }
 hr, .footnotes::before { border: 1px dashed #ddd; }
 .frontmatter { text-align: center; }
-#TOC .numbered li { list-style: none; }
-#TOC .numbered { padding-left: 0; }
-#TOC .numbered ul { padding-left: 1em; }
+#TOC .numbered {
+  padding-left: 0;
+  li { list-style: none; }
+  ul { padding-left: 1em; }
+}
 table, .body h2 { border-bottom: 1px solid #666; }
 .body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
-.footnote-ref a::before { content: "["; }
-.footnote-ref a::after { content: "]"; }
-section.footnotes::before {
-  content: "";
-  display: block;
-  max-width: 20em;
+.main-number::after { content: "."; }
+.ref-number-fig::after, .ref-number-tab::after { content: ":"; }
+.cross-ref-chp::before { content: "Chapter "; }
+.cross-ref-sec::before { content: "Section "; }
+.cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
+.cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.abstract, #refs {
+  &::before { display: block; margin: 1em auto; font-weight: bold; }
+}
+.abstract::before { content: "Abstract"; text-align: center; }
+#refs::before { content: "Bibliography"; font-size: 1.5em; }
+.ref-paren-open::before { content: "("; }
+.ref-paren-close::after { content: ")"; }
+.ref-semicolon::after { content: "; "; }
+.ref-and::after { content: " and "; }
+.ref-et-al::after { content: " et al."; font-style: italic; }
+.footnote-ref a {
+  &::before { content: "["; }
+  &::after { content: "]"; }
+}
+section.footnotes {
+  margin-top: 2em;
+  &::before { content: ""; display: block; max-width: 20em; }
 }
 
 @media print {
-  body {
-    font-size: 12pt;
-    max-width: 100%;
-  }
+  body { max-width: 100%; }
   tr, img { page-break-inside: avoid; }
 }
 @media only screen and (min-width: 992px) {
@@ -141,11 +98,9 @@ section.footnotes::before {
 <body>
 <div class="frontmatter">
 <div class="title"><h1>mirai - Shiny Integration</h1></div>
-<div class="author"><h2></h2></div>
-<div class="date"><h3></h3></div>
 </div>
 <div class="body">
-<h3 id="shiny-integration">Shiny Integration</h3>
+<h3 id="sec-shiny-integration">Shiny Integration</h3>
 <p><code>mirai</code> may be used as an asynchronous backend to scale <a href="https://shiny.posit.co/">Shiny</a> applications.</p>
 <p>Depending on the options suppled to <code>daemons()</code>, mirai tasks may be distributed across local background processes or multiple networked servers in an efficient and performant manner.</p>
 <p>For use with Shiny, <code>mirai</code> implements truly event-driven promises, developed in collaboration with Joe Cheng (creator of Shiny).</p>
@@ -156,7 +111,7 @@ section.footnotes::before {
 </ul>
 <p>mirai natively supports Shiny ExtendedTask to create scalable Shiny apps, which remain responsive intra-session for each user, as well as inter-session for multiple concurrent users.</p>
 <p>‘mirai’ may be used anywhere a ‘promise’ or ‘future_promise’ would be accepted (with <code>promises</code> &gt;= 1.3.0).</p>
-<h4 id="shiny-extendedtask-example-plot-with-clock">Shiny ExtendedTask Example: Plot with Clock</h4>
+<h4 id="sec-shiny-extendedtask-example-plot-with-clock">Shiny ExtendedTask Example: Plot with Clock</h4>
 <p>In the example below, the app remains responsive, with the clock continuing to tick whilst the simulated expensive computation is running asynchronously in a parallel process. Also the button is disabled and the plot greyed out until the computation is complete.</p>
 <p>By wrapping the <code>runApp()</code> call in <code>with(daemons(...), ...)</code> the daemons are set up for the duration of the app, exiting automatically when the app is stopped.</p>
 <pre><code class="language-r">library(shiny)
@@ -185,7 +140,7 @@ server &lt;- function(input, output, session) {
   observeEvent(input$btn, extended_task$invoke(x = input$n, y = input$delay))
 
   output$plot &lt;- renderPlot(hist(extended_task$result()))
-  
+
 }
 
 app &lt;- shinyApp(ui = ui, server = server)
@@ -217,7 +172,7 @@ with(daemons(2), runApp(app))
 </ol>
 <pre><code class="language-r">output$plot &lt;- renderPlot(hist(extended_task$result()))
 </code></pre>
-<h4 id="shiny-extendedtask-example-generative-art">Shiny ExtendedTask Example: Generative Art</h4>
+<h4 id="sec-shiny-extendedtask-example-generative-art">Shiny ExtendedTask Example: Generative Art</h4>
 <p>The following app produces pretty spiral patterns.</p>
 <p>The user can add multiple plots, making use of Shiny modules, each having a different calculation time.</p>
 <p>The plots are generated asynchronously, and it is easy to see the practical limitations of the number of daemons set. For example, if updating 4 plots, and there are only 3 daemons, the 4th plot will not start to be generated until one of the other plots has finished.</p>
@@ -263,12 +218,12 @@ plotServer &lt;- function(id, calc_time) {
       extended_task &lt;- ExtendedTask$new(
         function(time, run) mirai(run(time), environment())
       ) |&gt; bind_task_button(&quot;resample&quot;)
-      
+
       observeEvent(input$resample,
                    extended_task$invoke(calc_time, run_task))
-      
+
       output$plot &lt;- renderPlot(plot_result(extended_task$result()))
-      
+
     }
   )
 }
@@ -322,7 +277,7 @@ with(daemons(3), runApp(app))
 </ol>
 <pre><code class="language-r">output$plot &lt;- renderPlot(plot_result(extended_task$result()))
 </code></pre>
-<h4 id="advanced-promises-example-coin-flips">Advanced Promises Example: Coin Flips</h4>
+<h4 id="sec-advanced-promises-example-coin-flips">Advanced Promises Example: Coin Flips</h4>
 <p>The below example demonstrates how to integrate a <code>mirai_map()</code> operation into a Shiny app.</p>
 <p>By specifying the ‘.promise’ argument, this registers a promise action against each mapped operation. These can then be used to update reactive values or otherwise interact with the Shiny app.</p>
 <pre><code class="language-r">library(shiny)
@@ -341,17 +296,17 @@ ui &lt;- fluidPage(
 )
 
 server &lt;- function(input, output, session) {
-  
+
   # Keep running totals of heads, tails, and task errors
   flips &lt;- reactiveValues(heads = 0, tails = 0, flips = 0)
-  
+
   # Button to submit a batch of coin flips
   observeEvent(input$task, {
     flips$flips &lt;- flips$flips + 1000
     m &lt;- mirai_map(1:1000, flip_coin, .promise = \(x)
       if (x) flips$heads &lt;- flips$heads + 1 else flips$tails &lt;- flips$tails + 1)
   })
-  
+
   # Print time and task status
   output$status &lt;- renderText({
     input$task
@@ -359,7 +314,7 @@ server &lt;- function(input, output, session) {
     time &lt;- format(Sys.time(), &quot;%H:%M:%S&quot;)
     sprintf(&quot;%s %s flips submitted&quot;, time, flips$flips)
   })
-  
+
   # Print number of heads and tails
   output$outcomes &lt;- renderText(
     sprintf(&quot;%s heads %s tails&quot;, flips$heads, flips$tails)
@@ -369,93 +324,14 @@ server &lt;- function(input, output, session) {
 
 app &lt;- shinyApp(ui = ui, server = server)
 
-# run app using 8 local daemons, without dispatcher as tasks are the same length
-with(daemons(8, dispatcher = FALSE), {
+# run app using 8 local non-dispatcher daemons (tasks are the same length)
+with(daemons(8, dispatcher = &quot;none&quot;), {
   # pre-load flip_coin function on all daemons for efficiency
   everywhere({}, flip_coin = flip_coin)
   runApp(app)
 })
 </code></pre>
 <p><em>This is an adaptation of an original example provided by Will Landau for use of <code>crew</code> with Shiny. Please see <a href="https://wlandau.github.io/crew/articles/shiny.html">https://wlandau.github.io/crew/articles/shiny.html</a>.</em></p>
-<h4 id="advanced-non-promise-example-generative-art">Advanced Non-Promise Example: Generative Art</h4>
-<p>Whilst it is generally recommended to use the ExtendedTask framework, it is also possible for mirai to plug directly into Shiny’s reactive framework, without the use of ‘promises’ either implicitly or explicitly. This may be required for advanced uses of asynchronous programming, or where the use case does not fit the semantics of ExtendedTask.</p>
-<p>The following is similar to the previous example, but allows multiple tasks to be submitted at once, rather than one after the other as required by ExtendedTask. There is a button to submit tasks, which will be processed by one of 3 daemons, outputting a pretty spiral pattern upon completion. If more than 3 tasks are submitted at once, the chart updates 3 at a time, limited by the number of available daemons.</p>
-<p>It requires more boilerplate code to manage the mirai tasks, but otherwise functions similarly to the ExtendedTask example.</p>
-<pre><code class="language-r">library(mirai)
-library(shiny)
-library(ggplot2)
-library(aRtsy)
-
-# function definitions
-
-run_task &lt;- function() {
-  Sys.sleep(5)
-  list(
-    colors = aRtsy::colorPalette(name = &quot;random&quot;, n = 3),
-    angle = runif(n = 1, min = - 2 * pi, max = 2 * pi),
-    size = 1,
-    p = 1
-  )
-}
-
-plot_result &lt;- function(result) {
-  do.call(what = canvas_phyllotaxis, args = result)
-}
-
-status_message &lt;- function(tasks) {
-  if (tasks == 0L) {
-    &quot;All tasks completed.&quot;
-  } else {
-    sprintf(&quot;%d task%s in progress at %s&quot;,
-            tasks, if (tasks &gt; 1L) &quot;s&quot; else &quot;&quot;, format.POSIXct(Sys.time()))
-  }
-}
-
-ui &lt;- fluidPage(
-  actionButton(&quot;task&quot;, &quot;Submit a task (5 seconds)&quot;),
-  textOutput(&quot;status&quot;),
-  plotOutput(&quot;result&quot;)
-)
-
-server &lt;- function(input, output, session) {
-  # reactive values and outputs
-  reactive_result &lt;- reactiveVal(ggplot())
-  reactive_status &lt;- reactiveVal(&quot;No task submitted yet.&quot;)
-  output$result &lt;- renderPlot(reactive_result(), height = 600, width = 600)
-  output$status &lt;- renderText(reactive_status())
-  poll_for_results &lt;- reactiveVal(FALSE)
-  
-  # create empty mirai queue
-  q &lt;- list()
-
-  # button to submit a task
-  observeEvent(input$task, {
-    q[[length(q) + 1L]] &lt;&lt;- mirai(run_task(), run_task = run_task)
-    poll_for_results(TRUE)
-  })
-
-  # event loop to collect finished tasks
-  observe({
-    req(poll_for_results())
-    invalidateLater(millis = 250)
-    if (length(q)) {
-      if (!unresolved(q[[1L]])) {
-        reactive_result(plot_result(q[[1L]][[&quot;data&quot;]]))
-        q[[1L]] &lt;&lt;- NULL
-      }
-      reactive_status(status_message(length(q)))
-    } else {
-      poll_for_results(FALSE)
-    }
-  })
-}
-
-app &lt;- shinyApp(ui = ui, server = server)
-
-# run app using 3 local daemons
-with(daemons(3), runApp(app))
-</code></pre>
-<p><em>Thanks to Daniel Woodie and William Landau for providing the original example on which this is based. Please see <a href="https://wlandau.github.io/crew/articles/shiny.html">https://wlandau.github.io/crew/articles/shiny.html</a>.</em></p>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>

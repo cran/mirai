@@ -8,9 +8,9 @@
 [![CRAN
 status](https://www.r-pkg.org/badges/version/mirai?color=00184a)](https://CRAN.R-project.org/package=mirai)
 [![R-multiverse
-status](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fcommunity.r-multiverse.org%2Fapi%2Fpackages%2Fmirai&query=%24.Version&label=r-multiverse&color=00184a)](https://community.r-multiverse.org/mirai)
+status](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fcommunity.r-multiverse.org%2Fapi%2Fpackages%2Fmirai&query=%24.Version&label=r-multiverse)](https://community.r-multiverse.org/mirai)
 [![R-universe
-status](https://shikokuchuo.r-universe.dev/badges/mirai?color=2dab18)](https://shikokuchuo.r-universe.dev/mirai)
+status](https://shikokuchuo.r-universe.dev/badges/mirai)](https://shikokuchuo.r-universe.dev/mirai)
 [![R-CMD-check](https://github.com/shikokuchuo/mirai/workflows/R-CMD-check/badge.svg)](https://github.com/shikokuchuo/mirai/actions)
 [![codecov](https://codecov.io/gh/shikokuchuo/mirai/graph/badge.svg)](https://app.codecov.io/gh/shikokuchuo/mirai)
 [![DOI](https://zenodo.org/badge/459341940.svg)](https://zenodo.org/badge/latestdoi/459341940)
@@ -18,13 +18,13 @@ status](https://shikokuchuo.r-universe.dev/badges/mirai?color=2dab18)](https://s
 
 ### ミライ
 
-<br /> ( 未来 ) <br /><br /> Minimalist Async Evaluation Framework for R
-<br /><br /> Designed for simplicity, a ‘mirai’ evaluates an R
+<br /> みらい 未来 <br /><br /> Minimalist Async Evaluation Framework
+for R <br /><br /> Designed for simplicity, a ‘mirai’ evaluates an R
 expression asynchronously in a parallel process, locally or distributed
 over the network, with the result automatically available upon
 completion. <br /><br /> Modern networking and concurrency built on
 [nanonext](https://github.com/shikokuchuo/nanonext/) and
-[NNG](https://nng.nanomsg.org/) (Nanomsg Next Gen) ensures reliable and
+[NNG](https://nng.nanomsg.org/) (Nanomsg Next Gen) ensure reliable and
 efficient scheduling, over fast inter-process communications or TCP/IP
 secured by TLS. <br /><br /> Advantages include being inherently queued
 thus handling many more tasks than available processes, no storage on
@@ -75,11 +75,11 @@ To wait for and collect the return value, use the mirai’s `[]` method:
 
 ``` r
 m[]
-#> [1] 5.735529 7.862045 6.024613 7.572171 5.791506
+#> [1] 6.558945 6.774610 6.776656 7.419766 6.670370
 ```
 
 As a mirai represents an async operation, it is never necessary to wait
-for it. Other code can continue to be run. Once it completes, the return
+for it. Other code can continue to run. Once it completes, the return
 value automatically becomes available at `$data`.
 
 ``` r
@@ -89,7 +89,7 @@ while (unresolved(m)) {
 m
 #> < mirai [$data] >
 m$data
-#> [1] 5.735529 7.862045 6.024613 7.572171 5.791506
+#> [1] 6.558945 6.774610 6.776656 7.419766 6.670370
 ```
 
 #### Daemons
@@ -118,8 +118,7 @@ required.
 
 `mirai_map()` maps a function over a list or vector, with each element
 processed in a separate parallel process. It also performs multiple map
-over 2D lists/vectors, allowing advanced patterns such as map over the
-rows of a dataframe or matrix.
+over the rows of a dataframe or matrix.
 
 ``` r
 df <- data.frame(
@@ -153,7 +152,8 @@ over alternative map implementations.
 experience.
 
 - Fast
-  - Over 100x more responsive than common alternatives <sup>\[1\]</sup>
+  - 900x more responsive than common alternatives
+    [<sup>\[1\]</sup>](https://github.com/shikokuchuo/mirai/pull/142#issuecomment-2344077028)
   - Built for low-latency applications such as real time inference or
     Shiny apps
 - Reliable
@@ -190,12 +190,12 @@ with the promise pipe `%...>%`.
 
 [<img alt="Shiny" src="https://github.com/rstudio/shiny/raw/main/man/figures/logo.png" width="40" height="46" />](https://shikokuchuo.net/mirai/articles/shiny.html)
   Asynchronous parallel / distributed backend, supporting the next level
-of responsiveness and scalability for Shiny. Launches ExtendedTasks, or
-plugs directly into the reactive framework for advanced uses.
+of responsiveness and scalability within Shiny, with native support for
+ExtendedTask.
 
 [<img alt="Plumber" src="https://rstudio.github.io/cheatsheets/html/images/logo-plumber.png" width="40" height="46" />](https://shikokuchuo.net/mirai/articles/plumber.html)
-  Asynchronous parallel / distributed backend, capable of scaling
-Plumber applications in production usage.
+  Asynchronous parallel / distributed backend for scaling Plumber
+applications in production.
 
 [<img alt="Arrow" src="https://arrow.apache.org/img/arrow-logo_hex_black-txt_white-bg.png" width="40" height="46" />](https://shikokuchuo.net/mirai/articles/databases.html)
   Allows queries using the Apache Arrow format to be handled seamlessly
@@ -234,9 +234,9 @@ shaping development of the package, from initiating the original request
 for persistent daemons, through to orchestrating robustness testing for
 the high performance computing requirements of `crew` and `targets`.
 
-[Joe Cheng](https://github.com/jcheng5/) for optimising the `promises`
+[Joe Cheng](https://github.com/jcheng5/) for integrating the `promises`
 method to work seamlessly within Shiny, and prototyping event-driven
-promises, which is implemented across `nanonext` and `mirai`.
+promises.
 
 [Luke Tierney](https://github.com/ltierney/) of R Core, for discussion
 on L’Ecuyer-CMRG streams to ensure statistical independence in parallel
@@ -252,13 +252,13 @@ efficient solution to serialization and transmission of `torch` tensors.
 [Kirill Müller](https://github.com/krlmlr/) for discussion on using
 ‘daemons’ to host Arrow database connections.
 
-[<img alt="R Consortium" src="https://www.r-consortium.org/wp-content/uploads/sites/13/2016/09/RConsortium_Horizontal_Pantone.png" width="100" height="22" />](https://www.r-consortium.org/) 
+[<img alt="R Consortium" src="https://r-consortium.org/images/RConsortium_Horizontal_Pantone.webp" width="100" height="22" />](https://r-consortium.org/) 
 for funding work on the TLS implementation in `nanonext`, used to
 provide secure connections in `mirai`.
 
 ### Installation
 
-Install the latest release from CRAN or R-multiverse:
+Install the latest release from CRAN:
 
 ``` r
 install.packages("mirai")
@@ -277,9 +277,6 @@ package: <https://shikokuchuo.net/nanonext/>
 
 mirai is listed in CRAN High Performance Computing Task View: <br />
 <https://cran.r-project.org/view=HighPerformanceComputing>
-
-\[1\] Benchmark available in appendix of:
-<https://shikokuchuo.net/user2024-conference/>
 
 –
 

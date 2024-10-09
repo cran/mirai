@@ -38,31 +38,27 @@
 #'     \sQuote{url}. Where a single URL is supplied and \sQuote{n} > 1,
 #'     \sQuote{n} unique URLs will be automatically assigned for daemons to dial
 #'     into.
-#' @param ... (optional) additional arguments passed through to \code{\link{daemon}}.
-#'     These include \sQuote{autoexit}, \sQuote{cleanup}, \sQuote{maxtasks},
+#' @param ... (optional) additional arguments passed through to
+#'     \code{\link{daemon}}. These include  \sQuote{asyncdial},
+#'     \sQuote{autoexit}, \sQuote{cleanup}, \sQuote{maxtasks},
 #'     \sQuote{idletime}, \sQuote{walltime} and \sQuote{timerstart}.
-#' @param asyncdial [default FALSE] whether to perform dials asynchronously. The
-#'     default FALSE will error if a connection is not immediately possible
-#'     (e.g. \code{\link{daemons}} has yet to be called on the host, or the
-#'     specified port is not open etc.). Specifying TRUE continues retrying
-#'     (indefinitely) if not immediately successful, which is more resilient but
-#'     can mask potential connection issues.
-#' @param retry [default FALSE] if TRUE, a task where the daemon crashes or
-#'     terminates unexpectedly will be automatically re-tried on the next daemon
-#'     instance to connect. In such a case, the mirai will remain unresolved but
+#' @param retry [default FALSE] logical value, whether to automatically retry
+#'     tasks where the daemon crashes or terminates unexpectedly on the next
+#'     daemon instance to connect. If TRUE, the mirai will remain unresolved but
 #'     \code{\link{status}} will show \sQuote{online} as 0 and \sQuote{assigned}
-#'     > \sQuote{complete}. To cancel a task in such a case, use
+#'     > \sQuote{complete}. To cancel a task in this case, use
 #'     \code{saisei(force = TRUE)}. If FALSE, such tasks will be returned as
 #'     \sQuote{errorValue} 19 (Connection reset).
 #' @param token [default FALSE] if TRUE, appends a unique 24-character token
 #'     to each URL path the dispatcher listens at (not applicable for TCP URLs
 #'     which do not accept a path).
-#' @param tls [default NULL] (required for secure TLS connections) \strong{either}
-#'     the character path to a file containing the PEM-encoded TLS certificate
-#'     and associated private key (may contain additional certificates leading
-#'     to a validation chain, with the TLS certificate first), \strong{or} a
-#'     length 2 character vector comprising [i] the TLS certificate (optionally
-#'     certificate chain) and [ii] the associated private key.
+#' @param tls [default NULL] (required for secure TLS connections)
+#'     \strong{either} the character path to a file containing the PEM-encoded
+#'     TLS certificate and associated private key (may contain additional
+#'     certificates leading to a validation chain, with the TLS certificate
+#'     first), \strong{or} a length 2 character vector comprising [i] the TLS
+#'     certificate (optionally certificate chain) and [ii] the associated
+#'     private key.
 #' @param pass [default NULL] (required only if the private key supplied to
 #'     \sQuote{tls} is encrypted with a password) For security, should be
 #'     provided through a function that returns this value, rather than directly.
@@ -78,21 +74,30 @@
 #'
 #' @export
 #'
-dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
-                       retry = FALSE, token = FALSE, tls = NULL, pass = NULL,
-                       rs = NULL, monitor = NULL) {
+dispatcher <- function(host, url = NULL, n = NULL, ..., retry = FALSE, token = FALSE,
+                       tls = NULL, pass = NULL, rs = NULL, monitor = NULL) {
 
   n <- if (is.numeric(n)) as.integer(n) else length(url)
   n > 0L || stop(._[["missing_url"]])
 
-  pkgs <- Sys.getenv("MIRAI_DEF_PKGS")
-  Sys.unsetenv("MIRAI_DEF_PKGS")
-  if (nzchar(pkgs)) Sys.setenv(R_DEFAULT_PACKAGES = pkgs) else Sys.unsetenv("R_DEFAULT_PACKAGES")
   cv <- cv()
   sock <- socket(protocol = "rep")
   on.exit(reap(sock))
   pipe_notify(sock, cv = cv, remove = TRUE, flag = TRUE)
-  dial_and_sync_socket(sock = sock, url = host, asyncdial = asyncdial)
+  dial_and_sync_socket(sock = sock, url = host)
+
+  ctrchannel <- is.character(monitor)
+  if (ctrchannel) {
+    sockc <- socket(protocol = "rep")
+    on.exit(reap(sockc), add = TRUE, after = FALSE)
+    pipe_notify(sockc, cv = cv, remove = TRUE, flag = TRUE)
+    dial_and_sync_socket(sock = sockc, url = monitor)
+    cmessage <- recv(sockc, mode = 2L, block = .limit_long)
+    is.object(cmessage) && stop(._[["sync_dispatcher"]])
+    if (nzchar(cmessage[2L]))
+      Sys.setenv(R_DEFAULT_PACKAGES = cmessage[2L]) else
+        Sys.unsetenv("R_DEFAULT_PACKAGES")
+  }
 
   auto <- is.null(url)
   vectorised <- length(url) == n
@@ -105,12 +110,16 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
     dots <- parse_dots(...)
     output <- attr(dots, "output")
   } else {
-    baseurl <- parse_url(url)
-    ports <- get_ports(baseurl = baseurl, n = n)
+    ports <- get_ports(url = url, n = n)
     if (length(ports)) token <- FALSE
-    tls <- get_tls(baseurl = baseurl, tls = tls, pass = pass)
-    pass <- NULL
+    if (ctrchannel && nzchar(cmessage[4L]) && is.null(tls)) {
+      tls <- c(cmessage[4L], if (nzchar(cmessage[6L])) cmessage[6L])
+      pass <- if (nzchar(cmessage[8L])) cmessage[8L]
+    }
+    if (length(tls))
+      tls <- tls_config(server = tls, pass = pass)
   }
+  pass <- NULL
 
   envir <- new.env(hash = FALSE)
   if (is.numeric(rs)) `[[<-`(envir, "stream", as.integer(rs))
@@ -118,7 +127,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
   for (i in seq_n) {
     burl <- if (auto) .urlscheme else
       if (vectorised) url[i] else
-        if (is.null(ports)) sprintf("%s/%d", url, i) else
+        if (is.null(ports)) sprintf(if (startsWith(url, "ipc")) "%s-%d" else "%s/%d", url, i) else
           sub(ports[1L], ports[i], url, fixed = TRUE)
     nurl <- if (auto) local_url() else if (token) tokenized_url(burl) else burl
     ncv <- cv()
@@ -150,15 +159,9 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., asyncdial = FALSE,
 
   if (auto)
     for (i in seq_n)
-      until(cv, .limit_long) || stop(._[["sync_timeout"]])
+      until(cv, .limit_long) || stop(._[["sync_daemons"]])
 
-  ctrchannel <- is.character(monitor)
   if (ctrchannel) {
-    sockc <- socket(protocol = "rep")
-    on.exit(reap(sockc), add = TRUE, after = FALSE)
-    pipe_notify(sockc, cv = cv, remove = TRUE, flag = TRUE)
-    dial_and_sync_socket(sock = sockc, url = monitor, asyncdial = asyncdial)
-    recv(sockc, mode = 6L, block = .limit_long) && stop(._[["sync_timeout"]])
     send(sockc, c(Sys.getpid(), servernames), mode = 2L)
     cmessage <- recv_aio(sockc, mode = 5L, cv = cv)
   }
@@ -314,28 +317,10 @@ saisei <- function(i, force = FALSE, .compute = "default") {
 
 # internals --------------------------------------------------------------------
 
-get_ports <- function(baseurl, n)
+get_ports <- function(url, n) {
+  baseurl <- parse_url(url)
   if (startsWith(baseurl[["scheme"]], "t")) {
     if (baseurl[["port"]] == "0") integer(n) else seq.int(baseurl[["port"]], length.out = n)
-  }
-
-get_and_reset_env <- function(x) {
-  candidate <- Sys.getenv(x)
-  if (nzchar(candidate)) {
-    Sys.unsetenv(x)
-    candidate
-  }
-}
-
-get_tls <- function(baseurl, tls, pass) {
-  sch <- baseurl[["scheme"]]
-  if ((startsWith(sch, "wss") || startsWith(sch, "tls")) && is.null(tls)) {
-    tls <- get_and_reset_env("MIRAI_TEMP_FIELD1")
-    if (length(tls)) tls <- c(tls, get_and_reset_env("MIRAI_TEMP_FIELD2"))
-  }
-  if (length(tls)) {
-    if (is.null(pass)) pass <- get_and_reset_env("MIRAI_TEMP_VAR")
-    tls_config(server = tls, pass = pass)
   }
 }
 

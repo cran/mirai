@@ -1,3 +1,35 @@
+# mirai 1.3.0
+
+#### New Features
+
+* `daemons(dispatcher = "thread")` implements threaded dispatcher (experimental), a faster and more efficient alternative to running dispatcher in a separate process.
+* `mirai_map()` adds `[.progress_cli]` as an alternative progress indicator, using the cli package to show % complete and ETA.
+* `daemons()` gains argument 'force' to control whether further calls reset previous settings for the same compute profile.
+* `daemon()` gains argument 'asyncdial' to allow control of connection behaviour independently of what happens when the daemon exits.
+
+#### Behavioural Changes
+
+* For `daemons()`:
+  - Argument 'dispatcher' now takes the character options 'process', 'thread' and 'none'. Previous values of TRUE/FALSE continue to be accepted (thanks @hadley #157).
+  - Return value is now always an integer - either the number of daemons set if using dispatcher, or the number of daemons launched locally (zero if using a remote launcher).
+  - Invalid type of `...` arguments are now dropped instead of throwing an error. This allows `...` containing unused arguments to be more easily passed from other functions.
+* For `mirai_map()`:
+  - Now only performs multiple map over the rows of matrices and dataframes (thanks @andrewGhazi, #147).
+  - Combining collection options is now easier, in the fashion of: `x[.stop, .progress]`.
+  - Collection options now work even if mirai is not on the search path e.g. `mirai::mirai_map(1:4, Sys.sleep)[.progress]`.
+* `dispatcher()` drops argument 'asyncdial' as it is rarely useful to set this here.
+* `everywhere()` now errors if the specified compute profile is not yet set up, rather than fail silently.
+* `launch_local()` and `launch_remote()` now strictly require daemons to be set, and will error otherwise.
+* `serial_config()` now validates the arguments provided and returns them as a list. This means any saved configurations from previous package versions must be re-generated.
+
+#### Updates
+
+* Fixes `daemons()` to correctly handle a vector of URLs passed to 'url' again.
+* Fixes flatmap with `mirai_map()[.flat]` assigning a variable 'typ' to the calling environment.
+* Performance enhancements for `mirai()`, `mirai_map()` and the promises method.
+* Requires `nanonext` >= 1.3.0.
+* The package has a shiny new hex logo.
+
 # mirai 1.2.0
 
 * `everywhere()` adds argument '.serial' to accept serialization configurations created by `serial_config()`. These allow normally non-exportable reference objects such as Arrow Tables or torch tensors to be used seamlessly across parallel processes without additional marshalling steps. Configurations apply on a per compute profile basis.

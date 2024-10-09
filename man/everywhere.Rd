@@ -33,7 +33,8 @@ empty list.}
 to use (each compute profile has its own independent set of daemons).}
 }
 \value{
-Invisible NULL.
+Invisible NULL. Will error if the specified compute profile is not
+    found, i.e. not yet set up.
 }
 \description{
 Evaluate an expression \sQuote{everywhere} on all connected daemons for the
@@ -81,7 +82,7 @@ daemons(0)
 # loading a package on all daemons and also
 # registering custom serialization functions:
 cfg <- serial_config("cls_name", function(x) serialize(x, NULL), unserialize)
-daemons(1, dispatcher = FALSE)
+daemons(1, dispatcher = "none")
 everywhere(library(parallel), .serial = cfg)
 m <- mirai("package:parallel" \%in\% search())
 call_mirai(m)$data

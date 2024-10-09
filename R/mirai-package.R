@@ -19,7 +19,7 @@
 #' Designed for simplicity, a 'mirai' evaluates an R expression asynchronously
 #'     in a parallel process, locally or distributed over the network, with the
 #'     result automatically available upon completion. Modern networking and
-#'     concurrency built on 'nanonext' and 'NNG' (Nanomsg Next Gen) ensures
+#'     concurrency built on 'nanonext' and 'NNG' (Nanomsg Next Gen) ensure
 #'     reliable and efficient scheduling, over fast inter-process communications
 #'     or TCP/IP secured by TLS. Advantages include being inherently queued thus
 #'     handling many more tasks than available processes, no storage on the file
@@ -47,9 +47,9 @@
 #'     (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
 #'
 #' @importFrom nanonext .advance collect_aio collect_aio_ call_aio call_aio_
-#'     .context cv cv_value dial is_error_value listen lock .mark mclock msleep
-#'     nng_error opt opt<- parse_url pipe_notify random reap recv recv_aio
-#'     request send serial_config set_promise_context socket stat stop_aio
+#'     .context cv cv_value dial .dispatcher is_error_value .keep listen lock
+#'     .mark mclock msleep nng_error .online opt opt<- parse_url pipe_notify
+#'     random reap recv recv_aio request send serial_config socket stat stop_aio
 #'     tls_config unresolved .unresolved until wait write_cert
 #'
 "_PACKAGE"
@@ -89,21 +89,25 @@
     arglen = "'args' and/or 'url' must be of length 1 or the same length",
     cluster_inactive = "cluster is no longer active",
     correct_context = "'host' must be specified if not using directly in a function argument",
-    daemons_unset = "launch_*(): a numeric value for 'url' requires daemons to be set",
-    dot_required = "remote_config(): '.' must be an element of the character vector(s) supplied to 'args'",
+    daemons_unset = "daemons must be set to use launchers",
+    dispatcher_args = "'dispatcher' must be one of 'process', 'thread' or 'none'",
+    dot_required = "'.' must be an element of the character vector(s) supplied to 'args'",
+    function_required = "'.f' must be of type function, not %s",
     missing_expression = "missing expression, perhaps wrap in {}?",
     missing_url = "at least one URL must be supplied for 'url' or 'n' must be at least 1",
-    named_args = "all '...' arguments must be named, unless supplying an environment",
+    named_args = "all items in '.args' must be named, unless supplying an environment",
+    named_dots = "all '...' arguments must be named, unless supplying an environment",
     n_one = "'n' must be 1 or greater",
     n_zero = "the number of daemons must be zero or greater",
+    not_found = "compute profile '%s' not found",
     numeric_n = "'n' must be numeric, did you mean to provide 'url'?",
     register_cluster = "this function requires a more recent version of R",
-    requires_daemons = "mirai_map(): launching one local daemon as none previously set",
-    requires_local = "ssh_config(): SSH tunnelling requires 'url' hostname to be '127.0.0.1' or 'localhost'",
+    requires_daemons = "mirai is launching one local daemon for a map operation as none previously set",
+    requires_local = "SSH tunnelling requires 'url' / 'host' to be '127.0.0.1' or 'localhost'",
     single_url = "only one 'url' should be specified",
-    sync_timeout = "initial sync with dispatcher/daemon timed out after 10s",
-    url_spec = "launch_*(): numeric value for 'url' is out of bounds",
-    wrong_dots = "daemons(): '...' arguments should only be of integer, numeric or logical type"
+    sync_daemons = "initial sync with daemon(s) timed out after 10s",
+    sync_dispatcher = "initial sync with dispatcher timed out after 10s",
+    url_spec = "numeric value for 'url' is out of bounds"
   ),
   hash = TRUE
 )

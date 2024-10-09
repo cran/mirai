@@ -9,7 +9,6 @@ dispatcher(
   url = NULL,
   n = NULL,
   ...,
-  asyncdial = FALSE,
   retry = FALSE,
   token = FALSE,
   tls = NULL,
@@ -36,22 +35,16 @@ Otherwise \sQuote{n} will be inferred from the number of URLs supplied in
 \sQuote{n} unique URLs will be automatically assigned for daemons to dial
 into.}
 
-\item{...}{(optional) additional arguments passed through to \code{\link{daemon}}.
-These include \sQuote{autoexit}, \sQuote{cleanup}, \sQuote{maxtasks},
+\item{...}{(optional) additional arguments passed through to
+\code{\link{daemon}}. These include  \sQuote{asyncdial},
+\sQuote{autoexit}, \sQuote{cleanup}, \sQuote{maxtasks},
 \sQuote{idletime}, \sQuote{walltime} and \sQuote{timerstart}.}
 
-\item{asyncdial}{[default FALSE] whether to perform dials asynchronously. The
-default FALSE will error if a connection is not immediately possible
-(e.g. \code{\link{daemons}} has yet to be called on the host, or the
-specified port is not open etc.). Specifying TRUE continues retrying
-(indefinitely) if not immediately successful, which is more resilient but
-can mask potential connection issues.}
-
-\item{retry}{[default FALSE] if TRUE, a task where the daemon crashes or
-terminates unexpectedly will be automatically re-tried on the next daemon
-instance to connect. In such a case, the mirai will remain unresolved but
+\item{retry}{[default FALSE] logical value, whether to automatically retry
+tasks where the daemon crashes or terminates unexpectedly on the next
+daemon instance to connect. If TRUE, the mirai will remain unresolved but
 \code{\link{status}} will show \sQuote{online} as 0 and \sQuote{assigned}
-> \sQuote{complete}. To cancel a task in such a case, use
+> \sQuote{complete}. To cancel a task in this case, use
 \code{saisei(force = TRUE)}. If FALSE, such tasks will be returned as
 \sQuote{errorValue} 19 (Connection reset).}
 
@@ -59,12 +52,13 @@ instance to connect. In such a case, the mirai will remain unresolved but
 to each URL path the dispatcher listens at (not applicable for TCP URLs
 which do not accept a path).}
 
-\item{tls}{[default NULL] (required for secure TLS connections) \strong{either}
-the character path to a file containing the PEM-encoded TLS certificate
-and associated private key (may contain additional certificates leading
-to a validation chain, with the TLS certificate first), \strong{or} a
-length 2 character vector comprising [i] the TLS certificate (optionally
-certificate chain) and [ii] the associated private key.}
+\item{tls}{[default NULL] (required for secure TLS connections)
+\strong{either} the character path to a file containing the PEM-encoded
+TLS certificate and associated private key (may contain additional
+certificates leading to a validation chain, with the TLS certificate
+first), \strong{or} a length 2 character vector comprising [i] the TLS
+certificate (optionally certificate chain) and [ii] the associated
+private key.}
 
 \item{pass}{[default NULL] (required only if the private key supplied to
 \sQuote{tls} is encrypted with a password) For security, should be

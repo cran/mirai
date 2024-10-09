@@ -20,14 +20,12 @@
 #'
 #' Asynchronous parallel map of a function over a list or vector using
 #'     \pkg{mirai}, with optional \pkg{promises} integration. Performs multiple
-#'     map over 2D lists/vectors, allowing advanced patterns such as map over
-#'     the rows of a dataframe or matrix.
+#'     map over the rows of a dataframe or matrix.
 #'
-#' @param .x a list or atomic vector. If a 2D list (i.e. list of lists/vectors
-#'     of the same length), multiple map is performed over a slice of the list.
-#'     If a matrix, multiple map is performed over the rows of the matrix.
-#' @param .f a function to be applied to each element of \code{.x}, or across
-#'     all sub-elements of \code{.x} as the case may be.
+#' @param .x a list or atomic vector. Also accepts a matrix or dataframe, in
+#'     which case multiple map is performed over its rows.
+#' @param .f a function to be applied to each element of \code{.x}, or row of
+#'     \code{.x} as the case may be.
 #' @param ... (optional) named arguments (name = value pairs) specifying objects
 #'     referenced, but not defined, in \code{.f}.
 #' @param .args (optional) further constant arguments to \code{.f}, provided as
@@ -52,21 +50,34 @@
 #'     that they are of the same type to avoid coercion. Note: errors if an
 #'     \sQuote{errorValue} has been returned or results are of differing type.
 #'
-#'     \code{x[.progress]} collects map results whilst showing a text progress
-#'     indicator.
+#'     \code{x[.progress]} collects map results whilst showing a simple text
+#'     progress indicator of parts completed of the total.
+#'
+#'     \code{x[.progress_cli]} collects map results whilst showing a progress bar
+#'     from the \CRANpkg{cli} package, if available, with completion percentage
+#'     and ETA.
 #'
 #'     \code{x[.stop]} collects map results applying early stopping, which stops
 #'     at the first failure and cancels remaining operations. Note: operations
 #'     already in progress continue to completion, although their results are
 #'     not collected.
 #'
-#'     The options above may be combined in a vector, for example: \cr
-#'     \code{x[c(.stop, .progress)]} applies early stopping together with a
+#'     The options above may be combined in the manner of: \cr
+#'     \code{x[.stop, .progress]} which applies early stopping together with a
 #'     progress indicator.
 #'
+#' @section Multiple Map:
+#'
+#'    Multiple map is performed automatically over the \strong{rows} of an
+#'    object with \sQuote{dim} attributes such as a matrix or dataframe. This is
+#'    most often the desired behaviour.
+#'
+#'    To map over \strong{columns} instead, first wrap a dataframe in
+#'    \code{\link{as.list}}, or transpose a matrix using \code{\link{t}}.
+#'
 #' @details Sends each application of function \code{.f} on an element of
-#'     \code{.x} (or each application of \code{.f} on a slice of \code{.x}) for
-#'     computation in a separate \code{\link{mirai}} call.
+#'     \code{.x} (or row of \code{.x}) for computation in a separate
+#'     \code{\link{mirai}} call.
 #'
 #'     This simple and transparent behaviour is designed to make full use of
 #'     \pkg{mirai} scheduling to minimise overall execution time.
@@ -76,13 +87,13 @@
 #'     allowing only the failures to be re-run.
 #'
 #'     Note: requires daemons to have previously been set. If not, then one
-#'     local daemon is set before the function propceeds.
+#'     local daemon is set before the function proceeds.
 #'
 #' @examples
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' daemons(4, dispatcher = FALSE)
+#' daemons(4, dispatcher = "none")
 #'
 #' # map with constant args specified via '.args'
 #' mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
@@ -90,9 +101,9 @@
 #' # flatmap with function definition passed via '...'
 #' mirai_map(1:3, function(x) func(1L, x, x + 1L), func = stats::runif)[.flat]
 #'
-#' # sum slices of a list of vectors
-#' (listvec <- list(1:3, c(4, 3, 2)))
-#' mirai_map(listvec, sum)[.flat]
+#' # sum rows of a dataframe
+#' (df <- data.frame(a = 1:3, b = c(4, 3, 2)))
+#' mirai_map(df, sum)[.flat]
 #'
 #' # sum rows of a matrix
 #' (mat <- matrix(1:4, nrow = 2L))
@@ -104,7 +115,11 @@
 #'
 #' # indexed map over a vector
 #' v <- c("egg", "got", "ten", "nap", "pie")
-#' mirai_map(list(1:length(v), v), sprintf, .args = list(fmt = "%d_%s"))[.flat]
+#' mirai_map(
+#'   data.frame(1:length(v), v),
+#'   sprintf,
+#'   .args = list(fmt = "%d_%s")
+#' )[.flat]
 #'
 #' # return a 'mirai_map' object, check for resolution, collect later
 #' mp <- mirai_map(
@@ -126,13 +141,13 @@
 #' # generates warning as daemons not set
 #' # stops early when second element returns an error
 #' tryCatch(
-#'   mirai_map(list(list(1, "a", 3), 3:1), sum)[.stop],
+#'   mirai_map(list(1, "a", 3), sum)[.stop],
 #'   error = identity
 #' )
 #'
 #' # promises example that outputs the results, including errors, to the console
 #' if (requireNamespace("promises", quietly = TRUE)) {
-#' daemons(1, dispatcher = FALSE)
+#' daemons(1, dispatcher = "none")
 #' ml <- mirai_map(
 #'   1:30,
 #'   function(x) {Sys.sleep(0.1); if (x == 30) stop(x) else x},
@@ -149,36 +164,26 @@
 #'
 mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "default") {
 
+  is.function(.f) || stop(sprintf(._[["function_required"]], typeof(.f)))
   envir <- ..[[.compute]]
   is.null(envir) && {
     .x
-    .f
     warning(._[["requires_daemons"]], call. = FALSE, immediate. = TRUE)
-    daemons(n = 1L, dispatcher = FALSE, .compute = .compute)
+    daemons(n = 1L, dispatcher = "none", .compute = .compute)
     return(mirai_map(.x = .x, .f = .f, ..., .args = .args, .promise = .promise, .compute = .compute))
   }
-  if (is.matrix(.x)) {
-    xilen <- length(.x[1L, ])
-    cond <- xilen > 1L
-  } else {
-    xilen <- length(.x[[1L]])
-    cond <- xilen > 1L && all(as.integer(lapply(.x, length)) == xilen)
-  }
-  if (cond) {
-  vec <- vector(mode = "list", length = xilen)
-    if (is.matrix(.x)) {
-      for (i in seq_len(xilen))
-        vec[[i]] <- mirai(
-          .expr = do.call(.f, c(as.list(.x), .args)),
-          .f = .f,
-          .x = .x[i, ],
-          ...,
-          .args = list(.args = .args),
-          .compute = .compute
-        )
-    } else {
-      for (i in seq_len(xilen))
-        vec[[i]] <- mirai(
+  xilen <- dim(.x)[1L]
+  vec <- if (length(xilen))
+    lapply(
+      seq_len(xilen),
+      if (is.matrix(.x)) function(i) mirai(
+        .expr = do.call(.f, c(as.list(.x), .args)),
+        .f = .f,
+        .x = .x[i, ],
+        ...,
+        .args = list(.args = .args),
+        .compute = .compute
+      ) else function(i) mirai(
         .expr = do.call(.f, c(.x, .args)),
         .f = .f,
         .x = lapply(.x, .subset2, i),
@@ -186,19 +191,20 @@ mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "
         .args = list(.args = .args),
         .compute = .compute
       )
-    }
-  } else {
-    vec <- `names<-`(vector(mode = "list", length = length(.x)), names(.x))
-    for (i in seq_along(vec))
-      vec[[i]] <- mirai(
-        .expr = do.call(.f, c(list(.x), .args)),
-        .f = .f,
-        .x = .subset2(.x, i),
-        ...,
-        .args = list(.args = .args),
-        .compute = .compute
-      )
-  }
+    ) else `names<-`(
+      lapply(
+        .x,
+        function(x) mirai(
+          .expr = do.call(.f, c(list(.x), .args)),
+          .f = .f,
+          .x = x,
+          ...,
+          .args = list(.args = .args),
+          .compute = .compute
+        )
+      ),
+      names(.x)
+    )
 
   if (length(.promise))
     if (is.list(.promise)) {
@@ -215,23 +221,23 @@ mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "
 
 #' @export
 #'
-`[.mirai_map` <- function(x, i) {
+`[.mirai_map` <- function(x, ...) {
 
-  missing(i) && return(collect_aio_(x))
+  missing(..1) && return(collect_aio_(x))
 
-  .expr <- i
-  i <- 0L
-  typ <- xi <- NULL
+  dots <- eval(`[[<-`(substitute(alist(...)), 1L, quote(list)), envir = .)
+  expr <- if (length(dots) > 1L) do.call(expression, dots) else dots[[1L]]
   xlen <- length(x)
+  i <- 0L
+  typ <- xi <- FALSE
   collect_map <- function(i) {
     xi <- collect_aio_(x[[i]])
-    eval(.expr)
+    eval(expr)
     xi
   }
-  eval(.expr)
+  eval(expr)
   out <- `names<-`(lapply(seq_len(xlen), collect_map), names(x))
-  i <- xlen + 1L
-  eval(.expr)
+  xi && return(unlist(out, recursive = FALSE))
   out
 
 }
@@ -256,18 +262,38 @@ print.mirai_map <- function(x, ...) {
 #' @keywords internal
 #' @export
 #'
-.flat <- expression(
-  if (i <= 1L) typ <<- typeof(xi) else
-    if (i <= xlen) is_error_value(xi) && stop(xi, call. = FALSE) || typeof(xi) == typ || stop(sprintf("[.flat]: cannot flatten outputs of differing type: %s / %s", typ, typeof(xi)), call. = FALSE) else
-      out <- unlist(out, recursive = FALSE)
+.flat <- compiler::compile(
+  quote(
+    if (i == 0L) xi <- TRUE else
+      if (i == 1L) typ <<- typeof(xi) else
+        if (i <= xlen) is_error_value(xi) && stop(xi, call. = FALSE) || typeof(xi) == typ || stop(sprintf("[.flat]: cannot flatten outputs of differing type: %s / %s", typ, typeof(xi)), call. = FALSE)
+  )
 )
 
 #' @rdname dot-flat
 #' @export
 #'
-.progress <- expression(cat(if (i < xlen) sprintf("\r[ %d / %d .... ]", i, xlen) else if (i == xlen) sprintf("\r[ %d / %d done ]\n", i, xlen), file = stderr()))
+.progress <- compiler::compile(
+  quote(
+    if (i == 0L) cat(sprintf("\r[ 0 / %d .... ]", xlen), file = stderr()) else
+      if (i < xlen) cat(sprintf("\r[ %d / %d .... ]", i, xlen), file = stderr()) else
+        if (i == xlen) cat(sprintf("\r[ %d / %d done ]\n", i, xlen), file = stderr())
+  )
+)
 
 #' @rdname dot-flat
 #' @export
 #'
-.stop <- expression(if (is_error_value(xi)) { lapply(x, stop_mirai); stop(xi, call. = FALSE) })
+.progress_cli <- compiler::compile(
+  quote(
+    if (i == 0L) cli::cli_progress_bar(type = NULL, total = xlen, auto_terminate = TRUE, .envir = .) else
+      if (i <= xlen) cli::cli_progress_update(.envir = .)
+  )
+)
+
+#' @rdname dot-flat
+#' @export
+#'
+.stop <- compiler::compile(
+  quote(if (is_error_value(xi)) { lapply(x, stop_mirai); stop(xi, call. = FALSE) })
+)

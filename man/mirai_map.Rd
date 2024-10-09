@@ -7,12 +7,11 @@
 mirai_map(.x, .f, ..., .args = list(), .promise = NULL, .compute = "default")
 }
 \arguments{
-\item{.x}{a list or atomic vector. If a 2D list (i.e. list of lists/vectors
-of the same length), multiple map is performed over a slice of the list.
-If a matrix, multiple map is performed over the rows of the matrix.}
+\item{.x}{a list or atomic vector. Also accepts a matrix or dataframe, in
+which case multiple map is performed over its rows.}
 
-\item{.f}{a function to be applied to each element of \code{.x}, or across
-all sub-elements of \code{.x} as the case may be.}
+\item{.f}{a function to be applied to each element of \code{.x}, or row of
+\code{.x} as the case may be.}
 
 \item{...}{(optional) named arguments (name = value pairs) specifying objects
 referenced, but not defined, in \code{.f}.}
@@ -36,13 +35,12 @@ A \sQuote{mirai_map} (list of \sQuote{mirai} objects).
 \description{
 Asynchronous parallel map of a function over a list or vector using
     \pkg{mirai}, with optional \pkg{promises} integration. Performs multiple
-    map over 2D lists/vectors, allowing advanced patterns such as map over
-    the rows of a dataframe or matrix.
+    map over the rows of a dataframe or matrix.
 }
 \details{
 Sends each application of function \code{.f} on an element of
-    \code{.x} (or each application of \code{.f} on a slice of \code{.x}) for
-    computation in a separate \code{\link{mirai}} call.
+    \code{.x} (or row of \code{.x}) for computation in a separate
+    \code{\link{mirai}} call.
 
     This simple and transparent behaviour is designed to make full use of
     \pkg{mirai} scheduling to minimise overall execution time.
@@ -52,7 +50,7 @@ Sends each application of function \code{.f} on an element of
     allowing only the failures to be re-run.
 
     Note: requires daemons to have previously been set. If not, then one
-    local daemon is set before the function propceeds.
+    local daemon is set before the function proceeds.
 }
 \section{Results}{
 
@@ -65,24 +63,39 @@ Sends each application of function \code{.f} on an element of
     that they are of the same type to avoid coercion. Note: errors if an
     \sQuote{errorValue} has been returned or results are of differing type.
 
-    \code{x[.progress]} collects map results whilst showing a text progress
-    indicator.
+    \code{x[.progress]} collects map results whilst showing a simple text
+    progress indicator of parts completed of the total.
+
+    \code{x[.progress_cli]} collects map results whilst showing a progress bar
+    from the \CRANpkg{cli} package, if available, with completion percentage
+    and ETA.
 
     \code{x[.stop]} collects map results applying early stopping, which stops
     at the first failure and cancels remaining operations. Note: operations
     already in progress continue to completion, although their results are
     not collected.
 
-    The options above may be combined in a vector, for example: \cr
-    \code{x[c(.stop, .progress)]} applies early stopping together with a
+    The options above may be combined in the manner of: \cr
+    \code{x[.stop, .progress]} which applies early stopping together with a
     progress indicator.
+}
+
+\section{Multiple Map}{
+
+
+   Multiple map is performed automatically over the \strong{rows} of an
+   object with \sQuote{dim} attributes such as a matrix or dataframe. This is
+   most often the desired behaviour.
+
+   To map over \strong{columns} instead, first wrap a dataframe in
+   \code{\link{as.list}}, or transpose a matrix using \code{\link{t}}.
 }
 
 \examples{
 if (interactive()) {
 # Only run examples in interactive R sessions
 
-daemons(4, dispatcher = FALSE)
+daemons(4, dispatcher = "none")
 
 # map with constant args specified via '.args'
 mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
@@ -90,9 +103,9 @@ mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
 # flatmap with function definition passed via '...'
 mirai_map(1:3, function(x) func(1L, x, x + 1L), func = stats::runif)[.flat]
 
-# sum slices of a list of vectors
-(listvec <- list(1:3, c(4, 3, 2)))
-mirai_map(listvec, sum)[.flat]
+# sum rows of a dataframe
+(df <- data.frame(a = 1:3, b = c(4, 3, 2)))
+mirai_map(df, sum)[.flat]
 
 # sum rows of a matrix
 (mat <- matrix(1:4, nrow = 2L))
@@ -104,7 +117,11 @@ mirai_map(df, function(...) sprintf("\%s: \%d", ...))[.flat]
 
 # indexed map over a vector
 v <- c("egg", "got", "ten", "nap", "pie")
-mirai_map(list(1:length(v), v), sprintf, .args = list(fmt = "\%d_\%s"))[.flat]
+mirai_map(
+  data.frame(1:length(v), v),
+  sprintf,
+  .args = list(fmt = "\%d_\%s")
+)[.flat]
 
 # return a 'mirai_map' object, check for resolution, collect later
 mp <- mirai_map(
@@ -126,13 +143,13 @@ daemons(0)
 # generates warning as daemons not set
 # stops early when second element returns an error
 tryCatch(
-  mirai_map(list(list(1, "a", 3), 3:1), sum)[.stop],
+  mirai_map(list(1, "a", 3), sum)[.stop],
   error = identity
 )
 
 # promises example that outputs the results, including errors, to the console
 if (requireNamespace("promises", quietly = TRUE)) {
-daemons(1, dispatcher = FALSE)
+daemons(1, dispatcher = "none")
 ml <- mirai_map(
   1:30,
   function(x) {Sys.sleep(0.1); if (x == 30) stop(x) else x},

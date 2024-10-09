@@ -49,16 +49,17 @@
 #' @details These functions may be used to re-launch daemons that have exited
 #'     after reaching time or task limits.
 #'
-#'     If daemons have been set, the generated command will automatically
-#'     contain the argument \sQuote{rs} specifying the length 7 L'Ecuyer-CMRG
-#'     random seed supplied to the daemon. The values will be different each
-#'     time the function is called.
+#'     Daemons must already be set for launchers to work.
+#'
+#'     The generated command contains the argument \sQuote{rs} specifying the
+#'     length 7 L'Ecuyer-CMRG random seed supplied to the daemon. The values
+#'     will be different each time the function is called.
 #'
 #' @examples
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' daemons(url = host_url(ws = TRUE), dispatcher = FALSE)
+#' daemons(url = host_url(ws = TRUE), dispatcher = "none")
 #' status()
 #' launch_local(status()$daemons, maxtasks = 10L)
 #' launch_remote(1L, maxtasks = 10L)
@@ -81,17 +82,14 @@
 launch_local <- function(url, ..., tls = NULL, .compute = "default") {
 
   envir <- ..[[.compute]]
+  is.null(envir) && stop(._[["daemons_unset"]])
   dots <- parse_dots(...)
   output <- attr(dots, "output")
   if (is.null(tls)) tls <- envir[["tls"]]
-  url <- process_url(url, .compute = .compute)
-  if (is.null(envir[["stream"]])) {
-    for (u in url)
-      launch_daemon(wa2(u, dots, tls), output)
-  } else {
-    for (u in url)
-      launch_daemon(wa3(u, dots, next_stream(envir), tls), output)
-  }
+  url <- process_url(url = url, envir = envir)
+  is.character(url) || stop(._[["url_spec"]])
+  for (u in url)
+    launch_daemon(wa3(u, dots, next_stream(envir), tls), output)
 
 }
 
@@ -109,7 +107,7 @@ launch_local <- function(url, ..., tls = NULL, .compute = "default") {
 #'
 #' @return For \strong{launch_remote}: A character vector of daemon launch
 #'     commands, classed as \sQuote{miraiLaunchCmd}. The printed output may be
-#'     directly copy / pasted to the remote machine.
+#'     copy / pasted directly to the remote machine.
 #'
 #' @rdname launch_local
 #' @export
@@ -121,9 +119,11 @@ launch_remote <- function(url, remote = remote_config(), ..., tls = NULL, .compu
     url <- rep(..[[.compute]][["urls"]], max(length(url), 1L))
   }
   envir <- ..[[.compute]]
+  is.null(envir) && stop(._[["daemons_unset"]])
   dots <- parse_dots(...)
   if (is.null(tls)) tls <- envir[["tls"]]
-  url <- process_url(url, .compute = .compute)
+  url <- process_url(url = url, envir = envir)
+  is.character(url) || stop(._[["url_spec"]])
 
   ulen <- length(url)
   command <- remote[["command"]]
@@ -144,11 +144,7 @@ launch_remote <- function(url, remote = remote_config(), ..., tls = NULL, .compu
         arglen <- length(args)
         cmds <- character(arglen)
         for (i in seq_along(args))
-          cmds[i] <- sprintf(
-            "%s -e %s",
-            rscript,
-            if (is.null(envir[["stream"]])) wa2(url[min(i, ulen)], dots, tls) else wa3(url[min(i, ulen)], dots, next_stream(envir), tls)
-          )
+          cmds[i] <- sprintf("%s -e %s", rscript, wa3(url[min(i, ulen)], dots, next_stream(envir), tls))
 
         for (i in seq_along(args))
           system2(command = command, args = `[<-`(args[[i]], find_dot(args[[i]]), if (quote) shQuote(cmds[i]) else cmds[i]), wait = FALSE)
@@ -164,11 +160,7 @@ launch_remote <- function(url, remote = remote_config(), ..., tls = NULL, .compu
 
   cmds <- character(ulen)
   for (i in seq_along(url))
-    cmds[i] <- sprintf(
-      "%s -e %s",
-      rscript,
-      if (is.null(envir[["stream"]])) wa2(url[i], dots, tls) else wa3(url[i], dots, next_stream(envir), tls)
-    )
+    cmds[i] <- sprintf("%s -e %s", rscript, wa3(url[i], dots, next_stream(envir), tls))
 
   if (length(command))
     for (cmd in cmds)
@@ -433,11 +425,10 @@ find_dot <- function(args) {
   sel
 }
 
-process_url <- function(url, .compute) {
+process_url <- function(url, envir) {
   if (is.numeric(url)) {
-    vec <- ..[[.compute]][["urls"]]
-    is.null(vec) && stop(._[["daemons_unset"]], call. = FALSE)
-    all(url >= 1L, url <= length(vec)) || stop(._[["url_spec"]], call. = FALSE)
+    vec <- envir[["urls"]]
+    all(url >= 1L, url <= length(vec)) || return(FALSE)
     url <- vec[url]
   } else {
     lapply(url, parse_url)
