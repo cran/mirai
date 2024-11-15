@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.2">
+<meta name="generator" content="litedown 0.4">
 <title>mirai - Promises Integration</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.37/css/prism-xcode.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.44/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -46,6 +46,10 @@ table {
   th, td { padding: 5px; }
   thead, tfoot, tr:nth-child(even) { background: #eee; }
 }
+.table-full {
+  width: 100%;
+  td { vertical-align: baseline; }
+}
 blockquote {
   color: #666;
   margin: 0;
@@ -67,6 +71,7 @@ table, .body h2 { border-bottom: 1px solid #666; }
 .cross-ref-sec::before { content: "Section "; }
 .cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
 .cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
 .abstract, #refs {
   &::before { display: block; margin: 1em auto; font-weight: bold; }
 }
@@ -100,7 +105,7 @@ section.footnotes {
 <div class="title"><h1>mirai - Promises Integration</h1></div>
 </div>
 <div class="body">
-<h3 id="sec-promises-integration">Promises Integration</h3>
+<h3 id="sec:promises-integration">Promises Integration</h3>
 <p><code>mirai</code> supplies its own <code>as.promise()</code> method, allowing it to be used as a promise from the <a href="https://rstudio.github.io/promises/"><code>promises</code></a> package.</p>
 <p>These are next-generation, event-driven promises, developed in collaboration with Joe Cheng.</p>
 <ul>
@@ -135,7 +140,7 @@ m[]
 <pre><code class="language-r">env$res
 #&gt; [1] &quot;hello&quot;
 </code></pre>
-<h3 id="sec-the-one-million-promises-challenge">The One Million Promises Challenge</h3>
+<h3 id="sec:the-one-million-promises-challenge">The One Million Promises Challenge</h3>
 <p>The code below is taken from the challenge to launch and collect one million promises. For illustration, the example is scaled down to ten thousand.</p>
 <pre><code class="language-r">library(mirai)
 daemons(8, dispatcher = &quot;none&quot;)

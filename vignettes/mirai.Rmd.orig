@@ -353,16 +353,16 @@ daemons(
 
 `remote_config()` may be used to run a command to deploy daemons using a resource manager.
 
-Taking Slurm as an example, the following uses `srun` to launch 2 daemons on the cluster, with some additional arguments to `srun` specifying the resource allocation:
-
-```{r remotecfg, eval=FALSE}
+Taking Slurm as an example, the following uses `sbatch` to launch 2 daemons on the cluster, with some additional arguments to `sbatch` specifying the resource allocation:
+``` r
 daemons(
   n = 2,
   url = host_url(ws = TRUE),
   remote = remote_config(
-    command = "srun",
-    args = c("--mem 512", "-n 1", "."),
-    rscript = file.path(R.home("bin"), "Rscript")
+    command = "sbatch",
+    args = c("--mem 512", "-n 1", "--wrap", "."),
+    rscript = file.path(R.home("bin"), "Rscript"),
+    quote = TRUE
   )
 )
 ```
@@ -470,7 +470,8 @@ m3$data$stack.trace
 ```
 If a daemon instance is sent a user interrupt, the mirai will resolve to an object of class 'miraiInterrupt' and 'errorValue'. `is_mirai_interrupt()` may be used to test for such interrupts.
 ```{r interruptexample}
-is_mirai_interrupt(m2$data)
+m4 <- mirai(rlang::interrupt()) # simulates a user interrupt
+is_mirai_interrupt(m4[])
 ```
 If execution of a mirai surpasses the timeout set via the '.timeout' argument, the mirai will resolve to an 'errorValue' of 5L (timed out). This can, amongst other things, guard against mirai processes that have the potential to hang and never return.
 ```{r timeouts}
@@ -640,7 +641,7 @@ mirai as a framework is designed to support completely transparent and inter-ope
 
 There are hence few requirements of package authors.
 
-The following may nonetheless be helpful:
+The following points may, however, be useful:
 
 - `daemons()` settings should usually be left to end-users. Users may be guided to mirai documentation if desired. If however, a package wishes to set default settings, for example, `daemons()` should always be called specifying `force = FALSE`. This ensures that any prior user settings are respected, and that daemons set elsewhere are not prematurely terminated.
 
@@ -655,6 +656,8 @@ or
 
 - The shape and contents of the `status()` daemons matrix must not be relied upon, as this user interface is subject to change at any time. There is a developer interface `nextget()`, for querying values such as 'urls' described in the function documentation. Note: only the specifically-documented values are supported interfaces.
 
-- Testing on CRAN should respect it's 2-core usage limit. This practically means limiting tests to using one daemon (with `dispatcher = "none"`) to ensure that only one additional process is used. Always reset daemons when done and then allow at least a one-second sleep to ensure all background processes have properly exited. These limits only apply to CRAN of course, and it is always possible to run a full suite of tests involving further daemons options in other contexts.
+- This is recommended practice in any case, but especially relevant for package developers: the functions `unresolved()`, `is_error_value()`, `is_mirai_error()`, and `is_mirai_interrupt()` should be used to test for the relevant state of a mirai or its value. The characteristics of how they are currently implemented, e.g. as a logical NA for an 'unresolvedValue', should not be relied upon, as these are subject to change.
+
+- Testing on CRAN should respect it's 2-core usage limit. This practically means limiting tests to using one daemon (with `dispatcher = "none"`) to ensure that only one additional process is used. Always reset daemons when done and then allow at least a one-second sleep to ensure all background processes have properly exited. These limits apply only to tests run on CRAN machines and not those run elsewhere.
 
 [&laquo; Back to ToC](#table-of-contents)

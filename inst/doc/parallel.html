@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.2">
+<meta name="generator" content="litedown 0.4">
 <title>mirai - Parallel Integration</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.37/css/prism-xcode.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.44/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -46,6 +46,10 @@ table {
   th, td { padding: 5px; }
   thead, tfoot, tr:nth-child(even) { background: #eee; }
 }
+.table-full {
+  width: 100%;
+  td { vertical-align: baseline; }
+}
 blockquote {
   color: #666;
   margin: 0;
@@ -67,6 +71,7 @@ table, .body h2 { border-bottom: 1px solid #666; }
 .cross-ref-sec::before { content: "Section "; }
 .cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
 .cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
 .abstract, #refs {
   &::before { display: block; margin: 1em auto; font-weight: bold; }
 }
@@ -100,7 +105,7 @@ section.footnotes {
 <div class="title"><h1>mirai - Parallel Integration</h1></div>
 </div>
 <div class="body">
-<h3 id="sec-parallel-integration">Parallel Integration</h3>
+<h3 id="sec:parallel-integration">Parallel Integration</h3>
 <p><code>mirai</code> provides an alternative communications backend for R. This functionality was developed to fulfil a request by R Core at R Project Sprint 2023.</p>
 <p><code>make_cluster()</code> creates a cluster object of class ‘miraiCluster’, which is fully-compatible with <code>parallel</code> cluster types.</p>
 <ul>
@@ -136,7 +141,7 @@ parallel::parLapply(cl, iris, mean)
 #&gt; [1] 4
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://e755083adb3ac002d81d87c7&quot;
+#&gt; [1] &quot;abstract://4fc130b92777dbce706aaaa8&quot;
 stop_cluster(cl)
 </code></pre>
 <p>Making a cluster specifying ‘url’ without ‘remote’ causes the shell commands for manual deployment of nodes to be printed to the console.</p>
@@ -144,13 +149,13 @@ stop_cluster(cl)
 #&gt; Shell commands for deployment on nodes:
 #&gt; 
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:41567&quot;,rs=c(10407,-1229812554,-355079233,-704283916,613800293,-1049741598,-1259508485))'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:38547&quot;,rs=c(10407,987529368,-709709383,-455625178,-350041489,-644694556,1812636565))'
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:41567&quot;,rs=c(10407,-936602309,482053993,1829342693,1529156475,2009204106,1430761999))'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:38547&quot;,rs=c(10407,2025237564,31519412,1895592412,1818446374,-452272375,1687922752))'
 stop_cluster(cl)
 </code></pre>
-<h3 id="sec-foreach-integration">Foreach Integration</h3>
+<h3 id="sec:foreach-integration">Foreach Integration</h3>
 <p>A ‘miraiCluster’ may also be registered by <a href="https://cran.r-project.org/package=doParallel"><code>doParallel</code></a> for use with the <a href="https://cran.r-project.org/package=foreach"><code>foreach</code></a> package.</p>
 <p>Running some parallel examples for the <code>foreach()</code> function:</p>
 <pre><code class="language-r">library(foreach)
@@ -163,10 +168,10 @@ doParallel::registerDoParallel(cl)
 m &lt;- matrix(rnorm(9), 3, 3)
 foreach(i = 1:nrow(m), .combine = rbind) %dopar%
   (m[i, ] / mean(m[i, ]))
-#&gt;               [,1]      [,2]       [,3]
-#&gt; result.1 0.6168828 1.1209518  1.2621654
-#&gt; result.2 1.9631338 0.3970546  0.6398116
-#&gt; result.3 1.8112756 8.5974163 -7.4086918
+#&gt;               [,1]       [,2]      [,3]
+#&gt; result.1 0.5860066  1.0688031 1.3451903
+#&gt; result.2 0.6856291 -0.1415699 2.4559407
+#&gt; result.3 0.8224936  1.6700118 0.5074946
 # simple parallel matrix multiply
 a &lt;- matrix(1:16, 4, 4)
 b &lt;- t(a)

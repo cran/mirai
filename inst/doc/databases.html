@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.2">
+<meta name="generator" content="litedown 0.4">
 <title>mirai - Databases and Arrow</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.37/css/prism-xcode.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.44/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -46,6 +46,10 @@ table {
   th, td { padding: 5px; }
   thead, tfoot, tr:nth-child(even) { background: #eee; }
 }
+.table-full {
+  width: 100%;
+  td { vertical-align: baseline; }
+}
 blockquote {
   color: #666;
   margin: 0;
@@ -67,6 +71,7 @@ table, .body h2 { border-bottom: 1px solid #666; }
 .cross-ref-sec::before { content: "Section "; }
 .cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
 .cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
 .abstract, #refs {
   &::before { display: block; margin: 1em auto; font-weight: bold; }
 }
@@ -100,7 +105,7 @@ section.footnotes {
 <div class="title"><h1>mirai - Databases and Arrow</h1></div>
 </div>
 <div class="body">
-<h3 id="sec-database-hosting-the-basics">Database Hosting - The Basics</h3>
+<h3 id="sec:database-hosting-the-basics">Database Hosting - The Basics</h3>
 <p><code>mirai</code> supports the hosting of multiple database connections across processes on the local machine or a remote server. <code>everywhere()</code> easily sets up identical database connections in each daemon process.</p>
 <p>The following represents a simple example, which sets up 2 local daemons, and then opens a connection to the same SQLite file database in each daemon.</p>
 <pre><code class="language-r">file &lt;- tempfile()
@@ -133,7 +138,7 @@ m[]
 daemons(0)
 #&gt; [1] 0
 </code></pre>
-<h3 id="sec-database-hosting-using-arrow-database-connectivity">Database Hosting - Using Arrow Database Connectivity</h3>
+<h3 id="sec:database-hosting-using-arrow-database-connectivity">Database Hosting - Using Arrow Database Connectivity</h3>
 <p>It is possible using the <code>DBI</code> interface to access and manipulate data in the Apache Arrow data format efficiently through ABDC (Arrow Database Connectivity).</p>
 <p>The example below creates an in-memory SQLite connection using the <code>adbcsqlite</code> backend.</p>
 <p>Serialization is set up with the relevant serialization functions from the <code>arrow</code> package as part of the <code>everywhere()</code> call. Note that the specified class is ‘nanoarrow_array_stream’ as <code>nanoarrow</code> is the backend for all queries made by the DBI <code>db*Arrow()</code> functions.</p>
@@ -232,7 +237,7 @@ m[]
 daemons(0)
 #&gt; [1] 0
 </code></pre>
-<h3 id="sec-shiny-mirai-dbi-adbc-integrated-example">Shiny / mirai / DBI / ADBC Integrated Example</h3>
+<h3 id="sec:shiny-mirai-dbi-adbc-integrated-example">Shiny / mirai / DBI / ADBC Integrated Example</h3>
 <p>The following is an example of how database connections hosted in mirai daemons may be used to power a Shiny app.</p>
 <p>The one-time <code>serialization()</code> setup ensures seamless transport of Apache Arrow data, and occurs in the global environment outside of <code>server()</code>.</p>
 <p>A new database connection is created in a new daemon process for every new Shiny session. The resources are freed when a sesssion ends. This logic is all defined within <code>server()</code>. A unique ID is used to identify each session, and is specified as the ‘compute profile’ for daemons.</p>

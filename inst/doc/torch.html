@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.2">
+<meta name="generator" content="litedown 0.4">
 <title>mirai - Torch Integration</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.37/css/prism-xcode.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.44/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -46,6 +46,10 @@ table {
   th, td { padding: 5px; }
   thead, tfoot, tr:nth-child(even) { background: #eee; }
 }
+.table-full {
+  width: 100%;
+  td { vertical-align: baseline; }
+}
 blockquote {
   color: #666;
   margin: 0;
@@ -67,6 +71,7 @@ table, .body h2 { border-bottom: 1px solid #666; }
 .cross-ref-sec::before { content: "Section "; }
 .cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
 .cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
 .abstract, #refs {
   &::before { display: block; margin: 1em auto; font-weight: bold; }
 }
@@ -100,10 +105,10 @@ section.footnotes {
 <div class="title"><h1>mirai - Torch Integration</h1></div>
 </div>
 <div class="body">
-<h3 id="sec-torch-integration">Torch Integration</h3>
+<h3 id="sec:torch-integration">Torch Integration</h3>
 <p>Custom serialization functions may be registered to handle external pointer type reference objects.</p>
 <p>This allows tensors from the <a href="https://torch.mlverse.org/"><code>torch</code></a> package to be used seamlessly in ‘mirai’ computations.</p>
-<h4 id="sec-setup-steps">Setup Steps</h4>
+<h4 id="sec:setup-steps">Setup Steps</h4>
 <ol>
 <li>
 <p>Set up dameons.</p>
@@ -130,7 +135,7 @@ cfg &lt;- serial_config(
 
 everywhere(library(torch), .serial = cfg)
 </code></pre>
-<h4 id="sec-example-usage">Example Usage</h4>
+<h4 id="sec:example-usage">Example Usage</h4>
 <p>The below example creates a convolutional neural network using <code>torch::nn_module()</code>.</p>
 <p>A set of model parameters is also specified.</p>
 <p>The model specification and parameters are then passed to and initialized within a ‘mirai’.</p>

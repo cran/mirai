@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.2">
+<meta name="generator" content="litedown 0.4">
 <title>mirai - Plumber Integration</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.37/css/prism-xcode.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.44/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -46,6 +46,10 @@ table {
   th, td { padding: 5px; }
   thead, tfoot, tr:nth-child(even) { background: #eee; }
 }
+.table-full {
+  width: 100%;
+  td { vertical-align: baseline; }
+}
 blockquote {
   color: #666;
   margin: 0;
@@ -67,6 +71,7 @@ table, .body h2 { border-bottom: 1px solid #666; }
 .cross-ref-sec::before { content: "Section "; }
 .cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
 .cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
 .abstract, #refs {
   &::before { display: block; margin: 1em auto; font-weight: bold; }
 }
@@ -100,10 +105,10 @@ section.footnotes {
 <div class="title"><h1>mirai - Plumber Integration</h1></div>
 </div>
 <div class="body">
-<h3 id="sec-plumber-integration">Plumber Integration</h3>
+<h3 id="sec:plumber-integration">Plumber Integration</h3>
 <p><code>mirai</code> may be used as an asynchronous backend for <a href="https://www.rplumber.io/"><code>plumber</code></a> pipelines.</p>
 <p>Example usage is provided below for different types of endpoint.</p>
-<h4 id="sec-example-get-endpoint">Example GET Endpoint</h4>
+<h4 id="sec:example-get-endpoint">Example GET Endpoint</h4>
 <p>The plumber router code is run in a daemon process itself so that it does not block the interactive process.</p>
 <p>The /echo endpoint takes a GET request, sleeps for 1 second (simulating an expensive computation) and simply returns the ‘msg’ request header together with a timestamp and the process ID of the process it is run on.</p>
 <pre><code class="language-r">library(mirai)
@@ -182,7 +187,7 @@ collect_aio(res)
 daemons(0)
 #&gt; [1] 0
 </code></pre>
-<h4 id="sec-example-post-endpoint">Example POST Endpoint</h4>
+<h4 id="sec:example-post-endpoint">Example POST Endpoint</h4>
 <p>Below is a demonstration of the equivalent using a POST endpoint, accepting a JSON instruction sent as request data.</p>
 <p>Note that <code>req$postBody</code> should always be accessed in the router process and passed in as an argument to the ‘mirai’, as this is retrieved using a connection that is not serializable.</p>
 <pre><code class="language-r">library(mirai)

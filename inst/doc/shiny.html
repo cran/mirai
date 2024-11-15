@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.2">
+<meta name="generator" content="litedown 0.4">
 <title>mirai - Shiny Integration</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.37/css/prism-xcode.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.44/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -46,6 +46,10 @@ table {
   th, td { padding: 5px; }
   thead, tfoot, tr:nth-child(even) { background: #eee; }
 }
+.table-full {
+  width: 100%;
+  td { vertical-align: baseline; }
+}
 blockquote {
   color: #666;
   margin: 0;
@@ -67,6 +71,7 @@ table, .body h2 { border-bottom: 1px solid #666; }
 .cross-ref-sec::before { content: "Section "; }
 .cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
 .cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
 .abstract, #refs {
   &::before { display: block; margin: 1em auto; font-weight: bold; }
 }
@@ -100,7 +105,7 @@ section.footnotes {
 <div class="title"><h1>mirai - Shiny Integration</h1></div>
 </div>
 <div class="body">
-<h3 id="sec-shiny-integration">Shiny Integration</h3>
+<h3 id="sec:shiny-integration">Shiny Integration</h3>
 <p><code>mirai</code> may be used as an asynchronous backend to scale <a href="https://shiny.posit.co/">Shiny</a> applications.</p>
 <p>Depending on the options suppled to <code>daemons()</code>, mirai tasks may be distributed across local background processes or multiple networked servers in an efficient and performant manner.</p>
 <p>For use with Shiny, <code>mirai</code> implements truly event-driven promises, developed in collaboration with Joe Cheng (creator of Shiny).</p>
@@ -111,7 +116,7 @@ section.footnotes {
 </ul>
 <p>mirai natively supports Shiny ExtendedTask to create scalable Shiny apps, which remain responsive intra-session for each user, as well as inter-session for multiple concurrent users.</p>
 <p>‘mirai’ may be used anywhere a ‘promise’ or ‘future_promise’ would be accepted (with <code>promises</code> &gt;= 1.3.0).</p>
-<h4 id="sec-shiny-extendedtask-example-plot-with-clock">Shiny ExtendedTask Example: Plot with Clock</h4>
+<h4 id="sec:shiny-extendedtask-example-plot-with-clock">Shiny ExtendedTask Example: Plot with Clock</h4>
 <p>In the example below, the app remains responsive, with the clock continuing to tick whilst the simulated expensive computation is running asynchronously in a parallel process. Also the button is disabled and the plot greyed out until the computation is complete.</p>
 <p>By wrapping the <code>runApp()</code> call in <code>with(daemons(...), ...)</code> the daemons are set up for the duration of the app, exiting automatically when the app is stopped.</p>
 <pre><code class="language-r">library(shiny)
@@ -172,7 +177,7 @@ with(daemons(2), runApp(app))
 </ol>
 <pre><code class="language-r">output$plot &lt;- renderPlot(hist(extended_task$result()))
 </code></pre>
-<h4 id="sec-shiny-extendedtask-example-generative-art">Shiny ExtendedTask Example: Generative Art</h4>
+<h4 id="sec:shiny-extendedtask-example-generative-art">Shiny ExtendedTask Example: Generative Art</h4>
 <p>The following app produces pretty spiral patterns.</p>
 <p>The user can add multiple plots, making use of Shiny modules, each having a different calculation time.</p>
 <p>The plots are generated asynchronously, and it is easy to see the practical limitations of the number of daemons set. For example, if updating 4 plots, and there are only 3 daemons, the 4th plot will not start to be generated until one of the other plots has finished.</p>
@@ -277,7 +282,7 @@ with(daemons(3), runApp(app))
 </ol>
 <pre><code class="language-r">output$plot &lt;- renderPlot(plot_result(extended_task$result()))
 </code></pre>
-<h4 id="sec-advanced-promises-example-coin-flips">Advanced Promises Example: Coin Flips</h4>
+<h4 id="sec:advanced-promises-example-coin-flips">Advanced Promises Example: Coin Flips</h4>
 <p>The below example demonstrates how to integrate a <code>mirai_map()</code> operation into a Shiny app.</p>
 <p>By specifying the ‘.promise’ argument, this registers a promise action against each mapped operation. These can then be used to update reactive values or otherwise interact with the Shiny app.</p>
 <pre><code class="language-r">library(shiny)
