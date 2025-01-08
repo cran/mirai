@@ -1,4 +1,4 @@
-# Copyright (C) 2024 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2024-2025 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -52,7 +52,7 @@
 #'
 #' @return A \sQuote{mirai_map} (list of \sQuote{mirai} objects).
 #'
-#' @section Results:
+#' @section Collection Options:
 #'
 #' \code{x[]} collects the results of a \sQuote{mirai_map} \code{x} and returns
 #' a list. This will wait for all asynchronous operations to complete if still
@@ -90,7 +90,7 @@
 #' if (interactive()) {
 #' # Only run examples in interactive R sessions
 #'
-#' daemons(4, dispatcher = "none")
+#' daemons(4)
 #'
 #' # map with constant args specified via '.args'
 #' mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
@@ -144,7 +144,7 @@
 #'
 #' # promises example that outputs the results, including errors, to the console
 #' if (requireNamespace("promises", quietly = TRUE)) {
-#' daemons(1, dispatcher = "none")
+#' daemons(1, dispatcher = FALSE)
 #' ml <- mirai_map(
 #'   1:30,
 #'   function(x) {Sys.sleep(0.1); if (x == 30) stop(x) else x},
@@ -166,7 +166,7 @@ mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "
   is.null(envir) && {
     .x
     warning(._[["requires_daemons"]], call. = FALSE, immediate. = TRUE)
-    daemons(n = 1L, dispatcher = "none", .compute = .compute)
+    daemons(1L, dispatcher = FALSE, .compute = .compute)
     return(mirai_map(.x = .x, .f = .f, ..., .args = .args, .promise = .promise, .compute = .compute))
   }
   xilen <- dim(.x)[1L]
@@ -175,17 +175,13 @@ mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "
       seq_len(xilen),
       if (is.matrix(.x)) function(i) mirai(
         .expr = do.call(.f, c(as.list(.x), .args)),
-        .f = .f,
-        .x = .x[i, ],
         ...,
-        .args = list(.args = .args),
+        .args = list(.f = .f, .x = .x[i, ], .args = .args),
         .compute = .compute
       ) else function(i) mirai(
         .expr = do.call(.f, c(.x, .args)),
-        .f = .f,
-        .x = lapply(.x, .subset2, i),
         ...,
-        .args = list(.args = .args),
+        .args = list(.f = .f, .x = lapply(.x, .subset2, i), .args = .args),
         .compute = .compute
       )
     ) else `names<-`(
@@ -193,10 +189,8 @@ mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "
         .x,
         function(x) mirai(
           .expr = do.call(.f, c(list(.x), .args)),
-          .f = .f,
-          .x = x,
           ...,
-          .args = list(.args = .args),
+          .args = list(.f = .f, .x = x, .args = .args),
           .compute = .compute
         )
       ),
@@ -221,21 +215,7 @@ mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "
 `[.mirai_map` <- function(x, ...) {
 
   missing(..1) && return(collect_aio_(x))
-
-  dots <- eval(`[[<-`(substitute(alist(...)), 1L, quote(list)), envir = .)
-  expr <- if (length(dots) > 1L) do.call(expression, dots) else dots[[1L]]
-  xlen <- length(x)
-  i <- 0L
-  typ <- xi <- FALSE
-  collect_map <- function(i) {
-    xi <- collect_aio_(x[[i]])
-    eval(expr)
-    xi
-  }
-  eval(expr)
-  out <- `names<-`(lapply(seq_len(xlen), collect_map), names(x))
-  xi && return(unlist(out, recursive = FALSE))
-  out
+  map(x, ...)
 
 }
 
@@ -251,10 +231,10 @@ print.mirai_map <- function(x, ...) {
 
 #' mirai Map Options
 #'
-#' Expressions to insert into the \code{[]} method for \sQuote{mirai_map}
-#' objects.
+#' Expressions to be provided to the \code{[]} method for \sQuote{mirai_map}
+#' objects, or the \code{...} argument of \code{\link{collect_mirai}}.
 #'
-#' @inheritSection mirai_map Results
+#' @inheritSection mirai_map Collection Options
 #'
 #' @keywords internal
 #' @export
@@ -294,3 +274,24 @@ print.mirai_map <- function(x, ...) {
 .stop <- compiler::compile(
   quote(if (is_error_value(xi)) { lapply(x, stop_mirai); stop(xi, call. = FALSE) })
 )
+
+# internals --------------------------------------------------------------------
+
+map <- function(x, ...) {
+
+  dots <- eval(`[[<-`(substitute(alist(...)), 1L, quote(list)), envir = .)
+  expr <- if (length(dots) > 1L) do.call(expression, dots) else dots[[1L]]
+  xlen <- length(x)
+  i <- 0L
+  typ <- xi <- FALSE
+  collect_map <- function(i) {
+    xi <- collect_aio_(x[[i]])
+    eval(expr)
+    xi
+  }
+  eval(expr)
+  out <- `names<-`(lapply(seq_len(xlen), collect_map), names(x))
+  xi && return(unlist(out, recursive = FALSE))
+  out
+
+}

@@ -102,14 +102,14 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
 
   if (is.character(url)) {
 
-    length(url) == 1L || stop(._[["single_url"]])
-    daemons(url = url, remote = remote, dispatcher = "none", cleanup = FALSE, ..., .compute = id)
+    url <- url[1L]
+    daemons(n, url = url, remote = remote, dispatcher = FALSE, cleanup = FALSE, ..., .compute = id)
 
     if (is.null(remote)) {
       if (missing(n)) n <- 1L
       is.numeric(n) || stop(._[["numeric_n"]])
       cat("Shell commands for deployment on nodes:\n\n", file = stdout())
-      print(launch_remote(rep(..[[id]][["urls"]], n), .compute = id))
+      print(launch_remote(n, ..., .compute = id))
     } else {
       args <- remote[["args"]]
       n <- if (is.list(args)) length(args) else 1L
@@ -118,7 +118,7 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
   } else {
     is.numeric(n) || stop(._[["numeric_n"]])
     n >= 1L || stop(._[["n_one"]])
-    daemons(n = n, dispatcher = "none", cleanup = FALSE, ..., .compute = id)
+    daemons(n, dispatcher = FALSE, cleanup = FALSE, ..., .compute = id)
   }
 
   `[[<-`(..[[id]], "cvs", cvs)
@@ -138,7 +138,7 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
 #' @export
 #'
 stop_cluster <- function(cl)
-  daemons(n = 0L, .compute = attr(cl, "id")) || return(invisible())
+  daemons(0L, .compute = attr(cl, "id")) || return(invisible())
 
 #' @exportS3Method parallel::stopCluster
 #'

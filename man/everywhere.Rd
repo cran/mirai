@@ -4,7 +4,7 @@
 \alias{everywhere}
 \title{Evaluate Everywhere}
 \usage{
-everywhere(.expr, ..., .args = list(), .serial = NULL, .compute = "default")
+everywhere(.expr, ..., .args = list(), .compute = "default")
 }
 \arguments{
 \item{.expr}{an expression to evaluate asynchronously (of arbitrary length,
@@ -22,47 +22,46 @@ containing such objects. These objects will remain local to the evaluation
 environment as opposed to those supplied in \sQuote{...} above - see
 \sQuote{evaluation} section below.}
 
-\item{.serial}{[default NULL] (optional) a configuration created by
-\code{\link{serial_config}} to register serialization and unserialization
-functions for normally non-exportable reference objects, such as Arrow
-Tables or torch tensors. Updating with a new configuration replaces any
-existing registered functions. To remove the configuration, provide an
-empty list.}
-
 \item{.compute}{[default 'default'] character value for the compute profile
 to use (each compute profile has its own independent set of daemons).}
 }
 \value{
-Invisible NULL. Will error if the specified compute profile is not
-  found, i.e. not yet set up.
+A list of mirai executed on each daemon. This may be waited for and
+  inspected using \code{\link{call_mirai}} or \code{\link{collect_mirai}}.
 }
 \description{
 Evaluate an expression \sQuote{everywhere} on all connected daemons for the
-specified compute profile. Designed for performing setup operations across
-daemons by loading packages, exporting common data, or registering custom
-serialization functions. Resultant changes to the global environment, loaded
+specified compute profile - this must be set prior to calling this function.
+Designed for performing setup operations across daemons by loading packages
+or exporting common data. Resultant changes to the global environment, loaded
 packages and options are persisted regardless of a daemon's \sQuote{cleanup}
 setting.
+}
+\details{
+This function should be called when no other mirai operations are in
+progress. If necessary, wait for all mirai operations to complete. This is as
+this function does not force a synchronization point, and using concurrently
+with other mirai operations does not guarantee the timing of when the
+instructions will be received, or that they will be received on each daemon.
 }
 \section{Evaluation}{
 
 
 The expression \sQuote{.expr} will be evaluated in a separate R process in a
 clean environment (not the global environment), consisting only of the
-objects in the list or environment supplied to \sQuote{.args}, with the named
-objects passed as \sQuote{...} (from the environment if one was supplied)
+objects supplied to \sQuote{.args}, with the objects passed as \sQuote{...}
 assigned to the global environment of that process.
-
-For evaluation to occur \emph{as if} in your global environment, supply
-objects to \sQuote{...} rather than \sQuote{.args}. For stricter scoping, use
-\sQuote{.args}, which limits, for example, where variables not explicitly
-passed as arguments to functions are found.
 
 As evaluation occurs in a clean environment, all undefined objects must be
 supplied though \sQuote{...} and/or \sQuote{.args}, including self-defined
 functions. Functions from a package should use namespaced calls such as
 \code{mirai::mirai()}, or else the package should be loaded beforehand as
 part of \sQuote{.expr}.
+
+For evaluation to occur \emph{as if} in your global environment, supply
+objects to \sQuote{...} rather than \sQuote{.args}. This is important when
+supplying free variables defined in function bodies, as scoping rules may
+otherwise prevent them from being found.
 }
 
 \examples{
@@ -76,16 +75,19 @@ everywhere(y <<- 3)
 # '.expr' may be specified as an empty {} in such cases:
 everywhere({}, a = 1, b = 2)
 m <- mirai(a + b - y == 0L)
-call_mirai(m)$data
+m[]
+# everywhere() returns a list of mirai which may be waited for and inspected
+mlist <- everywhere("just a normal operation")
+collect_mirai(mlist)
+mlist <- everywhere(stop("error"))
+collect_mirai(mlist)
 daemons(0)
 
-# loading a package on all daemons and also
-# registering custom serialization functions:
-cfg <- serial_config("cls_name", function(x) serialize(x, NULL), unserialize)
-daemons(1, dispatcher = "none")
-everywhere(library(parallel), .serial = cfg)
+# loading a package on all daemons
+daemons(1, dispatcher = FALSE)
+everywhere(library(parallel))
 m <- mirai("package:parallel" \%in\% search())
-call_mirai(m)$data
+m[]
 daemons(0)
 
 }

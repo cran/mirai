@@ -3,9 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.4">
+<meta name="generator" content="litedown 0.5">
 <title>mirai - Plumber Integration</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.44/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -14,20 +13,22 @@ body {
   padding: 1em;
   line-height: 1.5;
 }
-body, .abstract, code, .footnotes, #refs { font-size: .9em; }
+body, .abstract, code, .footnotes, footer, #refs, .caption { font-size: .9em; }
 li li { font-size: .95em; }
 ul:has(li > input[type="checkbox"]) { list-style: none; padding-left: 1em; }
 *, :before, :after { box-sizing: border-box; }
 a { color: steelblue; }
 pre, img { max-width: 100%; }
-pre, pre:hover { white-space: pre-wrap; word-break: break-all; }
+pre { white-space: pre-wrap; word-break: break-word; }
 pre code { display: block; padding: 1em; overflow-x: auto; }
 code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
-:not(pre) > code, code[class], .box > div { background-color: #f8f8f8; }
-pre > code:not([class]), pre > .language-plain, .box { background-color: inherit; border: 1px solid #eee; }
-pre > .message { border-color: #9eeaf9; }
-pre > .warning { background: #fff3cd; border-color: #fff3cd; }
-pre > .error { background: #f8d7da; border-color: #f8d7da; }
+:not(pre) > code, code[class], div > .caption { background-color: #f8f8f8; }
+pre > code:is(:not([class]), .language-plain, .language-none), .box, .figure, .table { background-color: inherit; border: 1px solid #eee; }
+pre > code {
+  &.message { border-color: #9eeaf9; }
+  &.warning { background: #fff3cd; border-color: #fff3cd; }
+  &.error { background: #f8d7da; border-color: #f8d7da; }
+}
 .fenced-chunk { border-left: 1px solid #666; }
 .code-fence {
   opacity: .4;
@@ -35,20 +36,15 @@ pre > .error { background: #f8d7da; border-color: #f8d7da; }
   border-left: 2px solid;
   &:hover { opacity: inherit; }
 }
-.box { margin: 1em 0; }
-.box > :first-child > p:first-child, .box > :last-child > p:last-child { padding: 1em; }
-.box > :first-child, .box > :first-child > p:first-child { margin-top: 0; }
-.box > :last-child, .box > :last-child > p:last-child { margin-bottom: 0; }
-.figure > p:has(img) { text-align: center; }
+.box, .figure, .table, table { margin: 1em auto; }
+div > .caption { padding: 1px 1em; }
+.figure { p:has(img), pre:has(svg) { text-align: center; } }
+.flex-col { display: flex; justify-content: space-between; }
 table {
-  margin: auto; border-top: 1px solid #666;
+  border-top: 1px solid #666;
   thead th { border-bottom: 1px solid #ddd; }
-  th, td { padding: 5px; }
-  thead, tfoot, tr:nth-child(even) { background: #eee; }
-}
-.table-full {
-  width: 100%;
-  td { vertical-align: baseline; }
+  th, td { padding: 5px; font-variant-numeric: tabular-nums; }
+  thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
 }
 blockquote {
   color: #666;
@@ -58,14 +54,16 @@ blockquote {
 }
 hr, .footnotes::before { border: 1px dashed #ddd; }
 .frontmatter { text-align: center; }
-#TOC .numbered {
-  padding-left: 0;
-  li { list-style: none; }
-  ul { padding-left: 1em; }
+#TOC {
+  a { text-decoration: none; }
+  & > ul { padding: 0; }
+  ul { list-style: none; padding-left: 1em; }
+  ul ul { border-left: 1px solid lightsteelblue; }
 }
 table, .body h2 { border-bottom: 1px solid #666; }
 .body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
 .main-number::after { content: "."; }
+span[class^="ref-number-"] { font-weight: bold; }
 .ref-number-fig::after, .ref-number-tab::after { content: ":"; }
 .cross-ref-chp::before { content: "Chapter "; }
 .cross-ref-sec::before { content: "Section "; }
@@ -90,15 +88,20 @@ section.footnotes {
   margin-top: 2em;
   &::before { content: ""; display: block; max-width: 20em; }
 }
+.fade {
+  background: repeating-linear-gradient(135deg, white, white 30px, #ddd 32px, #ddd 32px);
+  opacity: 0.6;
+}
 
 @media print {
   body { max-width: 100%; }
   tr, img { page-break-inside: avoid; }
 }
 @media only screen and (min-width: 992px) {
-  pre { white-space: pre; }
+  body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
 }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.61/css/prism-xcode.min.css">
 </head>
 <body>
 <div class="frontmatter">
@@ -114,7 +117,7 @@ section.footnotes {
 <pre><code class="language-r">library(mirai)
 
 # supply SIGINT so the plumber server is interrupted and exits cleanly when finished
-daemons(1L, dispatcher = &quot;none&quot;, autoexit = tools::SIGINT)
+daemons(1L, dispatcher = FALSE, autoexit = tools::SIGINT)
 #&gt; [1] 1
 
 m &lt;- mirai({
@@ -123,7 +126,7 @@ m &lt;- mirai({
   library(mirai)
 
   # more efficient not to use dispatcher if all requests are similar length
-  daemons(4L, dispatcher = &quot;none&quot;) # handles 4 requests simultaneously
+  daemons(4L, dispatcher = FALSE) # handles 4 requests simultaneously
 
   pr() |&gt;
     pr_get(
@@ -161,28 +164,28 @@ res &lt;- lapply(
 )
 collect_aio(res)
 #&gt; [[1]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:25\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[81109]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:03\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[30785]}&quot;
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:25\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[81111]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:03\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[30777]}&quot;
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:25\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[81107]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:03\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[30779]}&quot;
 #&gt; 
 #&gt; [[4]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:25\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[81115]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:04\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[30785]}&quot;
 #&gt; 
 #&gt; [[5]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:26\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[81111]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:03\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[30782]}&quot;
 #&gt; 
 #&gt; [[6]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:26\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[81115]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:04\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[30782]}&quot;
 #&gt; 
 #&gt; [[7]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:26\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[81109]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:04\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[30777]}&quot;
 #&gt; 
 #&gt; [[8]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:26\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[81107]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:04\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[30779]}&quot;
 
 daemons(0)
 #&gt; [1] 0
@@ -193,7 +196,7 @@ daemons(0)
 <pre><code class="language-r">library(mirai)
 
 # supply SIGINT so the plumber server is interrupted and exits cleanly when finished
-daemons(1L, dispatcher = &quot;none&quot;, autoexit = tools::SIGINT)
+daemons(1L, dispatcher = FALSE, autoexit = tools::SIGINT)
 #&gt; [1] 1
 
 m &lt;- mirai({
@@ -202,7 +205,7 @@ m &lt;- mirai({
   library(mirai)
 
   # uses dispatcher - suitable when requests take differing times to complete
-  daemons(4L, dispatcher = &quot;thread&quot;) # handles 4 requests simultaneously
+  daemons(4L) # handles 4 requests simultaneously
 
   pr() |&gt;
     pr_post(
@@ -242,28 +245,28 @@ res &lt;- lapply(
 )
 collect_aio(res)
 #&gt; [[1]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:29\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[81336]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:08\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[31046]}&quot;
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:29\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[81338]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:08\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[31048]}&quot;
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:29\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[81344]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:08\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[31054]}&quot;
 #&gt; 
 #&gt; [[4]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:30\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[81338]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:08\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[31051]}&quot;
 #&gt; 
 #&gt; [[5]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:30\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[81336]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:09\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[31046]}&quot;
 #&gt; 
 #&gt; [[6]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:29\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[81340]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:09\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[31048]}&quot;
 #&gt; 
 #&gt; [[7]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:30\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[81340]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:09\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[31051]}&quot;
 #&gt; 
 #&gt; [[8]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-10-08 12:21:30\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[81344]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2024-12-01 10:05:09\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[31054]}&quot;
 
 daemons(0)
 #&gt; [1] 0

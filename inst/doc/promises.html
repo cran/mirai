@@ -3,9 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.4">
+<meta name="generator" content="litedown 0.5">
 <title>mirai - Promises Integration</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.44/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -14,20 +13,22 @@ body {
   padding: 1em;
   line-height: 1.5;
 }
-body, .abstract, code, .footnotes, #refs { font-size: .9em; }
+body, .abstract, code, .footnotes, footer, #refs, .caption { font-size: .9em; }
 li li { font-size: .95em; }
 ul:has(li > input[type="checkbox"]) { list-style: none; padding-left: 1em; }
 *, :before, :after { box-sizing: border-box; }
 a { color: steelblue; }
 pre, img { max-width: 100%; }
-pre, pre:hover { white-space: pre-wrap; word-break: break-all; }
+pre { white-space: pre-wrap; word-break: break-word; }
 pre code { display: block; padding: 1em; overflow-x: auto; }
 code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
-:not(pre) > code, code[class], .box > div { background-color: #f8f8f8; }
-pre > code:not([class]), pre > .language-plain, .box { background-color: inherit; border: 1px solid #eee; }
-pre > .message { border-color: #9eeaf9; }
-pre > .warning { background: #fff3cd; border-color: #fff3cd; }
-pre > .error { background: #f8d7da; border-color: #f8d7da; }
+:not(pre) > code, code[class], div > .caption { background-color: #f8f8f8; }
+pre > code:is(:not([class]), .language-plain, .language-none), .box, .figure, .table { background-color: inherit; border: 1px solid #eee; }
+pre > code {
+  &.message { border-color: #9eeaf9; }
+  &.warning { background: #fff3cd; border-color: #fff3cd; }
+  &.error { background: #f8d7da; border-color: #f8d7da; }
+}
 .fenced-chunk { border-left: 1px solid #666; }
 .code-fence {
   opacity: .4;
@@ -35,20 +36,15 @@ pre > .error { background: #f8d7da; border-color: #f8d7da; }
   border-left: 2px solid;
   &:hover { opacity: inherit; }
 }
-.box { margin: 1em 0; }
-.box > :first-child > p:first-child, .box > :last-child > p:last-child { padding: 1em; }
-.box > :first-child, .box > :first-child > p:first-child { margin-top: 0; }
-.box > :last-child, .box > :last-child > p:last-child { margin-bottom: 0; }
-.figure > p:has(img) { text-align: center; }
+.box, .figure, .table, table { margin: 1em auto; }
+div > .caption { padding: 1px 1em; }
+.figure { p:has(img), pre:has(svg) { text-align: center; } }
+.flex-col { display: flex; justify-content: space-between; }
 table {
-  margin: auto; border-top: 1px solid #666;
+  border-top: 1px solid #666;
   thead th { border-bottom: 1px solid #ddd; }
-  th, td { padding: 5px; }
-  thead, tfoot, tr:nth-child(even) { background: #eee; }
-}
-.table-full {
-  width: 100%;
-  td { vertical-align: baseline; }
+  th, td { padding: 5px; font-variant-numeric: tabular-nums; }
+  thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
 }
 blockquote {
   color: #666;
@@ -58,14 +54,16 @@ blockquote {
 }
 hr, .footnotes::before { border: 1px dashed #ddd; }
 .frontmatter { text-align: center; }
-#TOC .numbered {
-  padding-left: 0;
-  li { list-style: none; }
-  ul { padding-left: 1em; }
+#TOC {
+  a { text-decoration: none; }
+  & > ul { padding: 0; }
+  ul { list-style: none; padding-left: 1em; }
+  ul ul { border-left: 1px solid lightsteelblue; }
 }
 table, .body h2 { border-bottom: 1px solid #666; }
 .body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
 .main-number::after { content: "."; }
+span[class^="ref-number-"] { font-weight: bold; }
 .ref-number-fig::after, .ref-number-tab::after { content: ":"; }
 .cross-ref-chp::before { content: "Chapter "; }
 .cross-ref-sec::before { content: "Section "; }
@@ -90,15 +88,20 @@ section.footnotes {
   margin-top: 2em;
   &::before { content: ""; display: block; max-width: 20em; }
 }
+.fade {
+  background: repeating-linear-gradient(135deg, white, white 30px, #ddd 32px, #ddd 32px);
+  opacity: 0.6;
+}
 
 @media print {
   body { max-width: 100%; }
   tr, img { page-break-inside: avoid; }
 }
 @media only screen and (min-width: 992px) {
-  pre { white-space: pre; }
+  body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
 }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.61/css/prism-xcode.min.css">
 </head>
 <body>
 <div class="frontmatter">
@@ -143,7 +146,7 @@ m[]
 <h3 id="sec:the-one-million-promises-challenge">The One Million Promises Challenge</h3>
 <p>The code below is taken from the challenge to launch and collect one million promises. For illustration, the example is scaled down to ten thousand.</p>
 <pre><code class="language-r">library(mirai)
-daemons(8, dispatcher = &quot;none&quot;)
+daemons(8, dispatcher = FALSE)
 #&gt; [1] 8
 r &lt;- 0
 start &lt;- Sys.time()

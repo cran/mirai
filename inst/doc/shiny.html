@@ -3,9 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.4">
+<meta name="generator" content="litedown 0.5">
 <title>mirai - Shiny Integration</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.44/css/prism-xcode.min.css">
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -14,20 +13,22 @@ body {
   padding: 1em;
   line-height: 1.5;
 }
-body, .abstract, code, .footnotes, #refs { font-size: .9em; }
+body, .abstract, code, .footnotes, footer, #refs, .caption { font-size: .9em; }
 li li { font-size: .95em; }
 ul:has(li > input[type="checkbox"]) { list-style: none; padding-left: 1em; }
 *, :before, :after { box-sizing: border-box; }
 a { color: steelblue; }
 pre, img { max-width: 100%; }
-pre, pre:hover { white-space: pre-wrap; word-break: break-all; }
+pre { white-space: pre-wrap; word-break: break-word; }
 pre code { display: block; padding: 1em; overflow-x: auto; }
 code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
-:not(pre) > code, code[class], .box > div { background-color: #f8f8f8; }
-pre > code:not([class]), pre > .language-plain, .box { background-color: inherit; border: 1px solid #eee; }
-pre > .message { border-color: #9eeaf9; }
-pre > .warning { background: #fff3cd; border-color: #fff3cd; }
-pre > .error { background: #f8d7da; border-color: #f8d7da; }
+:not(pre) > code, code[class], div > .caption { background-color: #f8f8f8; }
+pre > code:is(:not([class]), .language-plain, .language-none), .box, .figure, .table { background-color: inherit; border: 1px solid #eee; }
+pre > code {
+  &.message { border-color: #9eeaf9; }
+  &.warning { background: #fff3cd; border-color: #fff3cd; }
+  &.error { background: #f8d7da; border-color: #f8d7da; }
+}
 .fenced-chunk { border-left: 1px solid #666; }
 .code-fence {
   opacity: .4;
@@ -35,20 +36,15 @@ pre > .error { background: #f8d7da; border-color: #f8d7da; }
   border-left: 2px solid;
   &:hover { opacity: inherit; }
 }
-.box { margin: 1em 0; }
-.box > :first-child > p:first-child, .box > :last-child > p:last-child { padding: 1em; }
-.box > :first-child, .box > :first-child > p:first-child { margin-top: 0; }
-.box > :last-child, .box > :last-child > p:last-child { margin-bottom: 0; }
-.figure > p:has(img) { text-align: center; }
+.box, .figure, .table, table { margin: 1em auto; }
+div > .caption { padding: 1px 1em; }
+.figure { p:has(img), pre:has(svg) { text-align: center; } }
+.flex-col { display: flex; justify-content: space-between; }
 table {
-  margin: auto; border-top: 1px solid #666;
+  border-top: 1px solid #666;
   thead th { border-bottom: 1px solid #ddd; }
-  th, td { padding: 5px; }
-  thead, tfoot, tr:nth-child(even) { background: #eee; }
-}
-.table-full {
-  width: 100%;
-  td { vertical-align: baseline; }
+  th, td { padding: 5px; font-variant-numeric: tabular-nums; }
+  thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
 }
 blockquote {
   color: #666;
@@ -58,14 +54,16 @@ blockquote {
 }
 hr, .footnotes::before { border: 1px dashed #ddd; }
 .frontmatter { text-align: center; }
-#TOC .numbered {
-  padding-left: 0;
-  li { list-style: none; }
-  ul { padding-left: 1em; }
+#TOC {
+  a { text-decoration: none; }
+  & > ul { padding: 0; }
+  ul { list-style: none; padding-left: 1em; }
+  ul ul { border-left: 1px solid lightsteelblue; }
 }
 table, .body h2 { border-bottom: 1px solid #666; }
 .body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
 .main-number::after { content: "."; }
+span[class^="ref-number-"] { font-weight: bold; }
 .ref-number-fig::after, .ref-number-tab::after { content: ":"; }
 .cross-ref-chp::before { content: "Chapter "; }
 .cross-ref-sec::before { content: "Section "; }
@@ -90,15 +88,20 @@ section.footnotes {
   margin-top: 2em;
   &::before { content: ""; display: block; max-width: 20em; }
 }
+.fade {
+  background: repeating-linear-gradient(135deg, white, white 30px, #ddd 32px, #ddd 32px);
+  opacity: 0.6;
+}
 
 @media print {
   body { max-width: 100%; }
   tr, img { page-break-inside: avoid; }
 }
 @media only screen and (min-width: 992px) {
-  pre { white-space: pre; }
+  body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
 }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.61/css/prism-xcode.min.css">
 </head>
 <body>
 <div class="frontmatter">
@@ -118,7 +121,7 @@ section.footnotes {
 <p>‘mirai’ may be used anywhere a ‘promise’ or ‘future_promise’ would be accepted (with <code>promises</code> &gt;= 1.3.0).</p>
 <h4 id="sec:shiny-extendedtask-example-plot-with-clock">Shiny ExtendedTask Example: Plot with Clock</h4>
 <p>In the example below, the app remains responsive, with the clock continuing to tick whilst the simulated expensive computation is running asynchronously in a parallel process. Also the button is disabled and the plot greyed out until the computation is complete.</p>
-<p>By wrapping the <code>runApp()</code> call in <code>with(daemons(...), ...)</code> the daemons are set up for the duration of the app, exiting automatically when the app is stopped.</p>
+<p>The call to <code>daemons()</code> is made at the top level, and <code>onStop()</code> may be used to automatically shut them down when the app exits.</p>
 <pre><code class="language-r">library(shiny)
 library(bslib)
 library(mirai)
@@ -148,10 +151,13 @@ server &lt;- function(input, output, session) {
 
 }
 
-app &lt;- shinyApp(ui = ui, server = server)
-
 # run app using 2 local daemons
-with(daemons(2), runApp(app))
+daemons(2)
+
+# automatically shutdown daemons when app exits
+onStop(function() daemons(0))
+
+shinyApp(ui = ui, server = server)
 </code></pre>
 <p><em>Thanks to Joe Cheng for providing examples on which the above is based.</em></p>
 <p>The key components to using ExtendedTask are:</p>
@@ -181,6 +187,7 @@ with(daemons(2), runApp(app))
 <p>The following app produces pretty spiral patterns.</p>
 <p>The user can add multiple plots, making use of Shiny modules, each having a different calculation time.</p>
 <p>The plots are generated asynchronously, and it is easy to see the practical limitations of the number of daemons set. For example, if updating 4 plots, and there are only 3 daemons, the 4th plot will not start to be generated until one of the other plots has finished.</p>
+<p>By wrapping the <code>runApp()</code> call in <code>with(daemons(...), ...)</code> the daemons are set up for the duration of the app, exiting automatically when the app is stopped.</p>
 <pre><code class="language-r">library(shiny)
 library(mirai)
 library(bslib)
@@ -330,7 +337,7 @@ server &lt;- function(input, output, session) {
 app &lt;- shinyApp(ui = ui, server = server)
 
 # run app using 8 local non-dispatcher daemons (tasks are the same length)
-with(daemons(8, dispatcher = &quot;none&quot;), {
+with(daemons(8, dispatcher = FALSE), {
   # pre-load flip_coin function on all daemons for efficiency
   everywhere({}, flip_coin = flip_coin)
   runApp(app)
