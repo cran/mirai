@@ -71,8 +71,8 @@ functions. Functions from a package should use namespaced calls such as
 part of \sQuote{.expr}.
 
 For evaluation to occur \emph{as if} in your global environment, supply
-objects to \sQuote{...} rather than \sQuote{.args}. This is important when
-supplying free variables defined in function bodies, as scoping rules may
+objects to \sQuote{...} rather than \sQuote{.args}, e.g. for free variables
+or helper functions defined in function bodies, as scoping rules may
 otherwise prevent them from being found.
 }
 
@@ -89,9 +89,10 @@ and interrupt a task.
 
 
 If an error occurs in evaluation, the error message is returned as a
-character string of class \sQuote{miraiError} and \sQuote{errorValue} (the
-stack trace is available at \code{$stack.trace} on the error object).
-\code{\link{is_mirai_error}} may be used to test for this.
+character string of class \sQuote{miraiError} and \sQuote{errorValue}.
+\code{\link{is_mirai_error}} may be used to test for this. The elements of
+the original condition are accessible via \code{$} on the error object. A
+stack trace is also available at \code{$stack.trace}.
 
 If a daemon crashes or terminates unexpectedly during evaluation, an
 \sQuote{errorValue} 19 (Connection reset) is returned.
@@ -116,7 +117,7 @@ m$data
 df1 <- data.frame(a = 1, b = 2)
 df2 <- data.frame(a = 3, b = 1)
 m <- mirai(as.matrix(rbind(df1, df2)), environment(), .timeout = 1000)
-call_mirai(m)$data
+m[]
 
 # using unresolved()
 m <- mirai(
@@ -137,7 +138,7 @@ n <- 10L
 file <- tempfile()
 cat("r <- rnorm(n)", file = file)
 m <- mirai({source(file); r}, file = file, n = n)
-call_mirai(m)[["data"]]
+call_mirai(m)$data
 unlink(file)
 
 # use source(local = TRUE) when passing in local variables via '.args'
@@ -145,14 +146,14 @@ n <- 10L
 file <- tempfile()
 cat("r <- rnorm(n)", file = file)
 m <- mirai({source(file, local = TRUE); r}, .args = list(file = file, n = n))
-call_mirai(m)[["data"]]
+call_mirai(m)$data
 unlink(file)
 
 # passing a language object to '.expr' and a named list to '.args'
 expr <- quote(a + b + 2)
 args <- list(a = 2, b = 3)
 m <- mirai(.expr = expr, .args = args)
-call_mirai(m)$data
+collect_mirai(m)
 
 }
 

@@ -4,13 +4,15 @@
 \alias{collect_mirai}
 \title{mirai (Collect Value)}
 \usage{
-collect_mirai(x, ...)
+collect_mirai(x, options = NULL)
 }
 \arguments{
 \item{x}{a \sQuote{mirai} object, or list of \sQuote{mirai} objects.}
 
-\item{...}{(if \sQuote{x} is a list of mirai) any of the collection options
-for \code{\link{mirai_map}}, such as \code{\link{.flat}}.}
+\item{options}{(if \sQuote{x} is a list of mirai) a character vector
+comprising any combination of collection options for
+\code{\link{mirai_map}}, such as \code{".flat"} or
+\code{c(".progress", ".stop")}.}
 }
 \value{
 An object (the return value of the \sQuote{mirai}), or a list of such
@@ -44,9 +46,10 @@ flow statements such as \code{while} or \code{if}.
 
 
 If an error occurs in evaluation, the error message is returned as a
-character string of class \sQuote{miraiError} and \sQuote{errorValue} (the
-stack trace is available at \code{$stack.trace} on the error object).
-\code{\link{is_mirai_error}} may be used to test for this.
+character string of class \sQuote{miraiError} and \sQuote{errorValue}.
+\code{\link{is_mirai_error}} may be used to test for this. The elements of
+the original condition are accessible via \code{$} on the error object. A
+stack trace is also available at \code{$stack.trace}.
 
 If a daemon crashes or terminates unexpectedly during evaluation, an
 \sQuote{errorValue} 19 (Connection reset) is returned.
@@ -71,7 +74,7 @@ m[]
 # mirai_map with collection options
 daemons(1, dispatcher = FALSE)
 m <- mirai_map(1:3, rnorm)
-collect_mirai(m, .flat, .progress)
+collect_mirai(m, c(".flat", ".progress"))
 daemons(0)
 
 }

@@ -62,12 +62,10 @@
 #' they are of the same type to avoid coercion. Note: errors if an
 #' \sQuote{errorValue} has been returned or results are of differing type.
 #'
-#' \code{x[.progress]} collects map results whilst showing a simple text
-#' progress indicator of parts completed of the total.
-#'
-#' \code{x[.progress_cli]} collects map results whilst showing a progress bar
-#' from the \CRANpkg{cli} package, if available, with completion percentage and
-#' ETA.
+#' \code{x[.progress]} collects map results whilst showing a progress bar from
+#' the \CRANpkg{cli} package, if installed, with completion percentage and ETA,
+#' or else a simple text progress indicator. Note: if the map operation
+#' completes too quickly then the progress bar may not show at all.
 #'
 #' \code{x[.stop]} collects map results applying early stopping, which stops at
 #' the first failure and cancels remaining operations. Note: operations already
@@ -79,9 +77,12 @@
 #'
 #' @section Multiple Map:
 #'
-#' Multiple map is performed automatically over the \strong{rows} of an object
-#' with \sQuote{dim} attributes such as a matrix or dataframe. This is most
-#' often the desired behaviour in these cases.
+#' If \code{.x} is a matrix or dataframe (or other object with \sQuote{dim}
+#' attributes), \emph{multiple} map is performed over its \strong{rows}.
+#'
+#' This allows map over 2 or more arguments, and \code{.f} should accept at
+#' least as many arguments as there are columns. If the dataframe has names, or
+#' the matrix column dimnames, named arguments are provided to \code{.f}.
 #'
 #' To map over \strong{columns} instead, first wrap a dataframe in
 #' \code{\link{as.list}}, or transpose a matrix using \code{\link{t}}.
@@ -92,25 +93,34 @@
 #'
 #' daemons(4)
 #'
+#' # perform and collect mirai map
+#' mm <- mirai_map(c(a = 1, b = 2, c = 3), rnorm)
+#' mm
+#' mm[]
+#'
 #' # map with constant args specified via '.args'
-#' mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
+#' mirai_map(1:3, rnorm, .args = list(n = 5, sd = 2))[]
 #'
-#' # flatmap with function definition passed via '...'
-#' mirai_map(1:3, function(x) func(1L, x, x + 1L), func = stats::runif)[.flat]
+#' # flatmap with helper function passed via '...'
+#' mirai_map(
+#'   10^(0:9),
+#'   function(x) rnorm(1L, valid(x)),
+#'   valid = function(x) min(max(x, 0L), 100L)
+#' )[.flat]
 #'
-#' # sum rows of a dataframe
-#' (df <- data.frame(a = 1:3, b = c(4, 3, 2)))
-#' mirai_map(df, sum)[.flat]
-#'
-#' # sum rows of a matrix
+#' # unnamed matrix multiple map: arguments passed to function by position
 #' (mat <- matrix(1:4, nrow = 2L))
-#' mirai_map(mat, sum)[.flat]
+#' mirai_map(mat, function(x = 10, y = 0, z = 0) x + y + z)[.flat]
 #'
-#' # map over rows of a dataframe
+#' # named matrix multiple map: arguments passed to function by name
+#' dimnames(mat)[[2L]] <- c("y", "z")
+#' mirai_map(mat, function(x = 10, y = 0, z = 0) x + y + z)[.flat]
+#'
+#' # dataframe multiple map: using a function taking '...' arguments
 #' df <- data.frame(a = c("Aa", "Bb"), b = c(1L, 4L))
 #' mirai_map(df, function(...) sprintf("%s: %d", ...))[.flat]
 #'
-#' # indexed map over a vector
+#' # indexed map over a vector (using a dataframe)
 #' v <- c("egg", "got", "ten", "nap", "pie")
 #' mirai_map(
 #'   data.frame(1:length(v), v),
@@ -119,15 +129,10 @@
 #' )[.flat]
 #'
 #' # return a 'mirai_map' object, check for resolution, collect later
-#' mp <- mirai_map(
-#'   c(a = 2, b = 3, c = 4),
-#'   function(x, y) do(x, as.logical(x %% y)),
-#'   do = nanonext::random,
-#'   .args = list(y = 2)
-#' )
+#' mp <- mirai_map(2:4, function(x) runif(1L, x, x + 1))
 #' unresolved(mp)
 #' mp
-#' mp[]
+#' mp[.flat]
 #' unresolved(mp)
 #'
 #' # progress indicator counts up from 0 to 4 seconds
@@ -137,17 +142,14 @@
 #'
 #' # generates warning as daemons not set
 #' # stops early when second element returns an error
-#' tryCatch(
-#'   mirai_map(list(1, "a", 3), sum)[.stop],
-#'   error = identity
-#' )
+#' tryCatch(mirai_map(list(1, "a", 3), sum)[.stop], error = identity)
 #'
 #' # promises example that outputs the results, including errors, to the console
 #' if (requireNamespace("promises", quietly = TRUE)) {
 #' daemons(1, dispatcher = FALSE)
 #' ml <- mirai_map(
 #'   1:30,
-#'   function(x) {Sys.sleep(0.1); if (x == 30) stop(x) else x},
+#'   function(i) {Sys.sleep(0.1); if (i == 30) stop(i) else i},
 #'   .promise = list(
 #'     function(x) cat(paste(x, "")),
 #'     function(x) { cat(conditionMessage(x), "\n"); daemons(0) }
@@ -170,21 +172,19 @@ mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "
     return(mirai_map(.x = .x, .f = .f, ..., .args = .args, .promise = .promise, .compute = .compute))
   }
   xilen <- dim(.x)[1L]
-  vec <- if (length(xilen))
+  vec <- if (length(xilen)) {
+    is_matrix <- is.matrix(.x)
     lapply(
       seq_len(xilen),
-      if (is.matrix(.x)) function(i) mirai(
-        .expr = do.call(.f, c(as.list(.x), .args)),
-        ...,
-        .args = list(.f = .f, .x = .x[i, ], .args = .args),
-        .compute = .compute
-      ) else function(i) mirai(
+      function(i) mirai(
         .expr = do.call(.f, c(.x, .args)),
         ...,
-        .args = list(.f = .f, .x = lapply(.x, .subset2, i), .args = .args),
+        .args = list(.f = .f, .x = if (is_matrix) as.list(.x[i, ]) else lapply(.x, .subset2, i), .args = .args),
         .compute = .compute
       )
-    ) else `names<-`(
+    )
+  } else {
+    `names<-`(
       lapply(
         .x,
         function(x) mirai(
@@ -196,6 +196,7 @@ mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "
       ),
       names(.x)
     )
+  }
 
   if (length(.promise))
     if (is.list(.promise)) {
@@ -215,7 +216,10 @@ mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "
 `[.mirai_map` <- function(x, ...) {
 
   missing(..1) && return(collect_aio_(x))
-  map(x, ...)
+
+  ensure_cli_initialized()
+  dots <- eval(`[[<-`(substitute(alist(...)), 1L, quote(list)), envir = .)
+  map(x, dots)
 
 }
 
@@ -243,7 +247,9 @@ print.mirai_map <- function(x, ...) {
   quote(
     if (i == 0L) xi <- TRUE else
       if (i == 1L) typ <<- typeof(xi) else
-        if (i <= xlen) is_error_value(xi) && stop(xi, call. = FALSE) || typeof(xi) == typ || stop(sprintf("[.flat]: cannot flatten outputs of differing type: %s / %s", typ, typeof(xi)), call. = FALSE)
+        if (i <= xlen)
+          is_error_value(xi) && stop(sprintf("In index %d:\n%s", i, xi), call. = FALSE) ||
+            typeof(xi) != typ && stop(sprintf("Cannot flatten outputs of differing type: %s / %s", typ, typeof(xi)), call. = FALSE)
   )
 )
 
@@ -261,25 +267,20 @@ print.mirai_map <- function(x, ...) {
 #' @rdname dot-flat
 #' @export
 #'
-.progress_cli <- compiler::compile(
-  quote(
-    if (i == 0L) cli::cli_progress_bar(type = NULL, total = xlen, auto_terminate = TRUE, .envir = .) else
-      if (i <= xlen) cli::cli_progress_update(.envir = .)
-  )
-)
-
-#' @rdname dot-flat
-#' @export
-#'
 .stop <- compiler::compile(
-  quote(if (is_error_value(xi)) { lapply(x, stop_mirai); stop(xi, call. = FALSE) })
+  quote(if (is_error_value(xi)) { stop_mirai(x); stop(sprintf("In index %d:\n%s", i, xi), call. = FALSE) })
 )
 
 # internals --------------------------------------------------------------------
 
-map <- function(x, ...) {
+ensure_cli_initialized <- function()
+  if (is.null(.[[".flat"]])) {
+    cli <- requireNamespace("cli", quietly = TRUE)
+    `[[<-`(`[[<-`(`[[<-`(., ".flat", if (cli) flat_cli else .flat), ".progress", if (cli) progress_cli else .progress), ".stop", if (cli) stop_cli else .stop)
+  }
 
-  dots <- eval(`[[<-`(substitute(alist(...)), 1L, quote(list)), envir = .)
+map <- function(x, dots) {
+
   expr <- if (length(dots) > 1L) do.call(expression, dots) else dots[[1L]]
   xlen <- length(x)
   i <- 0L
@@ -295,3 +296,29 @@ map <- function(x, ...) {
   out
 
 }
+
+flat_cli <- compiler::compile(
+  quote(
+    if (i == 0L) xi <- TRUE else
+      if (i == 1L) typ <<- typeof(xi) else
+        if (i <= xlen)
+          is_error_value(xi) && cli::cli_abort(c(i = "In index {i}.", x = xi), call = quote(mirai::mirai_map())) ||
+            typeof(xi) != typ && cli::cli_abort("cannot flatten outputs of differing type: {typ} / {typeof(xi)}", call = quote(mirai::mirai_map()))
+  )
+)
+
+progress_cli <- compiler::compile(
+  quote(
+    if (i == 0L) cli::cli_progress_bar(type = NULL, total = xlen, auto_terminate = TRUE, .envir = .) else
+      if (i <= xlen) cli::cli_progress_update(.envir = .)
+  )
+)
+
+stop_cli <- compiler::compile(
+  quote(
+    if (is_error_value(xi)) {
+      stop_mirai(x)
+      cli::cli_abort(c(i = "In index {i}.", x = xi), call = quote(mirai::mirai_map()))
+    }
+  )
+)

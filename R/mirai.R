@@ -74,8 +74,8 @@
 #' part of \sQuote{.expr}.
 #'
 #' For evaluation to occur \emph{as if} in your global environment, supply
-#' objects to \sQuote{...} rather than \sQuote{.args}. This is important when
-#' supplying free variables defined in function bodies, as scoping rules may
+#' objects to \sQuote{...} rather than \sQuote{.args}, e.g. for free variables
+#' or helper functions defined in function bodies, as scoping rules may
 #' otherwise prevent them from being found.
 #'
 #' @section Timeouts:
@@ -88,9 +88,10 @@
 #' @section Errors:
 #'
 #' If an error occurs in evaluation, the error message is returned as a
-#' character string of class \sQuote{miraiError} and \sQuote{errorValue} (the
-#' stack trace is available at \code{$stack.trace} on the error object).
-#' \code{\link{is_mirai_error}} may be used to test for this.
+#' character string of class \sQuote{miraiError} and \sQuote{errorValue}.
+#' \code{\link{is_mirai_error}} may be used to test for this. The elements of
+#' the original condition are accessible via \code{$} on the error object. A
+#' stack trace is also available at \code{$stack.trace}.
 #'
 #' If a daemon crashes or terminates unexpectedly during evaluation, an
 #' \sQuote{errorValue} 19 (Connection reset) is returned.
@@ -114,7 +115,7 @@
 #' df1 <- data.frame(a = 1, b = 2)
 #' df2 <- data.frame(a = 3, b = 1)
 #' m <- mirai(as.matrix(rbind(df1, df2)), environment(), .timeout = 1000)
-#' call_mirai(m)$data
+#' m[]
 #'
 #' # using unresolved()
 #' m <- mirai(
@@ -135,7 +136,7 @@
 #' file <- tempfile()
 #' cat("r <- rnorm(n)", file = file)
 #' m <- mirai({source(file); r}, file = file, n = n)
-#' call_mirai(m)[["data"]]
+#' call_mirai(m)$data
 #' unlink(file)
 #'
 #' # use source(local = TRUE) when passing in local variables via '.args'
@@ -143,14 +144,14 @@
 #' file <- tempfile()
 #' cat("r <- rnorm(n)", file = file)
 #' m <- mirai({source(file, local = TRUE); r}, .args = list(file = file, n = n))
-#' call_mirai(m)[["data"]]
+#' call_mirai(m)$data
 #' unlink(file)
 #'
 #' # passing a language object to '.expr' and a named list to '.args'
 #' expr <- quote(a + b + 2)
 #' args <- list(a = 2, b = 3)
 #' m <- mirai(.expr = expr, .args = args)
-#' call_mirai(m)$data
+#' collect_mirai(m)
 #'
 #' }
 #'
@@ -258,7 +259,7 @@ everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
       vec[[i]] <- mirai(.expr, ..., .args = .args, .compute = .compute)
   } else {
     .expr <- c(.block, .expr)
-    vec <- vector(mode = "list", length = status(.compute)[["connections"]])
+    vec <- vector(mode = "list", length = max(status(.compute)[["connections"]], 1L))
     for (i in seq_along(vec))
       vec[[i]] <- mirai(.expr, ..., .args = .args, .compute = .compute)
   }
@@ -352,8 +353,10 @@ call_mirai_ <- call_aio_
 #' \code{x}, and is equivalent to \code{collect_mirai(x)}.
 #'
 #' @inheritParams call_mirai
-#' @param ... (if \sQuote{x} is a list of mirai) any of the collection options
-#'   for \code{\link{mirai_map}}, such as \code{\link{.flat}}.
+#' @param options (if \sQuote{x} is a list of mirai) a character vector
+#'   comprising any combination of collection options for
+#'   \code{\link{mirai_map}}, such as \code{".flat"} or
+#'   \code{c(".progress", ".stop")}.
 #'
 #' @return An object (the return value of the \sQuote{mirai}), or a list of such
 #'   objects (the same length as \sQuote{x}, preserving names).
@@ -377,17 +380,20 @@ call_mirai_ <- call_aio_
 #' # mirai_map with collection options
 #' daemons(1, dispatcher = FALSE)
 #' m <- mirai_map(1:3, rnorm)
-#' collect_mirai(m, .flat, .progress)
+#' collect_mirai(m, c(".flat", ".progress"))
 #' daemons(0)
 #'
 #' }
 #'
 #' @export
 #'
-collect_mirai <- function(x, ...) {
+collect_mirai <- function(x, options = NULL) {
 
-  is.list(x) && ...length() && return(map(x, ...))
-  collect_aio_(x)
+  is.list(x) && length(options) || return(collect_aio_(x))
+
+  ensure_cli_initialized()
+  dots <- mget(options, envir = .)
+  map(x, dots)
 
 }
 
@@ -519,8 +525,9 @@ is_mirai_map <- function(x) inherits(x, "mirai_map")
 #'
 #' Is the object a \sQuote{miraiError}. When execution in a \sQuote{mirai}
 #' process fails, the error message is returned as a character string of class
-#' \sQuote{miraiError} and \sQuote{errorValue}. The stack trace is available at
-#' \code{$stack.trace} on the error object.
+#' \sQuote{miraiError} and \sQuote{errorValue}. The elements of the original
+#' condition are accessible via \code{$} on the error object. A stack trace is
+#' also available at \code{$stack.trace}.
 #'
 #' Is the object a \sQuote{miraiInterrupt}. When an ongoing \sQuote{mirai} is
 #' sent a user interrupt, it will resolve to an empty character string classed
@@ -634,13 +641,22 @@ mk_mirai_error <- function(e, sc) {
   msg <- if (is.null(call) || call == "eval(._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = .GlobalEnv)")
     sprintf("Error: %s", .subset2(e, "message")) else
       sprintf("Error in %s: %s", call, .subset2(e, "message"))
-  attributes(msg) <- e
-  idx <- which(as.logical(lapply(sc, identical, quote(eval(._mirai_.[[".expr"]], envir = ._mirai_., enclos = .GlobalEnv)))))
+  idx <- which(
+    as.logical(
+      lapply(
+        sc,
+        identical,
+        quote(eval(._mirai_.[[".expr"]], envir = ._mirai_., enclos = .GlobalEnv))
+      )
+    )
+  )
   sc <- sc[(length(sc) - 1L):(idx + 1L)]
   if (sc[[1L]][[1L]] == ".handleSimpleError")
     sc <- sc[-1L]
-  sc <- lapply(sc, deparse_call)
-  `class<-`(`attr<-`(msg, "stack.trace", sc), c("miraiError", "errorValue", "try-error"))
+  `class<-`(
+    `attributes<-`(msg, `[[<-`(e, "stack.trace", lapply(sc, deparse_call))),
+    c("miraiError", "errorValue", "try-error")
+  )
 }
 
 .miraiInterrupt <- `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))
