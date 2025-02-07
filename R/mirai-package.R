@@ -17,14 +17,15 @@
 #' mirai: Minimalist Async Evaluation Framework for R
 #'
 #' Designed for simplicity, a 'mirai' evaluates an R expression asynchronously
-#' in a parallel process, locally or distributed over the network, with the
-#' result automatically available upon completion. Modern networking and
-#' concurrency built on 'nanonext' and 'NNG' (Nanomsg Next Gen) ensure reliable
-#' and efficient scheduling, over fast inter-process communications or TCP/IP
-#' secured by TLS. Advantages include being inherently queued thus handling many
-#' more tasks than available processes, no storage on the file system, support
-#' for otherwise non-exportable reference objects, an event-driven promises
-#' implementation, and built-in asynchronous parallel map.
+#' in a parallel process, locally or distributed over the network. The result is
+#' automatically available upon completion. Modern networking and concurrency,
+#' built on 'nanonext' and 'NNG' (Nanomsg Next Gen), ensures reliable and
+#' efficient scheduling over fast inter-process communications or TCP/IP secured
+#' by TLS. Distributed computing can launch remote resources via SSH or cluster
+#' managers. An inherently queued architecture handles many more tasks than
+#' available processes, and requires no storage on the file system. Innovative
+#' features include support for otherwise non-exportable reference objects,
+#' event-driven promises, and asynchronous parallel map.
 #'
 #' @section Notes:
 #'
@@ -85,22 +86,23 @@
 
 ._ <- list2env(
   list(
-    arglen = "'n' must equal the length of 'args', or either must be 1",
+    arglen = "`n` must equal the length of `args`, or either must be 1",
     cluster_inactive = "cluster is no longer active",
+    daemons_set = "daemons already set for `%s` compute profile",
     daemons_unset = "daemons must be set to use launchers",
-    dispatcher_args = "'dispatcher' must be either TRUE or FALSE",
-    dot_required = "'.' must be an element of the character vector(s) supplied to 'args'",
-    function_required = "'.f' must be of type function, not %s",
+    dispatcher_args = "`dispatcher` must be either TRUE or FALSE",
+    dot_required = "`.` must be an element of the character vector(s) supplied to `args`",
+    function_required = "`.f` must be of type function, not %s",
     missing_expression = "missing expression, perhaps wrap in {}?",
-    missing_url = "'n' must be 1 or greater, or else 'url' must be supplied",
-    named_args = "all items in '.args' must be named, unless supplying an environment",
-    named_dots = "all '...' arguments must be named, unless supplying an environment",
-    n_one = "'n' must be 1 or greater",
+    missing_url = "`n` must be 1 or greater, or else `url` must be supplied",
+    named_args = "all items in `.args` must be named, unless supplying an environment",
+    named_dots = "all `...` arguments must be named, unless supplying an environment",
+    n_one = "`n` must be 1 or greater",
     n_zero = "the number of daemons must be zero or greater",
-    not_found = "compute profile '%s' not found",
-    numeric_n = "'n' must be numeric, did you mean to provide 'url'?",
+    not_found = "compute profile `%s` not found",
+    numeric_n = "`n` must be numeric, did you mean to provide `url`?",
     register_cluster = "this function requires a more recent version of R",
-    requires_daemons = "mirai is launching one local daemon for a map operation as none previously set",
+    requires_daemons = "daemons must be set prior to a map operation",
     sync_daemons = "initial sync with daemon(s) timed out after 10s",
     sync_dispatcher = "initial sync with dispatcher timed out after 10s"
   ),

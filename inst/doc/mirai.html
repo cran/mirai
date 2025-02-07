@@ -148,13 +148,13 @@ m$data
 </code></pre>
 <p>To wait for and collect the return value, use the mirai’s <code>[]</code> method:</p>
 <pre><code class="language-r">m[]
-#&gt; [1] 3.081159 5.130453 3.361243 3.899214 3.578723
+#&gt; [1] 4.171990 4.426733 4.665712 2.957891 4.321967
 </code></pre>
 <p>As a mirai represents an async operation, it is never necessary to wait for it. Other code can continue to be run. Once it completes, the return value automatically becomes available at <code>$data</code>.</p>
 <pre><code class="language-r">m
 #&gt; &lt; mirai [$data] &gt;
 m$data
-#&gt; [1] 3.081159 5.130453 3.361243 3.899214 3.578723
+#&gt; [1] 4.171990 4.426733 4.665712 2.957891 4.321967
 </code></pre>
 <p>For easy programmatic use of <code>mirai()</code>, ‘.expr’ accepts a pre-constructed language object, and also a list of named arguments passed via ‘.args’. So, the following would be equivalent to the above:</p>
 <pre><code class="language-r">expr &lt;- quote({Sys.sleep(time); rnorm(5L, mean)})
@@ -163,7 +163,7 @@ args &lt;- list(time = x$time, mean = x$mean)
 
 m &lt;- mirai(.expr = expr, .args = args)
 m[]
-#&gt; [1] 4.066422 2.925708 3.895417 3.189227 4.322313
+#&gt; [1] 3.921015 4.145974 4.864750 2.311800 4.678318
 </code></pre>
 <p><a href="#table-of-contents">« Back to ToC</a></p>
 <h3 id="sec:example-2-i-o-bound-operations">Example 2: I/O-bound Operations</h3>
@@ -223,9 +223,9 @@ for (i in 1:10) {
 #&gt; iteration 4 successful
 #&gt; iteration 5 successful
 #&gt; iteration 6 successful
-#&gt; Error: random error
 #&gt; iteration 7 successful
 #&gt; iteration 8 successful
+#&gt; Error: random error
 #&gt; iteration 9 successful
 #&gt; iteration 10 successful
 </code></pre>
@@ -252,7 +252,7 @@ for (i in 1:10) {
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://61f3b00995a8c1e081a9fb98&quot;
+#&gt; [1] &quot;abstract://151135cc39a81a6e83935293&quot;
 #&gt; 
 #&gt; $mirai
 #&gt;  awaiting executing completed 
@@ -275,7 +275,7 @@ for (i in 1:10) {
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://c910c5fc17b314069fe962e6&quot;
+#&gt; [1] &quot;abstract://9be5c1b0df5c047fb60435f9&quot;
 </code></pre>
 <p>This implementation sends tasks immediately, and ensures that tasks are evenly-distributed amongst daemons. This means that optimal scheduling is not guaranteed as the duration of tasks cannot be known <em>a priori</em>. As an example, tasks could be queued at a daemon behind a long-running task, whilst other daemons are idle having already completed their tasks.</p>
 <p>The advantage of this approach is that it is low-level and does not require an additional dispatcher process. It is well-suited to working with similar-length tasks, or where the number of concurrent tasks typically does not exceed available daemons.</p>
@@ -292,11 +292,11 @@ everywhere(con &lt;&lt;- dbConnect(RSQLite::SQLite(), file), file = file)
 m[]
 #&gt; [1] &quot;Formal class 'SQLiteConnection' [package \&quot;RSQLite\&quot;] with 8 slots&quot;  
 #&gt; [2] &quot;  ..@ ptr                :&lt;externalptr&gt; &quot;                            
-#&gt; [3] &quot;  ..@ dbname             : chr \&quot;/tmp/RtmpBA6yAD/file17a914db50cf1\&quot;&quot;
+#&gt; [3] &quot;  ..@ dbname             : chr \&quot;/tmp/RtmpEHceL3/file2f4e14cc04969\&quot;&quot;
 #&gt; [4] &quot;  ..@ loadable.extensions: logi TRUE&quot;                                
 #&gt; [5] &quot;  ..@ flags              : int 70&quot;                                   
 #&gt; [6] &quot;  ..@ vfs                : chr \&quot;\&quot;&quot;                                 
-#&gt; [7] &quot;  ..@ ref                :&lt;environment: 0x5661b9d35fa8&gt; &quot;            
+#&gt; [7] &quot;  ..@ ref                :&lt;environment: 0x5916aca439e8&gt; &quot;            
 #&gt; [8] &quot;  ..@ bigint             : chr \&quot;integer64\&quot;&quot;                        
 #&gt; [9] &quot;  ..@ extended_types     : logi FALSE&quot;
 </code></pre>
@@ -328,7 +328,7 @@ daemons(0)
 #&gt; [1] 0
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;tcp://hostname:34711&quot;
+#&gt; [1] &quot;tcp://hostname:41463&quot;
 #&gt; 
 #&gt; $mirai
 #&gt;  awaiting executing completed 
@@ -395,10 +395,10 @@ daemons(0)
 #&gt; [1] 0
 launch_remote(2)
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:34495&quot;,rs=c(10407,-1548736186,795843343,1112403460,-75379403,-879623054,1922652491),dispatcher=TRUE)'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:41983&quot;,rs=c(10407,-1344689176,-1963888439,-153451018,1270924287,927983156,1071643557),dispatcher=TRUE)'
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:34495&quot;,rs=c(10407,177393518,-240118901,227679337,1647891508,-951127399,-86322505),dispatcher=TRUE)'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://hostname:41983&quot;,rs=c(10407,615178451,635795015,145221564,-251292842,-5310680,-284738001),dispatcher=TRUE)'
 daemons(0)
 #&gt; [1] 0
 </code></pre>
@@ -415,37 +415,37 @@ daemons(0)
 <p>The generated self-signed certificate is available via <code>launch_remote()</code>. This function conveniently constructs the full shell command to launch a daemon, including the correctly specified ‘tls’ argument to <code>daemon()</code>.</p>
 <pre><code class="language-r">launch_remote(1)
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://hostname:46223&quot;,tls=c(&quot;-----BEGIN CERTIFICATE-----
+#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://hostname:39557&quot;,tls=c(&quot;-----BEGIN CERTIFICATE-----
 #&gt; MIIFNzCCAx+gAwIBAgIBATANBgkqhkiG9w0BAQsFADAzMREwDwYDVQQDDAhrdW1h
 #&gt; bW90bzERMA8GA1UECgwITmFub25leHQxCzAJBgNVBAYTAkpQMB4XDTAxMDEwMTAw
 #&gt; MDAwMFoXDTMwMTIzMTIzNTk1OVowMzERMA8GA1UEAwwIa3VtYW1vdG8xETAPBgNV
 #&gt; BAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDCCAiIwDQYJKoZIhvcNAQEBBQADggIP
-#&gt; ADCCAgoCggIBAK3MYDqsrXgGMed15Jv5NkxDqpxssmEsUkm74YA4/ocUBFpmVaGL
-#&gt; 7NyKwRJFHxZHzHCjJ4jwRcfvgVs3VtZJZfbziFqfoVwO4Yw4o7I+2RVJx8vobTts
-#&gt; RSxRkERhZ7AQSYR7c8+GzsjtoRQc7f6c6BkfoRiDOmg5g8QjbB12wBRHe6e+t0jT
-#&gt; SKNqPSsuVl4wBHU3pDGEiHKHprc7dyObGOhGRVzQ+tpqS2Jrwo4HZCugsWSQRYWZ
-#&gt; EBOQJ5Z5U4eMr6TcgcvdxCn8Y2cAkOKQgaCcrt/1o+shbfnruwUSgziDwnD3SCqQ
-#&gt; KCIapKs4oJBe/vYg8SMG+HiNqXZKuJzD/FJNSEDZrF/lszMwly5pbobNfQpkgTTk
-#&gt; w7eIiy6ZWCF60FFT49StigjmQV32/KkQrhiQGW0av1ExakQt9FNuWAxG2oFs/uKF
-#&gt; HZN6Cmr7zWYRTmNmLQlhvsM7Ck+AQjvZ7UqmPXGBe9KNvpRGtqm+4UgFumvWc+sv
-#&gt; 3EDMlB6tcg1uspJuyYr6PZ3NpUDgxHNsNXPmk4lb/ywU0SBRvxeASwXQIw3CJTiw
-#&gt; PV5KyDSw51HYMOYjKAtJjtEtXuKCxOTwAmUM6gMDrbhIsQg4ys2yOVHhEefqEijP
-#&gt; iKizrQt0tCQXIBHGHkdO6DBrrK0JEhYBfBDTrz1PFU+83ymLwrPLgAtrAgMBAAGj
-#&gt; VjBUMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFJePaxpbycudDyQm/v3f
-#&gt; utWSDH6xMB8GA1UdIwQYMBaAFJePaxpbycudDyQm/v3futWSDH6xMA0GCSqGSIb3
-#&gt; DQEBCwUAA4ICAQAYLPcaDAS3juvwNDvzcZ9xTVtNZpCZ3m3vzoRXGQtIccs6oZ7p
-#&gt; f/1cqTaPkUxYo0KQsnXJLdqE6wG5qy3FlbAH8XKH4Q63uYLkED9Y2JbnhQaujhvP
-#&gt; 2V/QQHe9a2NH9/NDr2WRJMxxoy0ublSe+kTMdQjajsgHZczz19okPB9cdPvI1bYH
-#&gt; K4hpb1/s6rBOd0JsymqajKmv44F2AXYKgBE2G83BdhdXf/7a430T9KmnOsi5q+sZ
-#&gt; b1Bdjn8ajHxxCfTpudTvxe4E7X9YA1d2bsX46rl6ap5zKoerSbBZRFBE2DgupegM
-#&gt; yKBRYypCFLSiRW4zQX+AlVlKgudSG4rPuniJwUDitt06CTxUJnKo04FyUKJVq0tl
-#&gt; kOvvGKh2kHO2i0FGbZf/pozwe5HAdvcP2WMEIH16ikoHzDmIMKg0drhJBrNfz0wC
-#&gt; EEXtaMQQu7dOcvQvkud0BXJQqk6NXM6PyqGUc1VgtWnKYjUC4+XB3EBCTdYR922V
-#&gt; PBtGDEvis0NzvrF++dGWKnACK7Z6VE2U/flmj4TRTLHYj14MVAcNopN/aV7aEp3P
-#&gt; yVcLzpj+Cnm4rWrKjTrLihH2+/0O5PCQy5VutXcjOMA2tqilE706Kl6IMXDt7eLF
-#&gt; 4DfVuE/NpVL7gDfvlRSg2vvmgSj5zzC7NFOVcU5fyRUHg3mI3TvPZONfwg==
+#&gt; ADCCAgoCggIBAJRuzF1wt+FU4ekzU0FtxEMQ0pOrzLKZxgpg0MK3DkO/4FeG28ht
+#&gt; 9QTmRY/jJ/UuTzdv2kXkj3rgk+jlr6vIU+mb6up0KPVnGD7zqBKWImbsrLzE+Au+
+#&gt; +fxTC4c7t3Rt1Oma0UpH9YoyGgHhQdYiubEcvSZAXm+quM0RX36JybmoY0HT9hvP
+#&gt; fCHxfEjScXdldWfrXSSA/AcAxKjF9FHBZVaEr2nnA1/mO1uG/C7tjoCzfRML34dY
+#&gt; 3pUgAr946HQHsp/Stn77R/SeqJM/mhxx41hcQ70K2d/w9coaz1u7Yy93hh5KcPUk
+#&gt; rKB60sN7c52MZ0+Q0HhCOxQWenZJF8KizVS6kgM02V7crJPpDe7S1UZuRCylE4OH
+#&gt; cKEBOg9NlnbMA3EkNT9RPlggb0uH0RaJEE2TdUs/dOnnKcpwI7Sgndz3gUrs3Uod
+#&gt; +m3yeC81RgNCuN3+aKr3c+YNOwPgok7mCH3KRq/AS8ijjMlnIsibw+Hp/1/EHSHs
+#&gt; pNdVcIWjSlgBNsxidDEoWDogxH/Nm4aC6xQfxP82fTfhml+C9qkzOSsBdoH5BV+A
+#&gt; QZXzoGhieeKbpWRlu3YGViORuISva7ulJFDhkr/ERuXFuVKci3/9iJWW08aOoCF0
+#&gt; GVCi2nstAOU+77xMI37lsagXgFGjjvam7SE40jaVxW2q7zrF1zKNRQKdAgMBAAGj
+#&gt; VjBUMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFPfuJB+1x4hUEY7XOqs2
+#&gt; LYscua2yMB8GA1UdIwQYMBaAFPfuJB+1x4hUEY7XOqs2LYscua2yMA0GCSqGSIb3
+#&gt; DQEBCwUAA4ICAQBQjIMmQcEhGOtnNxp1BIMsZe+t8ZTEyY0iEEbOSW1MTdzIqFT2
+#&gt; OCf3tWSOxgFIANTzNR7ZsO9he/GkytT7nN3+H1QOlyFv12Xtxh4+gJe8ixpgidfB
+#&gt; FDq0mfZ8pIk4YhBR/D7M77kqgzrlepB+KIfG5zYS+TWwzs/2+qaxjLC2XJESaWsD
+#&gt; uJ/EqdYfYX4CdCMK2BxUMdldvJONARHU3I9GBId1Y6NusKFzpKvTkOp2N6XxIGe+
+#&gt; rsnY/NvTTwF491a4kVEGQqT/9BBJ47GAoA8TGvaG88Spu+ZeMh0hybr0v5Z869Em
+#&gt; LQFvziB7Jr3cQtvxwUKP3EnPB+FCGEQ2N1vcW6H098kN1uOVhi2lyox0cxy69RDl
+#&gt; XKJWfVw1YDc2TUk2KyMAkcC2DEqW0YLjog603XilifeI07viJAI8D1BMBioOF2ub
+#&gt; H5YVqTtzueok5PFL6gKU/FxJChfFHS+vMEksUmhA/gbnE2gmARXWUp1YRENmaOlq
+#&gt; jGEjSVUSWJmz/Yxirdw8V+F/5Im0Rw9x2qi8Rcz4NpFLXZAE96XEfiBnSE+igcx/
+#&gt; va1vKQYG8+QlnaOj/tWcm7Ds2qyDXM2tkRg/wY5wn8zzbQIu1kaMaQQtQyRkm0Qb
+#&gt; eD0ANbWVm6sme3OcOIXOKWQ6SHsVfUxTu1oQxP0db0ub77YrwnQAyUm7cA==
 #&gt; -----END CERTIFICATE-----
-#&gt; &quot;,&quot;&quot;),rs=c(10407,-1811307506,-1390734025,335202316,-2079928931,-545218630,567695859),dispatcher=TRUE)'
+#&gt; &quot;,&quot;&quot;),rs=c(10407,170097720,1743868121,-835599674,1736640143,-1848605820,-567606091),dispatcher=TRUE)'
 </code></pre>
 <p>The printed value may be deployed directly on a remote machine.</p>
 <p><a href="#table-of-contents">« Back to ToC</a></p>
@@ -517,10 +517,10 @@ m3[]
 
 m3$data$stack.trace
 #&gt; [[1]]
-#&gt; [1] &quot;stop(\&quot;positive\&quot;)&quot;
+#&gt; stop(&quot;positive&quot;)
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;f(1)&quot;
+#&gt; f(1)
 </code></pre>
 <p>Elements of the original error condition are also accessible via <code>$</code> on the error object. For example, additional metadata recorded by <code>rlang::abort()</code> is preserved:</p>
 <pre><code class="language-r">f &lt;- function(x) if (x &gt; 0) stop(&quot;positive&quot;)
@@ -564,6 +564,9 @@ x &lt;- as_arrow_table(iris)
 m &lt;- mirai(list(a = head(x), b = &quot;some text&quot;), x = x)
 m[]
 #&gt; 'miraiError' chr Error: Invalid &lt;Table&gt;, external pointer to null
+
+daemons(0)
+#&gt; [1] 0
 </code></pre>
 <p>However, <code>serial_config()</code> can be used to create custom serialization configurations, specifying functions that hook into R’s native serialization mechanism for reference objects (‘refhooks’).</p>
 <p>This configuration may then be passed to the ‘serial’ argument of a <code>daemons()</code> call.</p>
@@ -657,10 +660,12 @@ daemons(4)
 vec &lt;- c(1, 1, 4, 4, 1, 1, 1, 1)
 system.time(mirai_map(vec, Sys.sleep)[])
 #&gt;    user  system elapsed 
-#&gt;   0.001   0.004   4.006
+#&gt;   0.004   0.003   4.007
 system.time(parLapply(cl, vec, Sys.sleep))
 #&gt;    user  system elapsed 
-#&gt;   0.016   0.077   8.091
+#&gt;   0.011   0.006   8.012
+daemons(0)
+#&gt; [1] 0
 </code></pre>
 <p><code>.args</code> is used to specify further constant arguments to <code>.f</code> - the ‘mean’ and ‘sd’ in the example below:</p>
 <pre><code class="language-r">with(
@@ -668,34 +673,35 @@ system.time(parLapply(cl, vec, Sys.sleep))
   mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
 )
 #&gt; [[1]]
-#&gt; [1] 21.67525
+#&gt; [1] 21.84541
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] 20.10329 19.76841
+#&gt; [1] 18.23470 20.94375
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] 20.36542 20.73644 19.38807
+#&gt; [1] 18.39093 16.46124 20.26067
 </code></pre>
 <p>Use <code>...</code> to further specify objects referenced but not defined in <code>.f</code> - the ‘do’ in the anonymous function below:</p>
-<pre><code class="language-r">ml &lt;- mirai_map(
+<pre><code class="language-r">daemons(4)
+#&gt; [1] 4
+ml &lt;- mirai_map(
   c(a = 1, b = 2, c = 3),
   function(x) do(x, as.logical(x %% 2)),
   do = nanonext::random
 )
-#&gt; Warning: mirai is launching one local daemon for a map operation as none previously set
 ml
-#&gt; &lt; mirai map [1/3] &gt;
+#&gt; &lt; mirai map [0/3] &gt;
 ml[]
 #&gt; $a
-#&gt; [1] &quot;47&quot;
+#&gt; [1] &quot;53&quot;
 #&gt; 
 #&gt; $b
-#&gt; [1] f4 de
+#&gt; [1] f1 05
 #&gt; 
 #&gt; $c
-#&gt; [1] &quot;9accab&quot;
+#&gt; [1] &quot;3cb8d3&quot;
 </code></pre>
-<p>Use of <code>mirai_map()</code> assumes that <code>daemons()</code> have previously been set. If not then one (non-dispatcher) daemon is set to allow the function to proceed. This ensures safe behaviour, but is unlikely to be optimal, so please ensure daemons are set beforehand.</p>
+<p>Use of <code>mirai_map()</code> requires that <code>daemons()</code> have previously been set, and will error if not.</p>
 <h4 id="sec:collecting-results">Collecting Results</h4>
 <p>When collecting the results, optionally specify arguments to <code>[]</code>:</p>
 <ul>
@@ -704,16 +710,21 @@ ml[]
 <li><code>x[.stop]</code> collects the results applying early stopping, which stops at the first failure and cancels remaining computations. If the <code>cli</code> package is available, it will be used for displaying the error message.</li>
 </ul>
 <p>Combinations of the above may be supplied in the fashion of <code>x[.stop, .progress]</code>.</p>
-<pre><code class="language-r">mirai_map(list(a = 1, b = &quot;a&quot;, c = 3), sum)[.stop]
-#&gt; Error in `mirai::mirai_map()`:
-#&gt; ℹ In index 2.
-#&gt; ✖ Error in .Primitive(&quot;sum&quot;)(&quot;a&quot;): invalid 'type' (character) of argument
+<pre><code class="language-r">mirai_map(list(a = 1, b = &quot;a&quot;, c = 3), function(x) exp(x))[.stop]
+#&gt; Error in `mirai_map()`:
+#&gt; ℹ In index: 2.
+#&gt; ℹ With name: b.
+#&gt; Caused by error in `exp()`:
+#&gt; ! non-numeric argument to mathematical function
 
 with(
-  daemons(4, dispatcher = FALSE),
-  mirai_map(c(0.1, 0.2, 0.3), Sys.sleep)[.progress, .flat]
+  daemons(4, dispatcher = FALSE, .compute = &quot;sleep&quot;),
+  mirai_map(c(0.1, 0.2, 0.3), Sys.sleep, .compute = &quot;sleep&quot;)[.progress, .flat]
 )
 #&gt; NULL
+
+daemons(0)
+#&gt; [1] 0
 </code></pre>
 <h4 id="sec:multiple-map">Multiple Map</h4>
 <p>Multiple map is performed over the <strong>rows</strong> of a dataframe or matrix, as this is most often the desired behaviour.</p>
@@ -739,7 +750,7 @@ with(
 <p>The following points may, however, be useful:</p>
 <ul>
 <li>
-<p><code>daemons()</code> settings should usually be left to end-users. Users may be guided to mirai documentation if desired. If however, a package wishes to set default settings, for example, <code>daemons()</code> should always be called specifying <code>force = FALSE</code>. This ensures that any prior user settings are respected, and that daemons set elsewhere are not prematurely terminated.</p>
+<p><code>daemons()</code> settings should usually be left to end-users, and you may consider re-exporting <code>daemons()</code> in your package as a convenience.</p>
 </li>
 <li>
 <p>Calling package functions in a mirai requires namespacing the call, or alternatively exporting the function, i.e.</p>

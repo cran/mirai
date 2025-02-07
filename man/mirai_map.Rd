@@ -39,6 +39,7 @@ over the rows of a dataframe or matrix.
 \details{
 Sends each application of function \code{.f} on an element of \code{.x}
 (or row of \code{.x}) for computation in a separate \code{\link{mirai}} call.
+If \code{.x} is named, names are preserved.
 
 This simple and transparent behaviour is designed to make full use of
 \pkg{mirai} scheduling to minimise overall execution time.
@@ -47,8 +48,8 @@ Facilitates recovery from partial failure by returning all
 \sQuote{miraiError} / \sQuote{errorValue} as the case may be, thus allowing
 only the failures to be re-run.
 
-Note: requires daemons to have previously been set. If not, then one local
-daemon is set before the function proceeds.
+This function requires daemons to have previously been set, and will error if
+not.
 }
 \section{Collection Options}{
 
@@ -80,6 +81,7 @@ progress indicator.
 
 If \code{.x} is a matrix or dataframe (or other object with \sQuote{dim}
 attributes), \emph{multiple} map is performed over its \strong{rows}.
+Character row names are preserved as names of the output.
 
 This allows map over 2 or more arguments, and \code{.f} should accept at
 least as many arguments as there are columns. If the dataframe has names, or
@@ -115,7 +117,7 @@ mirai_map(
 mirai_map(mat, function(x = 10, y = 0, z = 0) x + y + z)[.flat]
 
 # named matrix multiple map: arguments passed to function by name
-dimnames(mat)[[2L]] <- c("y", "z")
+dimnames(mat) <- list(c("a", "b"), c("y", "z"))
 mirai_map(mat, function(x = 10, y = 0, z = 0) x + y + z)[.flat]
 
 # dataframe multiple map: using a function taking '...' arguments
@@ -140,11 +142,10 @@ unresolved(mp)
 # progress indicator counts up from 0 to 4 seconds
 res <- mirai_map(1:4, Sys.sleep)[.progress]
 
-daemons(0)
-
-# generates warning as daemons not set
 # stops early when second element returns an error
 tryCatch(mirai_map(list(1, "a", 3), sum)[.stop], error = identity)
+
+daemons(0)
 
 # promises example that outputs the results, including errors, to the console
 if (requireNamespace("promises", quietly = TRUE)) {

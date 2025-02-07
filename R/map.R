@@ -24,6 +24,7 @@
 #'
 #' Sends each application of function \code{.f} on an element of \code{.x}
 #' (or row of \code{.x}) for computation in a separate \code{\link{mirai}} call.
+#' If \code{.x} is named, names are preserved.
 #'
 #' This simple and transparent behaviour is designed to make full use of
 #' \pkg{mirai} scheduling to minimise overall execution time.
@@ -32,8 +33,8 @@
 #' \sQuote{miraiError} / \sQuote{errorValue} as the case may be, thus allowing
 #' only the failures to be re-run.
 #'
-#' Note: requires daemons to have previously been set. If not, then one local
-#' daemon is set before the function proceeds.
+#' This function requires daemons to have previously been set, and will error if
+#' not.
 #'
 #' @param .x a list or atomic vector. Also accepts a matrix or dataframe, in
 #'   which case multiple map is performed over its rows.
@@ -79,6 +80,7 @@
 #'
 #' If \code{.x} is a matrix or dataframe (or other object with \sQuote{dim}
 #' attributes), \emph{multiple} map is performed over its \strong{rows}.
+#' Character row names are preserved as names of the output.
 #'
 #' This allows map over 2 or more arguments, and \code{.f} should accept at
 #' least as many arguments as there are columns. If the dataframe has names, or
@@ -113,7 +115,7 @@
 #' mirai_map(mat, function(x = 10, y = 0, z = 0) x + y + z)[.flat]
 #'
 #' # named matrix multiple map: arguments passed to function by name
-#' dimnames(mat)[[2L]] <- c("y", "z")
+#' dimnames(mat) <- list(c("a", "b"), c("y", "z"))
 #' mirai_map(mat, function(x = 10, y = 0, z = 0) x + y + z)[.flat]
 #'
 #' # dataframe multiple map: using a function taking '...' arguments
@@ -138,11 +140,10 @@
 #' # progress indicator counts up from 0 to 4 seconds
 #' res <- mirai_map(1:4, Sys.sleep)[.progress]
 #'
-#' daemons(0)
-#'
-#' # generates warning as daemons not set
 #' # stops early when second element returns an error
 #' tryCatch(mirai_map(list(1, "a", 3), sum)[.stop], error = identity)
+#'
+#' daemons(0)
 #'
 #' # promises example that outputs the results, including errors, to the console
 #' if (requireNamespace("promises", quietly = TRUE)) {
@@ -163,32 +164,32 @@
 #'
 mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "default") {
 
-  is.function(.f) || stop(sprintf(._[["function_required"]], typeof(.f)))
   envir <- ..[[.compute]]
-  is.null(envir) && {
-    .x
-    warning(._[["requires_daemons"]], call. = FALSE, immediate. = TRUE)
-    daemons(1L, dispatcher = FALSE, .compute = .compute)
-    return(mirai_map(.x = .x, .f = .f, ..., .args = .args, .promise = .promise, .compute = .compute))
-  }
+  is.null(envir) && stop(._[["requires_daemons"]])
+  is.function(.f) || stop(sprintf(._[["function_required"]], typeof(.f)))
+
   xilen <- dim(.x)[1L]
   vec <- if (length(xilen)) {
     is_matrix <- is.matrix(.x)
-    lapply(
-      seq_len(xilen),
-      function(i) mirai(
-        .expr = do.call(.f, c(.x, .args)),
-        ...,
-        .args = list(.f = .f, .x = if (is_matrix) as.list(.x[i, ]) else lapply(.x, .subset2, i), .args = .args),
-        .compute = .compute
-      )
+    names <- if (is_matrix) dimnames(.x)[[1L]] else if (is.character(rn <- attr(.x, "row.names"))) rn
+    `names<-`(
+      lapply(
+        seq_len(xilen),
+        function(i) mirai(
+          .expr = do.call(.f, c(.x, .args), quote = TRUE),
+          ...,
+          .args = list(.f = .f, .x = if (is_matrix) as.list(.x[i, ]) else lapply(.x, `[[`, i), .args = .args),
+          .compute = .compute
+        )
+      ),
+      names
     )
   } else {
     `names<-`(
       lapply(
         .x,
         function(x) mirai(
-          .expr = do.call(.f, c(list(.x), .args)),
+          .expr = do.call(.f, c(list(.x), .args), quote = TRUE),
           ...,
           .args = list(.f = .f, .x = x, .args = .args),
           .compute = .compute
@@ -247,9 +248,16 @@ print.mirai_map <- function(x, ...) {
   quote(
     if (i == 0L) xi <- TRUE else
       if (i == 1L) typ <<- typeof(xi) else
-        if (i <= xlen)
-          is_error_value(xi) && stop(sprintf("In index %d:\n%s", i, xi), call. = FALSE) ||
-            typeof(xi) != typ && stop(sprintf("Cannot flatten outputs of differing type: %s / %s", typ, typeof(xi)), call. = FALSE)
+        if (i <= xlen) {
+          is_error_value(xi) && {
+            stop_mirai(x)
+            stop(sprintf("In index %d:\n%s", i, attr(xi, "message")), call. = FALSE)
+          }
+          typeof(xi) != typ && {
+            stop_mirai(x)
+            stop(sprintf("Cannot flatten outputs of differing type: %s / %s", typ, typeof(xi)), call. = FALSE)
+          }
+        }
   )
 )
 
@@ -268,7 +276,7 @@ print.mirai_map <- function(x, ...) {
 #' @export
 #'
 .stop <- compiler::compile(
-  quote(if (is_error_value(xi)) { stop_mirai(x); stop(sprintf("In index %d:\n%s", i, xi), call. = FALSE) })
+  quote(if (is_error_value(xi)) { stop_mirai(x); stop(sprintf("In index %d:\n%s", i, attr(xi, "message")), call. = FALSE) })
 )
 
 # internals --------------------------------------------------------------------
@@ -301,9 +309,31 @@ flat_cli <- compiler::compile(
   quote(
     if (i == 0L) xi <- TRUE else
       if (i == 1L) typ <<- typeof(xi) else
-        if (i <= xlen)
-          is_error_value(xi) && cli::cli_abort(c(i = "In index {i}.", x = xi), call = quote(mirai::mirai_map())) ||
-            typeof(xi) != typ && cli::cli_abort("cannot flatten outputs of differing type: {typ} / {typeof(xi)}", call = quote(mirai::mirai_map()))
+        if (i <= xlen) {
+          is_error_value(xi) && {
+            stop_mirai(x)
+            iname <- names(x)[i]
+            cli::cli_abort(
+              c(i = "In index: {i}.",
+                i = if (length(iname) && nzchar(iname)) "With name: {iname}."),
+              location = i,
+              name = iname,
+              parent = `class<-`(attributes(xi), c("error", "condition")),
+              call = quote(mirai_map())
+            )
+          }
+          typeof(xi) != typ && {
+            stop_mirai(x)
+            iname <- names(x)[i]
+            cli::cli_abort(
+              c(`!` = "cannot flatten outputs of differing type: {typ} / {typeof(xi)}"),
+              location = i,
+              name = iname,
+              call = quote(mirai_map())
+            )
+          }
+        }
+
   )
 )
 
@@ -318,7 +348,15 @@ stop_cli <- compiler::compile(
   quote(
     if (is_error_value(xi)) {
       stop_mirai(x)
-      cli::cli_abort(c(i = "In index {i}.", x = xi), call = quote(mirai::mirai_map()))
+      iname <- names(x)[i]
+      cli::cli_abort(
+        c(i = "In index: {i}.",
+          i = if (length(iname) && nzchar(iname)) "With name: {iname}."),
+        location = i,
+        name = iname,
+        parent = `class<-`(attributes(xi), c("error", "condition")),
+        call = quote(mirai_map())
+      )
     }
   )
 )

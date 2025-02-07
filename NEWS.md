@@ -1,3 +1,25 @@
+# mirai 2.1.0
+
+#### Behavioural Changes
+
+* `daemons()` now requires an explicit reset before providing revised settings for a compute profile, and will error otherwise.
+* `mirai_map()` now errors if daemons have not yet been set (rather than warn and launch one local daemon).
+* Removal of mirai v1 compatibility features:
+  + `saisei()` is now removed as no longer required.
+  + `daemons()` dispatcher argument "thread" is removed.
+  + `daemons()` dispatcher arguments "process" and "none" are formally deprecated and will be removed in a future version.
+
+#### Updates
+
+* 'miraiError' evaluation errors now return the call stack at `$stack.trace` as a list of calls (with srcrefs removed) without deparsing to character strings.
+* `mirai_map()` improvements:
+  + Multiple map on a dataframe or matrix now correctly preserves the row names of the input as the names of the output.
+  + Fixes language objects being evaluated before the map function is applied (#194).
+  + Fixes classes of objects in a dataframe being dropped during a multiple map (#196).
+  + Better `cli` errors when collecting a 'mirai_map'.
+* Fixes `daemons(NULL)` not causing all daemons started with `autoexit = FALSE` to quit, regression introduced in mirai v2.0.0.
+* Requires nanonext >= 1.5.0.
+
 # mirai 2.0.1
 
 #### Updates

@@ -19,9 +19,9 @@ test_zero(status()[["connections"]])
 test_zero(status()[["daemons"]])
 test_zero(daemons(0L))
 test_error(mirai(), "missing expression, perhaps wrap in {}?")
-test_error(mirai(a, 1), "all '...' arguments must be named")
-test_error(mirai(a, .args = list(1)), "all items in '.args' must be named")
-test_error(mirai_map(1:2, "a function"), "must be of type function, not character")
+test_error(mirai(a, 1), "all `...` arguments must be named")
+test_error(mirai(a, .args = list(1)), "all items in `.args` must be named")
+test_error(mirai_map(1:2, identity), "daemons must be set")
 test_error(daemons(url = "URL"), "Invalid argument")
 test_error(daemons(-1), "zero or greater")
 test_error(daemons(raw(0L)), "must be numeric")
@@ -67,11 +67,12 @@ connection && {
   Sys.sleep(1L)
   test_equal(1L, d <- daemons(1L, dispatcher = FALSE, asyncdial = FALSE, seed = 1546L))
   test_print(d)
+  test_error(daemons(1L), "daemons already set")
   me <- mirai(mirai::mirai(), .timeout = 2000L)[]
   if (!is_mirai_error(me)) test_true(is_error_value(me))
   if (is_mirai_error(me)) test_type("list", me$stack.trace)
   if (is_mirai_error(me)) test_true(length(me$stack.trace) >= 2L)
-  if (is_mirai_error(me)) test_true(all(as.logical(lapply(me$stack.trace, is.character))))
+  if (is_mirai_error(me)) test_true(all(as.logical(lapply(me$stack.trace, is.language))))
   test_true(!is_mirai_interrupt(me))
   test_class("errorValue", me)
   test_print(me)
@@ -102,10 +103,12 @@ connection && {
   if (!unresolved(mp$data)) test_equal(mp$data, 3)
   Sys.sleep(1L)
   test_type("integer", status(.compute = "new")[["connections"]])
+  test_error(mirai_map(1:2, "a function", .compute = "new"), "must be of type function, not character")
+  test_error(daemons(url = local_url(), .compute = "new"), "daemons already set")
   test_zero(daemons(0L, .compute = "new"))
 }
 # additional daemons tests
-connection && .Platform[["OS.type"]] != "windows" && {
+connection && {
   Sys.sleep(1L)
   test_zero(daemons(url = value <- local_url(), dispatcher = FALSE))
   test_identical(status()$daemons, value)
@@ -119,9 +122,9 @@ connection && .Platform[["OS.type"]] != "windows" && {
   test_zero(daemons(0L))
 }
 # mirai_map tests
-connection && .Platform[["OS.type"]] != "windows" && {
+connection && {
   Sys.sleep(1L)
-  m <- with(daemons(1, dispatcher = "none", .compute = "ml"), {
+  m <- with(daemons(1, dispatcher = FALSE, .compute = "ml"), {
     if (is.null(tryCatch(mirai_map(list(1, "a", 2), sum, .compute = "ml")[.stop], error = function(e) NULL)))
       mirai_map(1:3, rnorm, .args = list(mean = 20, 2), .compute = "ml")[]
   })
@@ -130,11 +133,17 @@ connection && .Platform[["OS.type"]] != "windows" && {
   test_equal(length(m), 3L)
   test_true(all(as.logical(lapply(m, is.numeric))))
   Sys.sleep(1L)
-  test_print(suppressWarnings(mp <- mirai_map(list(x = "a"), function(...) do(...), do = function(x, y) sprintf("%s%s", x, y), .args = list("b"))))
+  daemons(1, dispatcher = FALSE)
+  mp <- mirai_map(list(x = "a"), function(...) do(...), do = function(x, y) sprintf("%s%s", x, y), .args = list("b"))
+  test_print(mp)
   test_identical(collect_mirai(mp)[["x"]], "ab")
   test_identical(call_mirai(mp)[["x"]][["data"]], "ab")
-  test_true(all(mirai_map(data.frame(1:3, 3:1), sum, .args = list(3L))[.flat] == 7L))
+  mres <- mirai_map(data.frame(1:3, 3:1), sum, .args = list(3L))[.flat]
+  test_true(all(mres == 7L))
+  test_null(names(mres))
   test_true(all(mirai_map(list(c(a = 1, b = 1, c = 1), 3), sum)[.flat] == 3))
+  test_type("language", mirai_map(list(quote(1+2)), identity)[][[1]])
+  test_class("Date", mirai_map(data.frame(x = as.Date("2020-01-01")), identity)[][[1]])
   test_zero(daemons(0L))
 }
 # parallel cluster tests
@@ -205,8 +214,8 @@ connection && {
   test_null(stopCluster(cl))
 }
 # advanced daemons and dispatcher tests
-connection && .Platform[["OS.type"]] != "windows" && Sys.getenv("NOT_CRAN") == "true" && {
-  Sys.sleep(1L)
+connection && Sys.getenv("NOT_CRAN") == "true" && {
+  Sys.sleep(0.5)
   test_zero(daemons(url = "ws://:0", correctype = 0L, token = TRUE))
   test_zero(daemons(0L))
   test_zero(with(daemons(url = "tcp://:0", correcttype = c(1, 0), token = TRUE), {8L - 9L + 1L}))
@@ -241,7 +250,7 @@ connection && .Platform[["OS.type"]] != "windows" && Sys.getenv("NOT_CRAN") == "
 }
 # TLS tests
 connection && Sys.getenv("NOT_CRAN") == "true" && {
-  Sys.sleep(1L)
+  Sys.sleep(0.5)
   cfg <- serial_config("custom", function(x) serialize(x, NULL), unserialize)
   test_zero(daemons(url = host_url(), pass = "test", serial = cfg))
   test_equal(launch_local(1L), 1L)
@@ -252,7 +261,6 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
   test_zero(collect_mirai(mm, ".flat"))
   m <- mirai(b, .timeout = 1000)
   if (!is_error_value(m[])) test_equal(m[], 2L)
-  test_null(saisei(1))
   test_zero(daemons(0))
   test_tls <- function(cert) {
     file <- tempfile()
@@ -264,16 +272,18 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
 }
 # promises tests
 connection && requireNamespace("promises", quietly = TRUE) && Sys.getenv("NOT_CRAN") == "true" && {
-  Sys.sleep(1L)
+  Sys.sleep(0.5)
   test_equal(daemons(1, notused = "wrongtype"), 1L)
   test_true(grepl("://", launch_remote(1L), fixed = TRUE))
   test_true(promises::is.promise(p1 <- promises::as.promise(mirai("completed"))))
   test_true(promises::is.promise(p2 <- promises::`%...>%`(mirai("completed"), identity())))
   test_true(promises::is.promise(p3 <- promises::as.promise(call_mirai(mirai("completed")))))
   test_zero(mirai_map(0:1, function(x) x, .promise = identity)[][[1L]])
-  test_true(is_mirai_map(mp <- mirai_map(matrix(1:4, nrow = 2L), function(x, y) x + y, .promise = list(identity))))
-  test_true(all(mp[.flat, .stop] == c(4L, 6L)))
-  test_null(names(mp[]))
+  mat <- matrix(1:4, nrow = 2L)
+  dimnames(mat) <- list(c("a", "b"), c("y", "x"))
+  test_true(is_mirai_map(mp <- mirai_map(mat, function(x, y) x - y, .promise = list(identity))))
+  test_true(all(mp[.flat, .stop] == 2L))
+  test_identical(names(mp[]), c("a", "b"))
   test_class("errorValue", mirai_map(1, function(x) stop(x), .promise = list(identity, identity))[][[1L]])
   Sys.sleep(1L)
   getNamespace("later")[["run_now"]]()
@@ -281,7 +291,7 @@ connection && requireNamespace("promises", quietly = TRUE) && Sys.getenv("NOT_CR
 }
 # mirai daemon limits tests
 connection && Sys.getenv("NOT_CRAN") == "true" && {
-  Sys.sleep(1L)
+  Sys.sleep(0.5)
   test_equal(daemons(1, cleanup = FALSE, maxtasks = 2L, id = 125L), 1L)
   test_equal(mirai(1)[], mirai(1)[])
   m <- mirai(0L)
@@ -309,7 +319,7 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
 }
 # mirai cancellation tests
 connection && Sys.getenv("NOT_CRAN") == "true" && {
-  Sys.sleep(1L)
+  Sys.sleep(0.5)
   test_equal(daemons(1, dispatcher = TRUE, cleanup = FALSE), 1L)
   m1 <- mirai({ Sys.sleep(1); res <<- "m1 done" })
   m2 <- mirai({ Sys.sleep(1); res <<- "m2 done" })
@@ -332,7 +342,7 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
 }
 # additional stress testing
 connection && Sys.getenv("NOT_CRAN") == "true" && {
-  Sys.sleep(1L)
+  Sys.sleep(0.5)
   q <- vector(mode = "list", length = 10000L)
   Sys.setenv(R_DEFAULT_PACKAGES = "stats,utils")
   test_equal(daemons(4), 4L)
@@ -344,32 +354,6 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
   test_equal(length(unique(unlist(collect_mirai(q)))), 10000L)
   test_true(all(as.logical(lapply(lapply(q, attr, "status"), is.list))))
   test_equal(daemons()[["mirai"]][["completed"]], 20000L)
-}
-# legacy interface tests
-connection && .Platform[["OS.type"]] != "windows" && Sys.getenv("NOT_CRAN") == "true" && {
-  option <- 15L
-  Sys.setenv(R_DEFAULT_PACKAGES = "stats,utils")
-  test_equal(1L, daemons(1, dispatcher = "process", maxtasks = 10L, timerstart = 1L, walltime = 500L, idletime = 500L, seed = 1546, cleanup = option, autoexit = tools::SIGCONT))
-  Sys.unsetenv("R_DEFAULT_PACKAGES")
-  Sys.sleep(1L)
-  mq <- mirai(runif(1L), .timeout = 1000)
-  test_true(is.numeric(mq[]))
-  mq <- mirai(Sys.sleep(0.7), .timeout = 500)
-  test_class("matrix", status()[["daemons"]])
-  test_null(saisei(i = 1L))
-  Sys.sleep(1L)
-  test_equal(daemons(url = "wss://127.0.0.1:0", dispatcher = "process", output = TRUE, token = TRUE, walltime = 500L, idletime = 505L), 1L)
-  test_equal(nextget("n"), 1L)
-  test_equal(length(nextget("urls")), 1L)
-  test_class("matrix", status()$daemons)
-  test_null(saisei(i = 0L))
-  test_print(saisei(i = 1L))
-  test_print(saisei(i = 1L, force = TRUE))
-  Sys.sleep(0.1)
-  test_zero(daemons(0))
-  test_equal(daemons(n = 2L, url = "tls+tcp://127.0.0.1:0", dispatcher = "thread", token = TRUE, idletime = Inf), 2L)
-  test_class("matrix", status()$daemons)
-  Sys.sleep(0.1)
   test_zero(daemons(0))
 }
 test_zero(daemons(0))
