@@ -2,71 +2,60 @@
 % Please edit documentation in R/mirai.R
 \name{call_mirai}
 \alias{call_mirai}
-\alias{call_mirai_}
 \title{mirai (Call Value)}
 \usage{
 call_mirai(x)
-
-call_mirai_(x)
 }
 \arguments{
-\item{x}{a \sQuote{mirai} object, or list of \sQuote{mirai} objects.}
+\item{x}{a 'mirai' object, or list of 'mirai' objects.}
 }
 \value{
-The passed object (invisibly). For a \sQuote{mirai}, the retrieved
-  value is stored at \code{$data}.
+The passed object (invisibly). For a 'mirai', the retrieved value is
+stored at \verb{$data}.
 }
 \description{
-\code{call_mirai} waits for the \sQuote{mirai} to resolve if still in
-progress, storing the value at \code{$data}, and returns the \sQuote{mirai}
-object.
-
-\code{call_mirai_} is a variant of \code{call_mirai} that allows user
-interrupts, suitable for interactive use.
+Waits for the 'mirai' to resolve if still in progress, stores the value at
+\verb{$data}, and returns the 'mirai' object.
 }
 \details{
-Both functions accept a list of \sQuote{mirai} objects, such as that returned
-by \code{\link{mirai_map}} as well as individual \sQuote{mirai}.
+Accepts a list of 'mirai' objects, such as those returned by \code{\link[=mirai_map]{mirai_map()}},
+as well as individual 'mirai'.
 
-They will wait for the asynchronous operation(s) to complete if still in
-progress (blocking).
+Waits for the asynchronous operation(s) to complete if still in progress,
+blocking but user-interruptible.
 
-\code{x[]} may also be used to wait for and return the value of a mirai
-\code{x}, and is the equivalent of \code{call_mirai_(x)$data}.
+\code{x[]} may also be used to wait for and return the value of a mirai \code{x}, and
+is the equivalent of \code{call_mirai(x)$data}.
 }
 \section{Alternatively}{
 
 
-The value of a \sQuote{mirai} may be accessed at any time at \code{$data},
-and if yet to resolve, an \sQuote{unresolved} logical NA will be returned
-instead.
+The value of a 'mirai' may be accessed at any time at \verb{$data}, and if yet to
+resolve, an 'unresolved' logical NA will be returned instead.
 
-Using \code{\link{unresolved}} on a \sQuote{mirai} returns TRUE only if it
-has yet to resolve and FALSE otherwise. This is suitable for use in control
-flow statements such as \code{while} or \code{if}.
+Using \code{\link[=unresolved]{unresolved()}} on a 'mirai' returns TRUE only if it has yet to resolve
+and FALSE otherwise. This is suitable for use in control flow statements such
+as \code{while} or \code{if}.
 }
 
 \section{Errors}{
 
 
 If an error occurs in evaluation, the error message is returned as a
-character string of class \sQuote{miraiError} and \sQuote{errorValue}.
-\code{\link{is_mirai_error}} may be used to test for this. The elements of
-the original condition are accessible via \code{$} on the error object. A
-stack trace comprising a list of calls is also available at
-\code{$stack.trace}.
+character string of class 'miraiError' and 'errorValue'. \code{\link[=is_mirai_error]{is_mirai_error()}}
+may be used to test for this. The elements of the original condition are
+accessible via \code{$} on the error object. A stack trace comprising a list of
+calls is also available at \verb{$stack.trace}.
 
 If a daemon crashes or terminates unexpectedly during evaluation, an
-\sQuote{errorValue} 19 (Connection reset) is returned.
+'errorValue' 19 (Connection reset) is returned.
 
-\code{\link{is_error_value}} tests for all error conditions including
-\sQuote{mirai} errors, interrupts, and timeouts.
+\code{\link[=is_error_value]{is_error_value()}} tests for all error conditions including 'mirai' errors,
+interrupts, and timeouts.
 }
 
 \examples{
-if (interactive()) {
-# Only run examples in interactive R sessions
-
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 # using call_mirai()
 df1 <- data.frame(a = 1, b = 2)
 df2 <- data.frame(a = 3, b = 1)
@@ -86,7 +75,5 @@ while (unresolved(m)) {
   Sys.sleep(0.1)
 }
 str(m$data)
-
-}
-
+\dontshow{\}) # examplesIf}
 }

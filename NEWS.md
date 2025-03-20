@@ -1,3 +1,30 @@
+# mirai 2.2.0
+
+#### Behavioural Changes
+
+* Simplified SSH tunnelling for distributed computing:
+  + `ssh_config()` argument 'port' is removed, with the tunnel port now inferred at the time of launch, and no longer set by the configuration.
+  + `local_url()` adds logical argument 'tcp' for easily constructing an automatic local TCP URL when setting `daemons()` for SSH tunnelling.
+
+#### New Features
+
+* Adds `as.promise()` method for 'mirai_map' objects. This will resolve upon completion of the entire map operation.
+
+#### Updates
+
+* mirai (in R >= 4.5) is now one of the official base R parallel cluster types.
+  + `register_cluster()` is removed as no longer required.
+  + Directly use `parallel::makeCluster(type = "MIRAI")` to create a 'miraiCluster'.
+* `call_mirai()` is now user-interruptible, consistent with all other functions in the package.
+  + `call_mirai_()` is hence redundant and now deprecated.
+* `with()` method for `daemons()` now propagates ".compute" so that this does not need to be specified in functions such as `mirai()` within the `with()` clause.
+* `mirai()` arguments `...` and `.args` now accept environments containing variables beginning with a dot `.` (#207).
+* 'miraiError' stack traces no longer sometimes contain an additional (internal) call (#216).
+* 'miraiError' condition `$call` objects are now stripped of 'srcref' attributes (thanks @lionel-, #218).
+* A mirai promise now rejects in exactly the same way whether or not the mirai was already resolved at time of creation.
+  This avoids Shiny deep stack trace errors when the mirai had already resolved (#229).
+* `daemons()` calls that error due to the remote launcher no longer leave the compute profile set up (#237).
+
 # mirai 2.1.0
 
 #### Behavioural Changes
@@ -52,7 +79,7 @@
 
 * `status()` using the new dispatcher is updated to provide more concise and insightful information.
 * `everywhere()` updates:
-  + Enhanced to return a list of mirai, which may be waited for and inspected (thanks @dgkf  #164).
+  + Enhanced to return a list of mirai, which may be waited for and inspected (thanks @dgkf, #164).
   + Drops argument '.serial' as serialization configurations are now registered via an argument at `daemons()`.
 * `daemon()` updates:
   + Gains the new argument 'dispatcher', which should be set to `TRUE` when connecting to dispatcher and `FALSE` when connecting directly to host.

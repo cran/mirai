@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 Hibiki AI Limited <info@hibiki-ai.com>
+# Copyright (C) 2023-2025 Hibiki AI Limited <info@hibiki-ai.com>
 #
 # This file is part of mirai.
 #
@@ -29,25 +29,23 @@
 # within a `later::later` callback. So this code is factored to isolate that
 # `later::later` code
 
-#' Make Mirai Promise
+#' Make mirai Promise
 #'
-#' Creates a \sQuote{promise} from a \sQuote{mirai}.
+#' Creates a 'promise' from a 'mirai'.
 #'
-#' This function is an S3 method for the generic \code{as.promise} for class
-#' \sQuote{mirai}.
+#' This function is an S3 method for the generic `as.promise()` for class
+#' 'mirai'.
 #'
 #' Requires the \CRANpkg{promises} package.
 #'
-#' Allows a \sQuote{mirai} to be used with the promise pipe \code{\%...>\%},
-#' which schedules a function to run upon resolution of the \sQuote{mirai}.
+#' Allows a 'mirai' to be used with the promise pipe `%...>%`, which schedules a
+#' function to run upon resolution of the 'mirai'.
 #'
-#' @param x an object of class \sQuote{mirai}.
+#' @param x an object of class 'mirai'.
 #'
-#' @return A \sQuote{promise} object.
+#' @return A 'promise' object.
 #'
-#' @examples
-#' if (interactive() && requireNamespace("promises", quietly = TRUE)) {
-#'
+#' @examplesIf interactive() && requireNamespace("promises", quietly = TRUE)
 #' library(promises)
 #'
 #' p <- as.promise(mirai("example"))
@@ -57,8 +55,6 @@
 #' p2 <- mirai("completed") %...>% identity()
 #' p2$then(cat)
 #' is.promise(p2)
-#'
-#' }
 #'
 #' @exportS3Method promises::as.promise
 #'
@@ -72,24 +68,72 @@ as.promise.mirai <- function(x) {
       promises::promise(
         function(resolve, reject) .keep(x, environment())
       )$then(
-        onFulfilled = function(value, .visible)
-          if (is_error_value(value) && !is_mirai_interrupt(value))
-            stop(if (is_mirai_error(value)) value else nng_error(value)) else
-              value
+        onFulfilled = function(value, .visible) {
+          is_error_value(value) && !is_mirai_interrupt(value) &&
+            stop(if (is_mirai_error(value)) value else nng_error(value))
+          value
+        }
       )
     } else {
       value <- .subset2(x, "value")
       promises::promise(
         function(resolve, reject)
-          if (is_error_value(value) && !is_mirai_interrupt(value))
-            reject(value) else
-              resolve(value)
+          resolve({
+            is_error_value(value) && !is_mirai_interrupt(value) &&
+              stop(if (is_mirai_error(value)) value else nng_error(value))
+            value
+          })
       )
     }
 
-    assign("promise", promise, x)
+    `[[<-`(x, "promise", promise)
 
   }
+
+  promise
+
+}
+
+#' Make mirai_map Promise
+#'
+#' Creates a 'promise' from a 'mirai_map'.
+#'
+#' This function is an S3 method for the generic `as.promise()` for class
+#' 'mirai_map'.
+#'
+#' Requires the \CRANpkg{promises} package.
+#'
+#' Allows a 'mirai_map' to be used with the promise pipe `%...>%`, which
+#' schedules a function to run upon resolution of the entire 'mirai_map'.
+#'
+#' The implementation internally uses `promises::promise_all()`. If all of the
+#' promises were successful, the returned promise will resolve to a list of the
+#' promise values; if any promise fails, the first error to be encountered will
+#' be used to reject the returned promise.
+#'
+#' @param x an object of class 'mirai_map'.
+#'
+#' @return A 'promise' object.
+#'
+#' @examplesIf interactive() && requireNamespace("promises", quietly = TRUE)
+#' library(promises)
+#'
+#' with(daemons(1), {
+#'   mp <- mirai_map(1:3, function(x) { Sys.sleep(1); x })
+#'   p <- as.promise(mp)
+#'   print(p)
+#'   p %...>% print
+#'   mp[.flat]
+#' })
+#'
+#' @exportS3Method promises::as.promise
+#'
+as.promise.mirai_map <- function(x) {
+
+  promise <- attr(x, "promise")
+
+  if (is.null(promise))
+    attr(x, "promise") <- promise <- promises::promise_all(.list = x)
 
   promise
 
@@ -98,3 +142,7 @@ as.promise.mirai <- function(x) {
 #' @exportS3Method promises::is.promising
 #'
 is.promising.mirai <- function(x) TRUE
+
+#' @exportS3Method promises::is.promising
+#'
+is.promising.mirai_map <- function(x) TRUE

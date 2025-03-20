@@ -20,8 +20,8 @@
 #'
 #' Dispatches tasks from a host to daemons for processing, using FIFO
 #' scheduling, queuing tasks as required. Daemon / dispatcher settings may be
-#' controlled by \code{\link{daemons}} and this function should not need to be
-#' invoked directly.
+#' controlled by [daemons()] and this function should not need to be invoked
+#' directly.
 #'
 #' The network topology is such that a dispatcher acts as a gateway between the
 #' host and daemons, ensuring that tasks received from the host are dispatched
@@ -39,17 +39,16 @@
 #'   use secure TLS connections.
 #' @param n (optional) if specified, the integer number of daemons to launch. In
 #'   this case, a local url is automatically generated.
-#' @param ... (optional) additional arguments passed through to
-#'   \code{\link{daemon}}. These include \sQuote{asyncdial}, \sQuote{autoexit},
-#'   and \sQuote{cleanup}.
-#' @param tls [default NULL] (required for secure TLS connections)
-#'   \strong{either} the character path to a file containing the PEM-encoded TLS
-#'   certificate and associated private key (may contain additional certificates
-#'   leading to a validation chain, with the TLS certificate first), \strong{or}
-#'   a length 2 character vector comprising [i] the TLS certificate (optionally
-#'   certificate chain) and [ii] the associated private key.
-#' @param pass [default NULL] (required only if the private key supplied to
-#'   \sQuote{tls} is encrypted with a password) For security, should be provided
+#' @param ... (optional) additional arguments passed through to [daemon()].
+#'   These include `asyncdial`, `autoexit`, and `cleanup`.
+#' @param tls \[default NULL\] (required for secure TLS connections) **either**
+#'   the character path to a file containing the PEM-encoded TLS certificate and
+#'   associated private key (may contain additional certificates leading to a
+#'   validation chain, with the TLS certificate first), **or** a length 2
+#'   character vector comprising \[i\] the TLS certificate (optionally
+#'   certificate chain) and \[ii\] the associated private key.
+#' @param pass \[default NULL\] (required only if the private key supplied to
+#'   `tls` is encrypted with a password) For security, should be provided
 #'   through a function that returns this value, rather than directly.
 #'
 #' @return Invisible NULL.
@@ -109,7 +108,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
 
     changes <- read_monitor(m)
     for (item in changes)
-      if (item > 0) {
+      item > 0 && {
         outq[[as.character(item)]] <- as.environment(list(pipe = item, msgid = 0L, ctx = NULL))
         send(psock, serial, mode = 1L, block = TRUE, pipe = item)
       }
@@ -142,7 +141,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
           } else {
             id <- as.character(-item)
             if (length(outq[[id]])) {
-              if (outq[[id]][["msgid"]])
+              outq[[id]][["msgid"]] &&
                 send(outq[[id]][["ctx"]], .connectionReset, mode = 1L, block = TRUE)
               if (length(outq[[id]][["dmnid"]]))
                 events <- c(events, outq[[id]][["dmnid"]])
@@ -169,7 +168,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
           } else {
             found <- FALSE
             for (item in outq)
-              if (item[["msgid"]] == id) {
+              item[["msgid"]] == id && {
                 send(psock, 0L, mode = 1L, pipe = item[["pipe"]], block = TRUE)
                 `[[<-`(item, "msgid", -1L)
                 found <- TRUE
@@ -177,7 +176,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
               }
             if (!found)
               for (i in seq_along(inq))
-                if (inq[[i]][["msgid"]] == id) {
+                inq[[i]][["msgid"]] == id && {
                   inq[[i]] <- NULL
                   found <- TRUE
                   break
@@ -196,7 +195,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
         value <- .subset2(res, "value")
         id <- as.character(.subset2(res, "aio"))
         res <- recv_aio(psock, mode = 8L, cv = cv)
-        if (outq[[id]][["msgid"]] < 0) {
+        outq[[id]][["msgid"]] < 0 && {
           `[[<-`(outq[[id]], "msgid", 0L)
           cv_signal(cv)
           next
@@ -222,7 +221,7 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
 
       if (length(inq))
         for (item in outq)
-          if (!item[["msgid"]]) {
+          item[["msgid"]] || {
             send(psock, inq[[1L]][["req"]], mode = 2L, pipe = item[["pipe"]], block = TRUE)
             `[[<-`(item, "ctx", inq[[1L]][["ctx"]])
             `[[<-`(item, "msgid", inq[[1L]][["msgid"]])

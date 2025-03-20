@@ -13,16 +13,14 @@ is_mirai_map(x)
 \item{x}{an object.}
 }
 \value{
-Logical TRUE if \sQuote{x} is of class \sQuote{mirai} or
-  \sQuote{mirai_map} respectively, FALSE otherwise.
+Logical TRUE if \code{x} is of class 'mirai' or 'mirai_map' respectively,
+FALSE otherwise.
 }
 \description{
-Is the object a \sQuote{mirai} or \sQuote{mirai_map}.
+Is the object a 'mirai' or 'mirai_map'.
 }
 \examples{
-if (interactive()) {
-# Only run examples in interactive R sessions
-
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 daemons(1, dispatcher = FALSE)
 df <- data.frame()
 m <- mirai(as.matrix(df), df = df)
@@ -33,7 +31,5 @@ mp <- mirai_map(1:3, runif)
 is_mirai_map(mp)
 is_mirai_map(mp[])
 daemons(0)
-
-}
-
+\dontshow{\}) # examplesIf}
 }

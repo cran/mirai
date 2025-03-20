@@ -35,20 +35,20 @@
 #'  pipes on Windows.
 #'
 #'  This may be overriden, if desired, by specifying 'url' in the
-#'  \code{\link{daemons}} interface and launching daemons using
-#'  \code{\link{launch_local}}.
+#'  [daemons()] interface and launching daemons using
+#'  [launch_local()].
 #'
 #' @section Reference Manual:
 #'
-#' \code{vignette("mirai", package = "mirai")}
+#' `vignette("mirai", package = "mirai")`
 #'
 #' @encoding UTF-8
 #' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
-#'   (\href{https://orcid.org/0000-0002-0750-061X}{ORCID})
+#'   ([ORCID](https://orcid.org/0000-0002-0750-061X))
 #'
 #' @importFrom nanonext .advance call_aio call_aio_ collect_aio collect_aio_
 #'   .context cv cv_signal cv_value dial .interrupt is_error_value .keep listen
-#'   lock .mark mclock monitor msleep nng_error opt opt<- parse_url pipe_notify
+#'   .mark mclock monitor msleep nng_error opt opt<- parse_url pipe_notify
 #'   random read_monitor reap recv recv_aio request send serial_config socket
 #'   stat stop_aio tls_config unresolved .unresolved until wait write_cert
 #'
@@ -79,7 +79,7 @@
 
 # nocov end
 
-. <- new.env()
+. <- `[[<-`(new.env(), "cp", "default")
 .. <- new.env()
 .command <- NULL
 .urlscheme <- NULL
@@ -90,9 +90,10 @@
     cluster_inactive = "cluster is no longer active",
     daemons_set = "daemons already set for `%s` compute profile",
     daemons_unset = "daemons must be set to use launchers",
-    dispatcher_args = "`dispatcher` must be either TRUE or FALSE",
+    dispatcher_args = "`dispatcher` should be either TRUE or FALSE",
     dot_required = "`.` must be an element of the character vector(s) supplied to `args`",
     function_required = "`.f` must be of type function, not %s",
+    localhost = "SSH tunnelling requires daemons `url` hostname to be `127.0.0.1`",
     missing_expression = "missing expression, perhaps wrap in {}?",
     missing_url = "`n` must be 1 or greater, or else `url` must be supplied",
     named_args = "all items in `.args` must be named, unless supplying an environment",
@@ -101,7 +102,6 @@
     n_zero = "the number of daemons must be zero or greater",
     not_found = "compute profile `%s` not found",
     numeric_n = "`n` must be numeric, did you mean to provide `url`?",
-    register_cluster = "this function requires a more recent version of R",
     requires_daemons = "daemons must be set prior to a map operation",
     sync_daemons = "initial sync with daemon(s) timed out after 10s",
     sync_dispatcher = "initial sync with dispatcher timed out after 10s"
@@ -112,3 +112,16 @@
 .intmax <- .Machine[["integer.max"]]
 .limit_short <- 5000L
 .limit_long <- 10000L
+
+# Deprecated  ------------------------------------------------------------------
+
+#' Call mirai
+#'
+#' `call_mirai_` is deprecated and exported for historical compatibility only.
+#' It will be removed in a future package version. Use [call_mirai()] instead.
+#'
+#' @inheritParams call_mirai
+#'
+#' @export
+#'
+call_mirai_ <- call_aio_

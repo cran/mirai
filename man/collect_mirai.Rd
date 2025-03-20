@@ -7,62 +7,56 @@
 collect_mirai(x, options = NULL)
 }
 \arguments{
-\item{x}{a \sQuote{mirai} object, or list of \sQuote{mirai} objects.}
+\item{x}{a 'mirai' object, or list of 'mirai' objects.}
 
-\item{options}{(if \sQuote{x} is a list of mirai) a character vector
-comprising any combination of collection options for
-\code{\link{mirai_map}}, such as \code{".flat"} or
+\item{options}{(if \code{x} is a list of mirai) a character vector comprising any
+combination of collection options for \code{\link[=mirai_map]{mirai_map()}}, such as \code{".flat"} or
 \code{c(".progress", ".stop")}.}
 }
 \value{
-An object (the return value of the \sQuote{mirai}), or a list of such
-  objects (the same length as \sQuote{x}, preserving names).
+An object (the return value of the 'mirai'), or a list of such
+objects (the same length as \code{x}, preserving names).
 }
 \description{
-Waits for the \sQuote{mirai} to resolve if still in progress, and returns its
-value directly. It is a more efficient version of and equivalent to
-\code{call_mirai_(x)$data}.
+Waits for the 'mirai' to resolve if still in progress, and returns its value
+directly. It is a more efficient version of and equivalent to
+\code{call_mirai(x)$data}.
 }
 \details{
 This function will wait for the asynchronous operation(s) to complete if
 still in progress, blocking but interruptible.
 
-\code{x[]} may also be used to wait for and return the value of a mirai
-\code{x}, and is equivalent to \code{collect_mirai(x)}.
+\code{x[]} is an equivalent way to wait for and return the value of a mirai \code{x}.
 }
 \section{Alternatively}{
 
 
-The value of a \sQuote{mirai} may be accessed at any time at \code{$data},
-and if yet to resolve, an \sQuote{unresolved} logical NA will be returned
-instead.
+The value of a 'mirai' may be accessed at any time at \verb{$data}, and if yet to
+resolve, an 'unresolved' logical NA will be returned instead.
 
-Using \code{\link{unresolved}} on a \sQuote{mirai} returns TRUE only if it
-has yet to resolve and FALSE otherwise. This is suitable for use in control
-flow statements such as \code{while} or \code{if}.
+Using \code{\link[=unresolved]{unresolved()}} on a 'mirai' returns TRUE only if it has yet to resolve
+and FALSE otherwise. This is suitable for use in control flow statements such
+as \code{while} or \code{if}.
 }
 
 \section{Errors}{
 
 
 If an error occurs in evaluation, the error message is returned as a
-character string of class \sQuote{miraiError} and \sQuote{errorValue}.
-\code{\link{is_mirai_error}} may be used to test for this. The elements of
-the original condition are accessible via \code{$} on the error object. A
-stack trace comprising a list of calls is also available at
-\code{$stack.trace}.
+character string of class 'miraiError' and 'errorValue'. \code{\link[=is_mirai_error]{is_mirai_error()}}
+may be used to test for this. The elements of the original condition are
+accessible via \code{$} on the error object. A stack trace comprising a list of
+calls is also available at \verb{$stack.trace}.
 
 If a daemon crashes or terminates unexpectedly during evaluation, an
-\sQuote{errorValue} 19 (Connection reset) is returned.
+'errorValue' 19 (Connection reset) is returned.
 
-\code{\link{is_error_value}} tests for all error conditions including
-\sQuote{mirai} errors, interrupts, and timeouts.
+\code{\link[=is_error_value]{is_error_value()}} tests for all error conditions including 'mirai' errors,
+interrupts, and timeouts.
 }
 
 \examples{
-if (interactive()) {
-# Only run examples in interactive R sessions
-
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 # using collect_mirai()
 df1 <- data.frame(a = 1, b = 2)
 df2 <- data.frame(a = 3, b = 1)
@@ -77,7 +71,5 @@ daemons(1, dispatcher = FALSE)
 m <- mirai_map(1:3, rnorm)
 collect_mirai(m, c(".flat", ".progress"))
 daemons(0)
-
-}
-
+\dontshow{\}) # examplesIf}
 }

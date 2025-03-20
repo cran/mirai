@@ -25,16 +25,18 @@ test_error(mirai_map(1:2, identity), "daemons must be set")
 test_error(daemons(url = "URL"), "Invalid argument")
 test_error(daemons(-1), "zero or greater")
 test_error(daemons(raw(0L)), "must be numeric")
-test_error(daemons(1, dispatcher = "p"), "must be either")
-test_error(daemons(url = local_url(), dispatcher = "t"), "must be either")
+test_error(daemons(1, dispatcher = "p"), "should be either TRUE or FALSE")
+test_error(daemons(url = local_url(), dispatcher = "t"), "should be either TRUE or FALSE")
 test_error(dispatcher(client = "URL"), "must be 1 or greater")
 test_error(daemon("URL"), "Invalid argument")
 test_error(launch_local(1L), "daemons must be set")
 test_type("character", host_url())
 test_true(startsWith(host_url(tls = TRUE), "tls"))
 test_true(grepl("5555", host_url(port = 5555), fixed = TRUE))
+test_identical(local_url(tcp = TRUE), "tcp://127.0.0.1:0")
+test_true(grepl("5555", local_url(tcp = TRUE, port = 5555), fixed = TRUE))
 test_type("list", ssh_config("ssh://remotehost"))
-test_type("list", ssh_config("ssh://remotehost", tunnel = TRUE, port = "5555"))
+test_type("list", ssh_config("ssh://remotehost", tunnel = TRUE))
 test_true(is_mirai_interrupt(r <- mirai:::mk_interrupt_error()))
 test_print(r)
 test_true(is_mirai_error(r <- `class<-`("Error in: testing\n", c("miraiError", "errorValue", "try-error"))))
@@ -42,6 +44,7 @@ test_print(r)
 test_null(r$stack.trace)
 test_equal(mirai:::.DollarNames.miraiError(r, "c"), "class")
 test_true(mirai:::is.promising.mirai())
+test_true(mirai:::is.promising.mirai_map())
 test_error(everywhere({}), "not found")
 test_null(nextstream())
 test_null(nextget("pid"))
@@ -50,10 +53,10 @@ for (i in 0:4)
 # mirai and daemons tests
 connection && {
   Sys.sleep(1L)
-  n <- function() m
+  .n <- function() m
   m <- mirai({
     Sys.sleep(0.1)
-    q <- m + n() + 2L
+    q <- m + .n() + 2L
     q / m
   }, m = 2L, .args = environment(), .timeout = 2000L)
   test_identical(call_mirai(m), m)
@@ -76,7 +79,7 @@ connection && {
   test_true(!is_mirai_interrupt(me))
   test_class("errorValue", me)
   test_print(me)
-  df <- data.frame(a = 1, b = 2)
+  df <- data.frame(a = 1, b = 2, .Random.seed = 0)
   dm <- mirai(as.matrix(df), .args = list(df = df), .timeout = 2000L)
   test_true(is_mirai(call_mirai(dm)))
   test_true(!unresolved(dm))
@@ -114,7 +117,7 @@ connection && {
   test_identical(status()$daemons, value)
   test_identical(nextget("urls"), value)
   test_type("character", launch_remote(remote = remote_config(command = "echo", args = list(c("Test out:", ".", ">/dev/null")), rscript = "/usr/lib/R/bin/Rscript")))
-  test_type("character", launch_remote(remote = ssh_config(remotes = c("ssh://remotehost", "ssh://remotenode"), tunnel = TRUE, port = "5555", command = "echo")))
+  test_error(launch_remote(remote = ssh_config("ssh://127.0.0.1:5456", tunnel = TRUE)), "127.0.0.1")
   test_zero(daemons(0L))
   Sys.sleep(1L)
   test_zero(daemons(n = 2L, url = value <- "ws://:0", dispatcher = FALSE, remote = remote_config(quote = TRUE)))
@@ -125,8 +128,8 @@ connection && {
 connection && {
   Sys.sleep(1L)
   m <- with(daemons(1, dispatcher = FALSE, .compute = "ml"), {
-    if (is.null(tryCatch(mirai_map(list(1, "a", 2), sum, .compute = "ml")[.stop], error = function(e) NULL)))
-      mirai_map(1:3, rnorm, .args = list(mean = 20, 2), .compute = "ml")[]
+    if (is.null(tryCatch(mirai_map(list(1, "a", 2), sum)[.stop], error = function(e) NULL)))
+      mirai_map(1:3, rnorm, .args = list(mean = 20, 2))[]
   })
   test_true(!is_mirai_map(m))
   test_type("list", m)
@@ -148,7 +151,6 @@ connection && {
 }
 # parallel cluster tests
 library(parallel)
-test_null(tryCatch(mirai::register_cluster(), error = function(e) NULL))
 connection && {
   Sys.sleep(1L)
   cluster <- make_cluster(1)
@@ -239,6 +241,7 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
   test_zero(daemons(0L))
   Sys.sleep(1L)
   test_zero(daemons(url = "tls+tcp://127.0.0.1:0", dispatcher = TRUE))
+  test_type("character", launch_remote(remote = ssh_config(c("ssh://remotehost", "ssh://remotenode"), tunnel = TRUE, command = "echo")))
   test_equal(launch_local(), 1L)
   Sys.sleep(1L)
   test_true(grepl("CERTIFICATE", launch_remote(), fixed = TRUE))
@@ -272,21 +275,30 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
 }
 # promises tests
 connection && requireNamespace("promises", quietly = TRUE) && Sys.getenv("NOT_CRAN") == "true" && {
+  run_now <- getNamespace("later")[["run_now"]]
   Sys.sleep(0.5)
   test_equal(daemons(1, notused = "wrongtype"), 1L)
   test_true(grepl("://", launch_remote(1L), fixed = TRUE))
   test_true(promises::is.promise(p1 <- promises::as.promise(mirai("completed"))))
-  test_true(promises::is.promise(p2 <- promises::`%...>%`(mirai("completed"), identity())))
+  test_true(promises::is.promise(p2 <- promises::`%...>%`(mirai(Sys.sleep(0.1)), identity())))
   test_true(promises::is.promise(p3 <- promises::as.promise(call_mirai(mirai("completed")))))
+  test_true(promises::is.promise(promises::then(mirai(stop()), identity, function(x) test_true(inherits(x, "simpleError")))))
+  run_now(1L)
+  test_true(promises::is.promise(promises::then(mirai(Sys.sleep(0.1), .timeout = 10), identity, function(x) test_true(inherits(x, "simpleError")))))
+  run_now(1L)
+  test_true(promises::is.promise(promises::then(call_mirai(mirai(stop())), identity, function(x) test_true(inherits(x, "simpleError")))))
+  run_now(1L)
+  test_true(promises::is.promise(promises::then(call_mirai(mirai(Sys.sleep(0.1), .timeout = 10)), identity, function(x) test_true(inherits(x, "simpleError")))))
+  run_now(1L)
   test_zero(mirai_map(0:1, function(x) x, .promise = identity)[][[1L]])
   mat <- matrix(1:4, nrow = 2L)
   dimnames(mat) <- list(c("a", "b"), c("y", "x"))
   test_true(is_mirai_map(mp <- mirai_map(mat, function(x, y) x - y, .promise = list(identity))))
+  test_true(promises::is.promise(promises::as.promise(mp)))
   test_true(all(mp[.flat, .stop] == 2L))
   test_identical(names(mp[]), c("a", "b"))
   test_class("errorValue", mirai_map(1, function(x) stop(x), .promise = list(identity, identity))[][[1L]])
-  Sys.sleep(1L)
-  getNamespace("later")[["run_now"]]()
+  run_now(1L)
   test_zero(daemons(NULL))
 }
 # mirai daemon limits tests
@@ -320,6 +332,7 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
 # mirai cancellation tests
 connection && Sys.getenv("NOT_CRAN") == "true" && {
   Sys.sleep(0.5)
+  Sys.unsetenv("R_DEFAULT_PACKAGES")
   test_equal(daemons(1, dispatcher = TRUE, cleanup = FALSE), 1L)
   m1 <- mirai({ Sys.sleep(1); res <<- "m1 done" })
   m2 <- mirai({ Sys.sleep(1); res <<- "m2 done" })

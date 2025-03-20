@@ -22,77 +22,73 @@
 #' \pkg{mirai}, with optional \pkg{promises} integration. Performs multiple map
 #' over the rows of a dataframe or matrix.
 #'
-#' Sends each application of function \code{.f} on an element of \code{.x}
-#' (or row of \code{.x}) for computation in a separate \code{\link{mirai}} call.
-#' If \code{.x} is named, names are preserved.
+#' Sends each application of function `.f` on an element of `.x` (or row of
+#' `.x`) for computation in a separate [mirai()] call. If `.x` is named, names
+#' are preserved.
 #'
 #' This simple and transparent behaviour is designed to make full use of
 #' \pkg{mirai} scheduling to minimise overall execution time.
 #'
-#' Facilitates recovery from partial failure by returning all
-#' \sQuote{miraiError} / \sQuote{errorValue} as the case may be, thus allowing
-#' only the failures to be re-run.
+#' Facilitates recovery from partial failure by returning all 'miraiError' /
+#' 'errorValue' as the case may be, thus allowing only failures to be re-run.
 #'
-#' This function requires daemons to have previously been set, and will error if
-#' not.
+#' This function requires daemons to have previously been set, and will error
+#' otherwise.
 #'
 #' @param .x a list or atomic vector. Also accepts a matrix or dataframe, in
 #'   which case multiple map is performed over its rows.
-#' @param .f a function to be applied to each element of \code{.x}, or row of
-#'   \code{.x} as the case may be.
+#' @param .f a function to be applied to each element of `.x`, or row of `.x` as
+#'   the case may be.
 #' @param ... (optional) named arguments (name = value pairs) specifying objects
-#'   referenced, but not defined, in \code{.f}.
-#' @param .args (optional) further constant arguments to \code{.f}, provided as
-#'   a list.
+#'   referenced, but not defined, in `.f`.
+#' @param .args (optional) further constant arguments to `.f`, provided as a
+#'   list.
 #' @param .promise (optional) if supplied, registers a promise against each
-#'   mirai. Either a function, supplied to the \sQuote{onFulfilled} argument of
-#'   \code{promises::then()} or a list of 2 functions, supplied respectively to
-#'   \sQuote{onFulfilled} and \sQuote{onRejected} for \code{promises::then()}.
-#'   Using this argument requires the \CRANpkg{promises} package.
+#'   mirai. Either a function, supplied to the `onFulfilled` argument of
+#'   `promises::then()` or a list of 2 functions, supplied respectively to
+#'   `onFulfilled` and `onRejected` of `promises::then()`. Using this argument
+#'   requires the \CRANpkg{promises} package.
 #' @inheritParams mirai
 #'
-#' @return A \sQuote{mirai_map} (list of \sQuote{mirai} objects).
+#' @return A 'mirai_map' (list of 'mirai' objects).
 #'
 #' @section Collection Options:
 #'
-#' \code{x[]} collects the results of a \sQuote{mirai_map} \code{x} and returns
-#' a list. This will wait for all asynchronous operations to complete if still
-#' in progress, blocking but user-interruptible.
+#' `x[]` collects the results of a 'mirai_map' `x` and returns a list. This will
+#' wait for all asynchronous operations to complete if still in progress,
+#' blocking but user-interruptible.
 #'
-#' \code{x[.flat]} collects and flattens map results to a vector, checking that
-#' they are of the same type to avoid coercion. Note: errors if an
-#' \sQuote{errorValue} has been returned or results are of differing type.
+#' `x[.flat]` collects and flattens map results to a vector, checking that
+#' they are of the same type to avoid coercion. Note: errors if an 'errorValue'
+#' has been returned or results are of differing type.
 #'
-#' \code{x[.progress]} collects map results whilst showing a progress bar from
+#' `x[.progress]` collects map results whilst showing a progress bar from
 #' the \CRANpkg{cli} package, if installed, with completion percentage and ETA,
 #' or else a simple text progress indicator. Note: if the map operation
 #' completes too quickly then the progress bar may not show at all.
 #'
-#' \code{x[.stop]} collects map results applying early stopping, which stops at
+#' `x[.stop]` collects map results applying early stopping, which stops at
 #' the first failure and cancels remaining operations. Note: operations already
 #' in progress continue to completion, although their results are not collected.
 #'
 #' The options above may be combined in the manner of: \cr
-#' \code{x[.stop, .progress]} which applies early stopping together with a
+#' `x[.stop, .progress]` which applies early stopping together with a
 #' progress indicator.
 #'
 #' @section Multiple Map:
 #'
-#' If \code{.x} is a matrix or dataframe (or other object with \sQuote{dim}
-#' attributes), \emph{multiple} map is performed over its \strong{rows}.
-#' Character row names are preserved as names of the output.
+#' If `.x` is a matrix or dataframe (or other object with 'dim' attributes),
+#' *multiple* map is performed over its **rows**. Character row names are
+#' preserved as names of the output.
 #'
-#' This allows map over 2 or more arguments, and \code{.f} should accept at
-#' least as many arguments as there are columns. If the dataframe has names, or
-#' the matrix column dimnames, named arguments are provided to \code{.f}.
+#' This allows map over 2 or more arguments, and `.f` should accept at least as
+#' many arguments as there are columns. If the dataframe has names, or the
+#' matrix column dimnames, named arguments are provided to `.f`.
 #'
-#' To map over \strong{columns} instead, first wrap a dataframe in
-#' \code{\link{as.list}}, or transpose a matrix using \code{\link{t}}.
+#' To map over **columns** instead, first wrap a dataframe in [as.list()], or
+#' transpose a matrix using [t()].
 #'
-#' @examples
-#' if (interactive()) {
-#' # Only run examples in interactive R sessions
-#'
+#' @examplesIf interactive()
 #' daemons(4)
 #'
 #' # perform and collect mirai map
@@ -145,8 +141,8 @@
 #'
 #' daemons(0)
 #'
+#' @examplesIf interactive() && requireNamespace("promises", quietly = TRUE)
 #' # promises example that outputs the results, including errors, to the console
-#' if (requireNamespace("promises", quietly = TRUE)) {
 #' daemons(1, dispatcher = FALSE)
 #' ml <- mirai_map(
 #'   1:30,
@@ -156,57 +152,68 @@
 #'     function(x) { cat(conditionMessage(x), "\n"); daemons(0) }
 #'   )
 #' )
-#' }
-#'
-#' }
 #'
 #' @export
 #'
 mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = "default") {
 
+  if (missing(.compute)) .compute <- .[["cp"]]
   envir <- ..[[.compute]]
   is.null(envir) && stop(._[["requires_daemons"]])
   is.function(.f) || stop(sprintf(._[["function_required"]], typeof(.f)))
 
-  xilen <- dim(.x)[1L]
-  vec <- if (length(xilen)) {
-    is_matrix <- is.matrix(.x)
-    names <- if (is_matrix) dimnames(.x)[[1L]] else if (is.character(rn <- attr(.x, "row.names"))) rn
-    `names<-`(
-      lapply(
-        seq_len(xilen),
-        function(i) mirai(
-          .expr = do.call(.f, c(.x, .args), quote = TRUE),
-          ...,
-          .args = list(.f = .f, .x = if (is_matrix) as.list(.x[i, ]) else lapply(.x, `[[`, i), .args = .args),
-          .compute = .compute
-        )
-      ),
-      names
-    )
-  } else {
+  dx <- dim(.x)
+  vec <- if (is.null(dx)) {
     `names<-`(
       lapply(
         .x,
-        function(x) mirai(
-          .expr = do.call(.f, c(list(.x), .args), quote = TRUE),
-          ...,
-          .args = list(.f = .f, .x = x, .args = .args),
-          .compute = .compute
-        )
+        function(x)
+          mirai(
+            .expr = do.call(.f, c(list(.x), .args), quote = TRUE),
+            ...,
+            .args = list(.f = .f, .x = x, .args = .args),
+            .compute = .compute
+          )
       ),
       names(.x)
     )
+  } else {
+    if (is.matrix(.x)) {
+      `names<-`(
+        lapply(
+          seq_len(dx[1L]),
+          function(i)
+            mirai(
+              .expr = do.call(.f, c(as.vector(.x, mode = "list"), .args), quote = TRUE),
+              ...,
+              .args = list(.f = .f, .x = .x[i, ], .args = .args),
+              .compute = .compute
+            )
+        ),
+        dimnames(.x)[[1L]]
+      )
+    } else {
+      rn <- attr(.x, "row.names", exact = TRUE)
+      `names<-`(
+        lapply(
+          seq_len(dx[1L]),
+          function(i)
+            mirai(
+              .expr = do.call(.f, c(.x, .args), quote = TRUE),
+              ...,
+              .args = list(.f = .f, .x = lapply(.x, `[[`, i), .args = .args),
+              .compute = .compute
+            )
+        ),
+        if (is.character(rn)) rn
+      )
+    }
   }
 
   if (length(.promise))
-    if (is.list(.promise)) {
-      if (length(.promise) > 1L)
-        lapply(vec, promises::then, .promise[[1L]], .promise[[2L]]) else
-          lapply(vec, promises::then, .promise[[1L]])
-    } else {
-      lapply(vec, promises::then, .promise)
-    }
+    if (is.list(.promise))
+      lapply(vec, promises::then, .promise[[1L]], .promise[2L][[1L]]) else
+        lapply(vec, promises::then, .promise)
 
   `class<-`(vec, "mirai_map")
 
@@ -236,8 +243,7 @@ print.mirai_map <- function(x, ...) {
 
 #' mirai Map Options
 #'
-#' Expressions to be provided to the \code{[]} method for \sQuote{mirai_map}
-#' objects, or the \code{...} argument of \code{\link{collect_mirai}}.
+#' Expressions to be provided to the `[]` method for 'mirai_map' objects.
 #'
 #' @inheritSection mirai_map Collection Options
 #'

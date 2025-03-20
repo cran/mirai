@@ -10,26 +10,26 @@ mirai_map(.x, .f, ..., .args = list(), .promise = NULL, .compute = "default")
 \item{.x}{a list or atomic vector. Also accepts a matrix or dataframe, in
 which case multiple map is performed over its rows.}
 
-\item{.f}{a function to be applied to each element of \code{.x}, or row of
-\code{.x} as the case may be.}
+\item{.f}{a function to be applied to each element of \code{.x}, or row of \code{.x} as
+the case may be.}
 
 \item{...}{(optional) named arguments (name = value pairs) specifying objects
 referenced, but not defined, in \code{.f}.}
 
-\item{.args}{(optional) further constant arguments to \code{.f}, provided as
-a list.}
+\item{.args}{(optional) further constant arguments to \code{.f}, provided as a
+list.}
 
 \item{.promise}{(optional) if supplied, registers a promise against each
-mirai. Either a function, supplied to the \sQuote{onFulfilled} argument of
+mirai. Either a function, supplied to the \code{onFulfilled} argument of
 \code{promises::then()} or a list of 2 functions, supplied respectively to
-\sQuote{onFulfilled} and \sQuote{onRejected} for \code{promises::then()}.
-Using this argument requires the \CRANpkg{promises} package.}
+\code{onFulfilled} and \code{onRejected} of \code{promises::then()}. Using this argument
+requires the \CRANpkg{promises} package.}
 
 \item{.compute}{[default 'default'] character value for the compute profile
 to use (each compute profile has its own independent set of daemons).}
 }
 \value{
-A \sQuote{mirai_map} (list of \sQuote{mirai} objects).
+A 'mirai_map' (list of 'mirai' objects).
 }
 \description{
 Asynchronous parallel map of a function over a list or vector using
@@ -37,30 +37,29 @@ Asynchronous parallel map of a function over a list or vector using
 over the rows of a dataframe or matrix.
 }
 \details{
-Sends each application of function \code{.f} on an element of \code{.x}
-(or row of \code{.x}) for computation in a separate \code{\link{mirai}} call.
-If \code{.x} is named, names are preserved.
+Sends each application of function \code{.f} on an element of \code{.x} (or row of
+\code{.x}) for computation in a separate \code{\link[=mirai]{mirai()}} call. If \code{.x} is named, names
+are preserved.
 
 This simple and transparent behaviour is designed to make full use of
 \pkg{mirai} scheduling to minimise overall execution time.
 
-Facilitates recovery from partial failure by returning all
-\sQuote{miraiError} / \sQuote{errorValue} as the case may be, thus allowing
-only the failures to be re-run.
+Facilitates recovery from partial failure by returning all 'miraiError' /
+'errorValue' as the case may be, thus allowing only failures to be re-run.
 
-This function requires daemons to have previously been set, and will error if
-not.
+This function requires daemons to have previously been set, and will error
+otherwise.
 }
 \section{Collection Options}{
 
 
-\code{x[]} collects the results of a \sQuote{mirai_map} \code{x} and returns
-a list. This will wait for all asynchronous operations to complete if still
-in progress, blocking but user-interruptible.
+\code{x[]} collects the results of a 'mirai_map' \code{x} and returns a list. This will
+wait for all asynchronous operations to complete if still in progress,
+blocking but user-interruptible.
 
 \code{x[.flat]} collects and flattens map results to a vector, checking that
-they are of the same type to avoid coercion. Note: errors if an
-\sQuote{errorValue} has been returned or results are of differing type.
+they are of the same type to avoid coercion. Note: errors if an 'errorValue'
+has been returned or results are of differing type.
 
 \code{x[.progress]} collects map results whilst showing a progress bar from
 the \CRANpkg{cli} package, if installed, with completion percentage and ETA,
@@ -79,22 +78,20 @@ progress indicator.
 \section{Multiple Map}{
 
 
-If \code{.x} is a matrix or dataframe (or other object with \sQuote{dim}
-attributes), \emph{multiple} map is performed over its \strong{rows}.
-Character row names are preserved as names of the output.
+If \code{.x} is a matrix or dataframe (or other object with 'dim' attributes),
+\emph{multiple} map is performed over its \strong{rows}. Character row names are
+preserved as names of the output.
 
-This allows map over 2 or more arguments, and \code{.f} should accept at
-least as many arguments as there are columns. If the dataframe has names, or
-the matrix column dimnames, named arguments are provided to \code{.f}.
+This allows map over 2 or more arguments, and \code{.f} should accept at least as
+many arguments as there are columns. If the dataframe has names, or the
+matrix column dimnames, named arguments are provided to \code{.f}.
 
-To map over \strong{columns} instead, first wrap a dataframe in
-\code{\link{as.list}}, or transpose a matrix using \code{\link{t}}.
+To map over \strong{columns} instead, first wrap a dataframe in \code{\link[=as.list]{as.list()}}, or
+transpose a matrix using \code{\link[=t]{t()}}.
 }
 
 \examples{
-if (interactive()) {
-# Only run examples in interactive R sessions
-
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 daemons(4)
 
 # perform and collect mirai map
@@ -146,9 +143,9 @@ res <- mirai_map(1:4, Sys.sleep)[.progress]
 tryCatch(mirai_map(list(1, "a", 3), sum)[.stop], error = identity)
 
 daemons(0)
-
+\dontshow{\}) # examplesIf}
+\dontshow{if (interactive() && requireNamespace("promises", quietly = TRUE)) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 # promises example that outputs the results, including errors, to the console
-if (requireNamespace("promises", quietly = TRUE)) {
 daemons(1, dispatcher = FALSE)
 ml <- mirai_map(
   1:30,
@@ -158,8 +155,5 @@ ml <- mirai_map(
     function(x) { cat(conditionMessage(x), "\n"); daemons(0) }
   )
 )
-}
-
-}
-
+\dontshow{\}) # examplesIf}
 }

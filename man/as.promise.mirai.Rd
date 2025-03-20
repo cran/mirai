@@ -2,31 +2,30 @@
 % Please edit documentation in R/promises.R
 \name{as.promise.mirai}
 \alias{as.promise.mirai}
-\title{Make Mirai Promise}
+\title{Make mirai Promise}
 \usage{
 \method{as.promise}{mirai}(x)
 }
 \arguments{
-\item{x}{an object of class \sQuote{mirai}.}
+\item{x}{an object of class 'mirai'.}
 }
 \value{
-A \sQuote{promise} object.
+A 'promise' object.
 }
 \description{
-Creates a \sQuote{promise} from a \sQuote{mirai}.
+Creates a 'promise' from a 'mirai'.
 }
 \details{
-This function is an S3 method for the generic \code{as.promise} for class
-\sQuote{mirai}.
+This function is an S3 method for the generic \code{as.promise()} for class
+'mirai'.
 
 Requires the \CRANpkg{promises} package.
 
-Allows a \sQuote{mirai} to be used with the promise pipe \code{\%...>\%},
-which schedules a function to run upon resolution of the \sQuote{mirai}.
+Allows a 'mirai' to be used with the promise pipe \verb{\%...>\%}, which schedules a
+function to run upon resolution of the 'mirai'.
 }
 \examples{
-if (interactive() && requireNamespace("promises", quietly = TRUE)) {
-
+\dontshow{if (interactive() && requireNamespace("promises", quietly = TRUE)) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 library(promises)
 
 p <- as.promise(mirai("example"))
@@ -36,7 +35,5 @@ is.promise(p)
 p2 <- mirai("completed") \%...>\% identity()
 p2$then(cat)
 is.promise(p2)
-
-}
-
+\dontshow{\}) # examplesIf}
 }

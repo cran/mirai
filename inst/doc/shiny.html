@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.5">
+<meta name="generator" content="litedown 0.6">
 <title>mirai - Shiny Integration</title>
 <style type="text/css">
 body {
@@ -22,8 +22,8 @@ pre, img { max-width: 100%; }
 pre { white-space: pre-wrap; word-break: break-word; }
 pre code { display: block; padding: 1em; overflow-x: auto; }
 code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
-:not(pre) > code, code[class], div > .caption { background-color: #f8f8f8; }
-pre > code:is(:not([class]), .language-plain, .language-none), .box, .figure, .table { background-color: inherit; border: 1px solid #eee; }
+:not(pre, th) > code, code[class], div > .caption { background: #f8f8f8; }
+pre > code:is(:not([class]), .language-plain, .language-none, .plain), .box, .figure, .table { background: inherit; border: 1px solid #eee; }
 pre > code {
   &.message { border-color: #9eeaf9; }
   &.warning { background: #fff3cd; border-color: #fff3cd; }
@@ -38,13 +38,17 @@ pre > code {
 }
 .box, .figure, .table, table { margin: 1em auto; }
 div > .caption { padding: 1px 1em; }
-.figure { p:has(img), pre:has(svg) { text-align: center; } }
+.figure { p:has(img, svg), pre:has(svg) { text-align: center; } }
 .flex-col { display: flex; justify-content: space-between; }
 table {
-  border-top: 1px solid #666;
-  thead th { border-bottom: 1px solid #ddd; }
+  &:only-child:not(.table > *) { margin: auto; }
   th, td { padding: 5px; font-variant-numeric: tabular-nums; }
   thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
+  thead th { border-bottom: 1px solid #ddd; }
+  &:not(.datatable-table) {
+    border-top: 1px solid #666;
+    border-bottom: 1px solid #666;
+  }
 }
 blockquote {
   color: #666;
@@ -56,11 +60,11 @@ hr, .footnotes::before { border: 1px dashed #ddd; }
 .frontmatter { text-align: center; }
 #TOC {
   a { text-decoration: none; }
-  & > ul { padding: 0; }
   ul { list-style: none; padding-left: 1em; }
+  & > ul { padding: 0; }
   ul ul { border-left: 1px solid lightsteelblue; }
 }
-table, .body h2 { border-bottom: 1px solid #666; }
+.body h2 { border-bottom: 1px solid #666; }
 .body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
 .main-number::after { content: "."; }
 span[class^="ref-number-"] { font-weight: bold; }
@@ -95,13 +99,15 @@ section.footnotes {
 
 @media print {
   body { max-width: 100%; }
-  tr, img { page-break-inside: avoid; }
+  tr, img { break-inside: avoid; }
 }
 @media only screen and (min-width: 992px) {
   body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
 }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.61/css/prism-xcode.min.css">
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
 </head>
 <body>
 <div class="frontmatter">
@@ -109,17 +115,17 @@ section.footnotes {
 </div>
 <div class="body">
 <h3 id="sec:shiny-integration">Shiny Integration</h3>
-<p><code>mirai</code> may be used as an asynchronous backend to scale <a href="https://shiny.posit.co/">Shiny</a> applications.</p>
-<p>Depending on the options suppled to <code>daemons()</code>, mirai tasks may be distributed across local background processes or multiple networked servers in an efficient and performant manner.</p>
-<p>For use with Shiny, <code>mirai</code> implements truly event-driven promises, developed in collaboration with Joe Cheng (creator of Shiny).</p>
+<p>mirai may be used as an asynchronous backend to scale <a href="https://shiny.posit.co/">Shiny</a> applications.</p>
+<p>Depending on the options suppled to <code>daemons()</code>, mirai tasks may be distributed across local background processes or networked servers in an efficient and performant manner.</p>
+<p>For use with Shiny, mirai implements truly event-driven promises, developed in collaboration with Joe Cheng (creator of Shiny).</p>
 <ul>
 <li>Each promise is not polled in a loop for completion (as for other types of promise).</li>
 <li>Instead, promise actions are triggered for execution as soon as each ‘mirai’ completes (asynchronously).</li>
-<li>Allows for much higher responsiveness (lower latency) and massive scalability (situations with thousand of promises or more).</li>
+<li>Allows for much higher responsiveness (lower latency) and massive scalability (thousands of simultaneous promises or more).</li>
 </ul>
 <p>mirai natively supports Shiny ExtendedTask to create scalable Shiny apps, which remain responsive intra-session for each user, as well as inter-session for multiple concurrent users.</p>
-<p>‘mirai’ may be used anywhere a ‘promise’ or ‘future_promise’ would be accepted (with <code>promises</code> &gt;= 1.3.0).</p>
-<h4 id="sec:shiny-extendedtask-introductory-example">Shiny ExtendedTask: Introductory Example</h4>
+<p>‘mirai’ may be used anywhere a ‘promise’ or ‘future_promise’ would be accepted (with the promises package versions &gt;= 1.3.0).</p>
+<h3 id="sec:shiny-extendedtask-introduction">Shiny ExtendedTask: Introduction</h3>
 <p>In the example below, the app remains responsive, with the clock continuing to tick whilst the simulated expensive computation is running asynchronously in a parallel process. Also the button is disabled and the plot greyed out until the computation is complete.</p>
 <p>The call to <code>daemons()</code> is made at the top level, and <code>onStop()</code> may be used to automatically shut them down when the app exits.</p>
 <pre><code class="language-r">library(shiny)
@@ -183,7 +189,7 @@ shinyApp(ui = ui, server = server)
 </ol>
 <pre><code class="language-r">output$plot &lt;- renderPlot(hist(task$result()))
 </code></pre>
-<h4 id="sec:shiny-extendedtask-cancellation-example">Shiny ExtendedTask: Cancellation Example</h4>
+<h3 id="sec:shiny-extendedtask-cancellation">Shiny ExtendedTask: Cancellation</h3>
 <p>The app below is a demonstration of the cancellation capability added in mirai v2.</p>
 <p>It builds on the introductory app by adding a button that sends an infinite sleep extendedTask. This will block execution as we are using a single daemon - any new extendedTasks will be queued behind this never-ending task.
 There is also a button to cancel that blocking task and allow any queued plots to continue processing.</p>
@@ -241,7 +247,7 @@ onStop(function() daemons(0))
 shinyApp(ui = ui, server = server)
 </code></pre>
 <p><em>Thanks to Joe Cheng for providing examples on which the above is based.</em></p>
-<h4 id="sec:shiny-extendedtask-generative-art-example">Shiny ExtendedTask: Generative Art Example</h4>
+<h3 id="sec:shiny-extendedtask-generative-art">Shiny ExtendedTask: Generative Art</h3>
 <p>The following app produces pretty spiral patterns.</p>
 <p>The user can add multiple plots, making use of Shiny modules, each having a different calculation time.</p>
 <p>The plots are generated asynchronously, and it is easy to see the practical limitations of the number of daemons set. For example, if updating 4 plots, and there are only 3 daemons, the 4th plot will not start to be generated until one of the other plots has finished.</p>
@@ -347,8 +353,53 @@ with(daemons(3), runApp(app))
 </ol>
 <pre><code class="language-r">output$plot &lt;- renderPlot(plot_result(task$result()))
 </code></pre>
-<h4 id="sec:advanced-promises-example-coin-flips">Advanced Promises Example: Coin Flips</h4>
-<p>The below example demonstrates how to integrate a <code>mirai_map()</code> operation into a Shiny app.</p>
+<h3 id="sec:shiny-extendedtask-mirai-map">Shiny ExtendedTask: mirai map</h3>
+<p>This example, uses <code>mirai_map()</code> to perform multiple calculations simultaneously in multiple daemons, returning the results asynchronously.</p>
+<pre><code class="language-r">library(shiny)
+library(bslib)
+library(mirai)
+
+ui &lt;- page_fluid(
+  titlePanel(&quot;ExtendedTask Map Demo&quot;),
+  hr(),
+  p(&quot;The time is &quot;, textOutput(&quot;current_time&quot;, inline = TRUE)),
+  p(&quot;Perform 4 calculations that each take between 1 and 4 secs to complete:&quot;),
+  input_task_button(&quot;calculate&quot;, &quot;Calculate&quot;),
+  p(textOutput(&quot;result&quot;)),
+  tags$style(type=&quot;text/css&quot;, &quot;#result {white-space: pre-wrap;}&quot;)
+)
+
+server &lt;- function(input, output) {
+  task &lt;- ExtendedTask$new(function() {
+    mirai_map(1:4, function(i) {
+      # simulated long calculation
+      Sys.sleep(i)
+      sprintf(
+        &quot;Calc %d | PID %d | Finished at %s.&quot;, i, Sys.getpid(), format(Sys.time())
+      )
+    })
+  }) |&gt; bind_task_button(&quot;calculate&quot;)
+  
+  observeEvent(input$calculate, {
+    task$invoke()
+  })
+  
+  output$result &lt;- renderText({
+    # result of mirai_map() is a list
+    as.character(task$result())
+  }, sep = &quot;\n&quot;)
+  
+  output$current_time &lt;- renderText({
+    invalidateLater(1000)
+    format(Sys.time(), &quot;%H:%M:%S %p&quot;)
+  })
+}
+
+app &lt;- shinyApp(ui, server)
+with(daemons(4), runApp(app))
+</code></pre>
+<h3 id="sec:advanced-promises-coin-flips">Advanced Promises: Coin Flips</h3>
+<p>The below example demonstrates how to integrate a <code>mirai_map()</code> operation into a Shiny app in an observer, without using ExtendedTask.</p>
 <p>By specifying the ‘.promise’ argument, this registers a promise action against each mapped operation. These can then be used to update reactive values or otherwise interact with the Shiny app.</p>
 <pre><code class="language-r">library(shiny)
 library(mirai)
@@ -372,7 +423,6 @@ server &lt;- function(input, output, session) {
 
   # Button to submit a batch of coin flips
   observeEvent(input$task, {
-    flips$flips &lt;- flips$flips + 1000
     mirai_map(
       1:1000,
       flip_coin,
@@ -380,6 +430,9 @@ server &lt;- function(input, output, session) {
         if (x) flips$heads &lt;- flips$heads + 1 else flips$tails &lt;- flips$tails + 1
       }
     )
+    # Ensure there is something after mirai_map() in the observer, as it is
+    # convertible to a promise, and will otherwise be waited for before returning
+    flips$flips &lt;- flips$flips + 1000
   })
 
   # Print time and task status
@@ -406,8 +459,66 @@ with(daemons(8, dispatcher = FALSE), {
 })
 </code></pre>
 <p><em>This is an adaptation of an original example provided by Will Landau for use of <code>crew</code> with Shiny. Please see <a href="https://wlandau.github.io/crew/articles/shiny.html">https://wlandau.github.io/crew/articles/shiny.html</a>.</em></p>
+<h3 id="sec:advanced-promises-progress-bar">Advanced Promises: Progress Bar</h3>
+<p>The below example uses a <code>mirai_map()</code> operation in an observer to update a Shiny progress bar with custom messages, and also to update a reactive value once the entire map operation has completed (asynchronously).</p>
+<pre><code class="language-r">library(shiny)
+library(mirai)
+library(promises)
+
+slow_squared &lt;- function(x) {
+  Sys.sleep(runif(1))
+  x^2
+}
+
+ui &lt;- fluidPage(
+  titlePanel(&quot;Asynchronous Squares Calculator&quot;),
+  p(&quot;The time is &quot;, textOutput(&quot;current_time&quot;, inline = TRUE)),
+  hr(),
+  actionButton(&quot;start&quot;, &quot;Start Calculation&quot;),
+  br(), br(),
+  uiOutput(&quot;progress_ui&quot;),
+  verbatimTextOutput(&quot;result&quot;)
+)
+
+server &lt;- function(input, output, session) {
+  x &lt;- 1:100
+  y &lt;- reactiveVal()
+  
+  observeEvent(input$start, {
+    
+    progress &lt;- Progress$new(session, min = 0, max = length(x))
+    progress$set(message = &quot;Parallel calculation in progress&quot;, detail = &quot;Starting...&quot;)
+    completed &lt;- reactiveVal(0)
+    mirai_map(
+      x,
+      slow_squared,
+      slow_squared = slow_squared,
+      .promise = function(result) {
+        new_val &lt;- completed() + 1
+        completed(new_val)  # Increment completed counter
+        progress$inc(1, detail = paste(&quot;Completed&quot;, new_val))  # Update progress
+      }
+    ) %...&gt;% {
+      y(unlist(.))
+      progress$close()
+    }
+    # Ensure there is something after mirai_map() in the observer, as otherwise
+    # the created promise will be waited for before returning
+    y(0)
+  })
+  output$current_time &lt;- renderText({
+    invalidateLater(1000)
+    format(Sys.time(), &quot;%H:%M:%S %p&quot;)
+  })
+  output$result &lt;- renderPrint({
+    cat(&quot;Sum of squares calculated: &quot;, sum(y()), &quot;\n&quot;)
+  })
+}
+
+app &lt;- shinyApp(ui, server)
+with(daemons(8), runApp(app))
+</code></pre>
+<p><em>This example adapts a contribution from Davide Magno.</em></p>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
 </body>
 </html>

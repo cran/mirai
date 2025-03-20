@@ -16,18 +16,18 @@ nextcode(xc)
 \item{.compute}{[default 'default'] character value for the compute profile
 to use (each compute profile has its own independent set of daemons).}
 
-\item{x}{character value of item to retrieve. One of \sQuote{n} (number of
-dispatcher daemons), \sQuote{pid} (dispatcher process ID), \sQuote{urls}
-(URLs dispatcher is listening at) or \sQuote{tls} (the stored client TLS
-configuration for use by daemons).}
+\item{x}{character value of item to retrieve. One of \code{"n"} (number of
+dispatcher daemons), \code{"pid"} (dispatcher process ID), \code{"urls"} (URLs
+dispatcher is listening at) or \code{"tls"} (the stored client TLS configuration
+for use by daemons).}
 
-\item{xc}{integer value.}
+\item{xc}{integer return value of \code{\link[=daemon]{daemon()}}.}
 }
 \value{
 For \code{nextstream}: a length 7 integer vector, as given by
-  \code{.Random.seed} when the L'Ecuyer-CMRG RNG is in use (may be passed
-  directly to the \sQuote{rs} argument of \code{\link{daemon}}), or else
-  NULL if a stream has not yet been created.
+\code{.Random.seed} when the L'Ecuyer-CMRG RNG is in use (may be passed directly
+to the \code{rs} argument of \code{\link[=daemon]{daemon()}}), or else NULL if a stream has not yet
+been created.
 
 For \code{nextget}: the requested item, or else NULL if not present.
 
@@ -37,15 +37,13 @@ For \code{nextcode}: character string.
 \code{nextstream} retrieves the currently stored L'Ecuyer-CMRG RNG stream
 for the specified compute profile and advances it to the next stream.
 
-\code{nextget} retrieves the specified item from the specified compute
-profile.
+\code{nextget} retrieves the specified item from the specified compute profile.
 
-\code{nextcode} translates integer exit codes returned by
-\code{\link{daemon}}.
+\code{nextcode} translates integer exit codes returned by \code{\link[=daemon]{daemon()}}.
 }
 \details{
 These functions are exported for use by packages extending \pkg{mirai} with
-alternative launchers of \code{\link{daemon}} processes.
+alternative launchers of \code{\link[=daemon]{daemon()}} processes.
 
 For \code{nextstream}: This function should be called for its return value
 when required. The function also has the side effect of automatically
@@ -53,9 +51,7 @@ advancing the stream stored within the compute profile. This ensures that the
 next recursive stream is returned when the function is called again.
 }
 \examples{
-if (interactive()) {
-# Only run examples in interactive R sessions
-
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 daemons(1L)
 nextstream()
 nextstream()
@@ -64,9 +60,7 @@ nextget("pid")
 nextget("urls")
 
 daemons(0)
-
-}
-
+\dontshow{\}) # examplesIf}
 nextcode(0L)
 nextcode(1L)
 
