@@ -4,23 +4,18 @@
 \alias{serial_config}
 \title{Create Serialization Configuration}
 \usage{
-serial_config(class, sfunc, ufunc, vec = FALSE)
+serial_config(class, sfunc, ufunc)
 }
 \arguments{
-\item{class}{character string of the class of object custom serialization
-functions are applied to, e.g. 'ArrowTabular' or 'torch_tensor'.}
+\item{class}{a character string (or vector) of the class of object custom
+serialization functions are applied to, e.g. \code{'ArrowTabular'} or
+\code{c('torch_tensor', 'ArrowTabular')}.}
 
-\item{sfunc}{a function that accepts a reference object inheriting from
-\code{class} (or a list of such objects) and returns a raw vector.}
+\item{sfunc}{a function (or list of functions) that accepts a reference
+object inheriting from \code{class} and returns a raw vector.}
 
-\item{ufunc}{a function that accepts a raw vector and returns a reference
-object (or list of such objects).}
-
-\item{vec}{[default FALSE] whether or not the serialization functions are
-vectorized. If FALSE, they should accept and return reference objects
-individually e.g. \code{arrow::write_to_raw} and \code{arrow::read_ipc_stream}. If
-TRUE, they should accept and return a list of reference objects, e.g.
-\code{torch::torch_serialize} and \code{torch::torch_load}.}
+\item{ufunc}{a function (or list of functions) that accepts a raw vector and
+returns a reference object.}
 }
 \value{
 A list comprising the configuration. This should be passed to the
@@ -30,12 +25,21 @@ A list comprising the configuration. This should be passed to the
 Returns a serialization configuration, which may be set to perform custom
 serialization and unserialization of normally non-exportable reference
 objects, allowing these to be used seamlessly between different R sessions.
-This feature utilises the 'refhook' system of R native serialization. Once
-set, the functions apply to all mirai requests for a specific compute
-profile.
+Once set by passing to the \code{serial} argument of \code{\link[=daemons]{daemons()}}, the functions
+apply to all mirai requests for that compute profile.
+}
+\details{
+This feature utilises the 'refhook' system of R native serialization.
 }
 \examples{
 cfg <- serial_config("test_cls", function(x) serialize(x, NULL), unserialize)
 cfg
+
+cfg2 <- serial_config(
+  c("class_one", "class_two"),
+  list(function(x) serialize(x, NULL), function(x) serialize(x, NULL)),
+  list(unserialize, unserialize)
+)
+cfg2
 
 }

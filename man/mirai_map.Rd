@@ -4,7 +4,7 @@
 \alias{mirai_map}
 \title{mirai Map}
 \usage{
-mirai_map(.x, .f, ..., .args = list(), .promise = NULL, .compute = "default")
+mirai_map(.x, .f, ..., .args = list(), .promise = NULL, .compute = NULL)
 }
 \arguments{
 \item{.x}{a list or atomic vector. Also accepts a matrix or dataframe, in
@@ -25,8 +25,9 @@ mirai. Either a function, supplied to the \code{onFulfilled} argument of
 \code{onFulfilled} and \code{onRejected} of \code{promises::then()}. Using this argument
 requires the \CRANpkg{promises} package.}
 
-\item{.compute}{[default 'default'] character value for the compute profile
-to use (each compute profile has its own independent set of daemons).}
+\item{.compute}{[default NULL] character value for the compute profile
+to use (each has its own independent set of daemons), or NULL to use the
+'default' profile.}
 }
 \value{
 A 'mirai_map' (list of 'mirai' objects).
@@ -67,8 +68,7 @@ or else a simple text progress indicator. Note: if the map operation
 completes too quickly then the progress bar may not show at all.
 
 \code{x[.stop]} collects map results applying early stopping, which stops at
-the first failure and cancels remaining operations. Note: operations already
-in progress continue to completion, although their results are not collected.
+the first failure and cancels remaining operations.
 
 The options above may be combined in the manner of: \cr
 \code{x[.stop, .progress]} which applies early stopping together with a
@@ -91,7 +91,7 @@ transpose a matrix using \code{\link[=t]{t()}}.
 }
 
 \examples{
-\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 daemons(4)
 
 # perform and collect mirai map
@@ -114,7 +114,7 @@ mirai_map(
 mirai_map(mat, function(x = 10, y = 0, z = 0) x + y + z)[.flat]
 
 # named matrix multiple map: arguments passed to function by name
-dimnames(mat) <- list(c("a", "b"), c("y", "z"))
+mat <- matrix(1:4, nrow = 2L, dimnames = list(c("a", "b"), c("y", "z")))
 mirai_map(mat, function(x = 10, y = 0, z = 0) x + y + z)[.flat]
 
 # dataframe multiple map: using a function taking '...' arguments
@@ -144,7 +144,7 @@ tryCatch(mirai_map(list(1, "a", 3), sum)[.stop], error = identity)
 
 daemons(0)
 \dontshow{\}) # examplesIf}
-\dontshow{if (interactive() && requireNamespace("promises", quietly = TRUE)) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (interactive() && requireNamespace("promises", quietly = TRUE)) withAutoprint(\{ # examplesIf}
 # promises example that outputs the results, including errors, to the console
 daemons(1, dispatcher = FALSE)
 ml <- mirai_map(

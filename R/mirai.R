@@ -1,19 +1,3 @@
-# Copyright (C) 2022-2025 Hibiki AI Limited <info@hibiki-ai.com>
-#
-# This file is part of mirai.
-#
-# mirai is free software: you can redistribute it and/or modify it under the
-# terms of the GNU General Public License as published by the Free Software
-# Foundation, either version 3 of the License, or (at your option) any later
-# version.
-#
-# mirai is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with
-# mirai. If not, see <https://www.gnu.org/licenses/>.
-
 # mirai ------------------------------------------------------------------------
 
 #' mirai (Evaluate Async)
@@ -51,8 +35,9 @@
 #' @param .timeout \[default NULL\] for no timeout, or an integer value in
 #'   milliseconds. A mirai will resolve to an 'errorValue' 5 (timed out) if
 #'   evaluation exceeds this limit.
-#' @param .compute \[default 'default'\] character value for the compute profile
-#'   to use (each compute profile has its own independent set of daemons).
+#' @param .compute \[default NULL\] character value for the compute profile
+#'   to use (each has its own independent set of daemons), or NULL to use the
+#'   'default' profile.
 #'
 #' @return A 'mirai' object.
 #'
@@ -77,8 +62,11 @@
 #' @section Timeouts:
 #'
 #' Specifying the `.timeout` argument ensures that the mirai always resolves.
-#' However, the task may not have completed and still be ongoing in the daemon
-#' process. Use [stop_mirai()] instead to explicitly stop and interrupt a task.
+#' When using dispatcher, the mirai will be cancelled after it times out (as if
+#' [stop_mirai()] had been called). As in that case, there is no guarantee that
+#' any cancellation will be successful, if the code cannot be interrupted for
+#' instance. When not using dispatcher, the mirai task will continue to
+#' completion in the daemon process, even if it times out in the host process.
 #'
 #' @section Errors:
 #'
@@ -147,38 +135,56 @@
 #'
 #' @export
 #'
-mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "default") {
-
+mirai <- function(
+  .expr,
+  ...,
+  .args = list(),
+  .timeout = NULL,
+  .compute = NULL
+) {
   missing(.expr) && stop(._[["missing_expression"]])
 
   expr <- substitute(.expr)
   globals <- list(...)
-  length(globals) && {
-    gn <- names(globals)
-    if (is.null(gn)) {
-      is.environment(globals[[1L]]) || stop(._[["named_dots"]])
-      globals <- as.list.environment(globals[[1L]], all.names = TRUE)
-      globals[[".Random.seed"]] <- NULL
+  length(globals) &&
+    {
+      gn <- names(globals)
+      if (is.null(gn)) {
+        is.environment(globals[[1L]]) || stop(._[["named_dots"]])
+        globals <- as.list.environment(globals[[1L]], all.names = TRUE)
+        globals[[".Random.seed"]] <- NULL
+      }
+      all(nzchar(gn)) || stop(._[["named_dots"]])
     }
-    all(nzchar(gn)) || stop(._[["named_dots"]])
-  }
   data <- list(
     ._mirai_globals_. = globals,
-    .expr = if (is.symbol(expr) && exists(as.character(expr), envir = parent.frame()) && is.language(.expr)) .expr else expr
+    .expr = if (
+      is.symbol(expr) &&
+        exists(as.character(expr), envir = parent.frame()) &&
+        is.language(.expr)
+    )
+      .expr else expr
   )
   if (length(.args)) {
     if (is.environment(.args))
       .args <- as.list.environment(.args, all.names = TRUE) else
-        length(names(.args)) && all(nzchar(names(.args))) || stop(._[["named_args"]])
+      length(names(.args)) && all(nzchar(names(.args))) || stop(._[["named_args"]])
     data <- c(.args, data)
   }
 
-  if (missing(.compute)) .compute <- .[["cp"]]
+  if (is.null(.compute)) .compute <- .[["cp"]]
   envir <- ..[[.compute]]
   is.null(envir) && return(ephemeral_daemon(data, .timeout))
-  r <- request(.context(envir[["sock"]]), data, send_mode = 1L, recv_mode = 1L, timeout = .timeout, cv = envir[["cv"]])
-  `attr<-`(`attr<-`(r, "msgid", next_msgid(envir)), "profile", .compute)
 
+  request(
+    .context(envir[["sock"]]),
+    data,
+    send_mode = 1L,
+    recv_mode = 1L,
+    timeout = .timeout,
+    cv = envir[["cv"]],
+    id = next_msgid(envir)
+  )
 }
 
 #' Evaluate Everywhere
@@ -228,32 +234,42 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = "defau
 #'
 #' @export
 #'
-everywhere <- function(.expr, ..., .args = list(), .compute = "default") {
-
-  if (missing(.compute)) .compute <- .[["cp"]]
+everywhere <- function(.expr, ..., .args = list(), .compute = NULL) {
+  if (is.null(.compute)) .compute <- .[["cp"]]
   envir <- ..[[.compute]]
-
   is.null(envir) && stop(sprintf(._[["not_found"]], .compute))
 
   expr <- substitute(.expr)
   .expr <- c(
     .snapshot,
-    as.expression(if (is.symbol(expr) && exists(as.character(expr), envir = parent.frame()) && is.language(.expr)) .expr else expr)
+    as.expression(
+      if (
+        is.symbol(expr) &&
+          exists(as.character(expr), envir = parent.frame()) &&
+          is.language(.expr)
+      )
+        .expr else expr
+    )
   )
 
   if (is.null(envir[["msgid"]])) {
-    vec <- vector(mode = "list", length = max(stat(envir[["sock"]], "pipes"), envir[["n"]]))
+    vec <- vector(
+      mode = "list",
+      length = max(stat(envir[["sock"]], "pipes"), envir[["n"]])
+    )
     for (i in seq_along(vec))
       vec[[i]] <- mirai(.expr, ..., .args = .args, .compute = .compute)
   } else {
     .expr <- c(.block, .expr)
-    vec <- vector(mode = "list", length = max(status(.compute)[["connections"]], 1L))
+    vec <- vector(
+      mode = "list",
+      length = max(status(.compute)[["connections"]], 1L)
+    )
     for (i in seq_along(vec))
       vec[[i]] <- mirai(.expr, ..., .args = .args, .compute = .compute)
   }
   `[[<-`(envir, "everywhere", vec)
   invisible(vec)
-
 }
 
 #' mirai (Call Value)
@@ -352,13 +368,11 @@ call_mirai <- call_aio_
 #' @export
 #'
 collect_mirai <- function(x, options = NULL) {
-
   is.list(x) && length(options) || return(collect_aio_(x))
 
   ensure_cli_initialized()
   dots <- mget(options, envir = .)
   map(x, dots)
-
 }
 
 #' mirai (Stop)
@@ -393,18 +407,14 @@ collect_mirai <- function(x, options = NULL) {
 #' @export
 #'
 stop_mirai <- function(x) {
-  is.list(x) && {
-    xlen <- length(x)
-    vec <- logical(xlen)
-    if (xlen)
-      for (i in xlen:1)
-        vec[i] <- stop_mirai(x[[i]])
-    return(vec)
-  }
-  .compute <- attr(x, "profile")
-  envir <- if (is.character(.compute)) ..[[.compute]]
+  is.list(x) &&
+    return(invisible(rev(as.logical(lapply(rev(unclass(x)), stop_mirai)))))
+
   stop_aio(x)
-  invisible(length(envir[["msgid"]]) && query_dispatcher(envir[["sock"]], c(0L, attr(x, "msgid"))))
+  aio <- .subset2(x, "aio")
+  !is.integer(aio) &&
+    attr(aio, "id") > 0 &&
+    query_dispatcher(attr(aio, "context"), c(0L, attr(aio, "id")))
 }
 
 #' Query if a mirai is Unresolved
@@ -512,6 +522,23 @@ is_mirai_interrupt <- function(x) inherits(x, "miraiInterrupt")
 #'
 is_error_value <- is_error_value
 
+#' On Daemon
+#'
+#' Returns a logical value, whether or not evaluation is taking place within a
+#' mirai call on a daemon.
+#'
+#' @return Logical `TRUE` or `FALSE`.
+#'
+#' @examplesIf interactive()
+#' on_daemon()
+#' mirai(mirai::on_daemon())[]
+#'
+#' @export
+#'
+on_daemon <- function() !is.null(.[["sock"]])
+
+# methods ----------------------------------------------------------------------
+
 #' @export
 #'
 `[.mirai` <- function(x, i) collect_aio_(x)
@@ -519,34 +546,30 @@ is_error_value <- is_error_value
 #' @export
 #'
 print.mirai <- function(x, ...) {
-
-  cat(if (.unresolved(x)) "< mirai [] >\n" else "< mirai [$data] >\n", file = stdout())
+  cat(
+    if (.unresolved(x)) "< mirai [] >\n" else "< mirai [$data] >\n",
+    file = stdout()
+  )
   invisible(x)
-
 }
 
 #' @export
 #'
 print.miraiError <- function(x, ...) {
-
   cat(sprintf("'miraiError' chr %s", x), file = stdout())
   invisible(x)
-
 }
 
 #' @export
 #'
 print.miraiInterrupt <- function(x, ...) {
-
   cat("'miraiInterrupt' chr \"\"\n", file = stdout())
   invisible(x)
-
 }
 
 #' @export
 #'
-`$.miraiError` <- function(x, name)
-  attr(x, name, exact = TRUE)
+`$.miraiError` <- function(x, name) attr(x, name, exact = TRUE)
 
 #' @exportS3Method utils::.DollarNames
 #'
@@ -558,33 +581,47 @@ print.miraiInterrupt <- function(x, ...) {
 ephemeral_daemon <- function(data, timeout) {
   url <- local_url()
   sock <- req_socket(url)
-  system2(.command, args = c("-e", shQuote(sprintf("mirai:::.daemon(\"%s\")", url))), stdout = FALSE, stderr = FALSE, wait = FALSE)
-  aio <- request(.context(sock), data, send_mode = 1L, recv_mode = 1L, timeout = timeout, cv = NA)
+  system2(
+    .command,
+    args = c("-e", shQuote(sprintf("mirai:::.daemon(\"%s\")", url))),
+    stdout = FALSE,
+    stderr = FALSE,
+    wait = FALSE
+  )
+  aio <- request(
+    .context(sock),
+    data,
+    send_mode = 1L,
+    recv_mode = 1L,
+    timeout = timeout,
+    cv = NA
+  )
   `attr<-`(.subset2(aio, "aio"), "sock", sock)
   aio
 }
 
-deparse_safe <- function(x) if (length(x))
-  deparse(x, width.cutoff = 500L, backtick = TRUE, control = NULL, nlines = 1L)
+deparse_safe <- function(x)
+  if (length(x))
+    deparse(x, width.cutoff = 500L, backtick = TRUE, control = NULL, nlines = 1L)
 
 mk_interrupt_error <- function() .miraiInterrupt
 
 mk_mirai_error <- function(cnd, sc) {
   cnd[["call"]] <- `attributes<-`(.subset2(cnd, "call"), NULL)
   call <- deparse_safe(.subset2(cnd, "call"))
-  msg <- if (is.null(call) || call == "eval(._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = .GlobalEnv)")
-    sprintf("Error: %s", .subset2(cnd, "message")) else
-      sprintf("Error in %s: %s", call, .subset2(cnd, "message"))
-  idx <- max(
-    which(
-      as.logical(
-        lapply(sc, `==`, "eval(._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = .GlobalEnv)")
-      )
-    )
+  msg <- if (
+    is.null(call) ||
+      call == "eval(._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = .GlobalEnv)"
   )
+    sprintf("Error: %s", .subset2(cnd, "message")) else
+    sprintf("Error in %s: %s", call, .subset2(cnd, "message"))
+  idx <- max(which(as.logical(lapply(
+    sc,
+    `==`,
+    "eval(._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = .GlobalEnv)"
+  ))))
   sc <- sc[(length(sc) - 1L):(idx + 1L)]
-  if (sc[[1L]][[1L]] == ".handleSimpleError")
-    sc <- sc[-1L]
+  if (sc[[1L]][[1L]] == ".handleSimpleError") sc <- sc[-1L]
   sc <- lapply(sc, `attributes<-`, NULL)
   out <- `attributes<-`(msg, `[[<-`(cnd, "stack.trace", sc))
   `class<-`(out, c("miraiError", "errorValue", "try-error"))
@@ -593,4 +630,4 @@ mk_mirai_error <- function(cnd, sc) {
 .miraiInterrupt <- `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))
 .connectionReset <- `class<-`(19L, c("errorValue", "try-error"))
 .snapshot <- expression(on.exit(mirai:::snapshot(), add = TRUE))
-.block <- expression(on.exit(nanonext::msleep(500L), add = TRUE))
+.block <- expression(on.exit(nanonext::msleep(1000L), add = TRUE))

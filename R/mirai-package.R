@@ -1,31 +1,15 @@
-# Copyright (C) 2022-2025 Hibiki AI Limited <info@hibiki-ai.com>
-#
-# This file is part of mirai.
-#
-# mirai is free software: you can redistribute it and/or modify it under the
-# terms of the GNU General Public License as published by the Free Software
-# Foundation, either version 3 of the License, or (at your option) any later
-# version.
-#
-# mirai is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with
-# mirai. If not, see <https://www.gnu.org/licenses/>.
-
 #' mirai: Minimalist Async Evaluation Framework for R
 #'
 #' Designed for simplicity, a 'mirai' evaluates an R expression asynchronously
-#' in a parallel process, locally or distributed over the network. The result is
-#' automatically available upon completion. Modern networking and concurrency,
-#' built on 'nanonext' and 'NNG' (Nanomsg Next Gen), ensures reliable and
-#' efficient scheduling over fast inter-process communications or TCP/IP secured
-#' by TLS. Distributed computing can launch remote resources via SSH or cluster
-#' managers. An inherently queued architecture handles many more tasks than
-#' available processes, and requires no storage on the file system. Innovative
-#' features include support for otherwise non-exportable reference objects,
-#' event-driven promises, and asynchronous parallel map.
+#' in a parallel process, locally or distributed over the network. Modern
+#' networking and concurrency, built on 'nanonext' and 'NNG' (Nanomsg Next Gen),
+#' ensures reliable and efficient scheduling over fast inter-process
+#' communications or TCP/IP secured by TLS. Distributed computing can launch
+#' remote resources via SSH or cluster managers. A queued architecture readily
+#' handles more tasks than available processes, requiring no storage on the file
+#' system. Innovative features include event-driven promises, asynchronous
+#' parallel map, and automatic serialization of otherwise non-exportable
+#' reference objects.
 #'
 #' @section Notes:
 #'
@@ -34,23 +18,19 @@
 #'  Unix domain sockets on MacOS, Solaris and other POSIX platforms, and named
 #'  pipes on Windows.
 #'
-#'  This may be overriden, if desired, by specifying 'url' in the
-#'  [daemons()] interface and launching daemons using
-#'  [launch_local()].
+#'  This may be overriden, if desired, by specifying 'url' in the [daemons()]
+#'  interface and launching daemons using [launch_local()].
 #'
 #' @section Reference Manual:
 #'
 #' `vignette("mirai", package = "mirai")`
 #'
-#' @encoding UTF-8
-#' @author Charlie Gao \email{charlie.gao@@shikokuchuo.net}
-#'   ([ORCID](https://orcid.org/0000-0002-0750-061X))
-#'
 #' @importFrom nanonext .advance call_aio call_aio_ collect_aio collect_aio_
-#'   .context cv cv_signal cv_value dial .interrupt is_error_value .keep listen
-#'   .mark mclock monitor msleep nng_error opt opt<- parse_url pipe_notify
-#'   random read_monitor reap recv recv_aio request send serial_config socket
-#'   stat stop_aio tls_config unresolved .unresolved until wait write_cert
+#'   .context cv cv_signal cv_value dial .interrupt ip_addr is_error_value .keep
+#'   listen .mark mclock monitor msleep nng_error opt opt<- parse_url pipe_id
+#'   pipe_notify random .read_marker read_monitor reap recv recv_aio request
+#'   send socket stat stop_aio tls_config unresolved .unresolved until wait
+#'   write_cert
 #'
 "_PACKAGE"
 
@@ -58,7 +38,6 @@
 # tested implicitly
 
 .onLoad <- function(libname, pkgname) {
-
   switch(
     Sys.info()[["sysname"]],
     Linux = {
@@ -74,7 +53,6 @@
       .urlscheme <<- "ipc:///tmp/"
     }
   )
-
 }
 
 # nocov end
@@ -83,6 +61,9 @@
 .. <- new.env()
 .command <- NULL
 .urlscheme <- NULL
+.limit_long <- 10000L
+.limit_long_secs <- 10L
+.limit_short <- 5000L
 
 ._ <- list2env(
   list(
@@ -103,15 +84,11 @@
     not_found = "compute profile `%s` not found",
     numeric_n = "`n` must be numeric, did you mean to provide `url`?",
     requires_daemons = "daemons must be set prior to a map operation",
-    sync_daemons = "initial sync with daemon(s) timed out after 10s",
-    sync_dispatcher = "initial sync with dispatcher timed out after 10s"
+    sync_daemons = "mirai: initial sync with daemon(s) [%d secs elapsed]",
+    sync_dispatcher = "mirai: initial sync with dispatcher [%d secs elapsed]"
   ),
   hash = TRUE
 )
-
-.intmax <- .Machine[["integer.max"]]
-.limit_short <- 5000L
-.limit_long <- 10000L
 
 # Deprecated  ------------------------------------------------------------------
 
@@ -122,6 +99,7 @@
 #'
 #' @inheritParams call_mirai
 #'
+#' @keywords internal
 #' @export
 #'
 call_mirai_ <- call_aio_

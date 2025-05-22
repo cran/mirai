@@ -1,19 +1,3 @@
-# Copyright (C) 2022-2025 Hibiki AI Limited <info@hibiki-ai.com>
-#
-# This file is part of mirai.
-#
-# mirai is free software: you can redistribute it and/or modify it under the
-# terms of the GNU General Public License as published by the Free Software
-# Foundation, either version 3 of the License, or (at your option) any later
-# version.
-#
-# mirai is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with
-# mirai. If not, see <https://www.gnu.org/licenses/>.
-
 # mirai ------------------------------------------------------------------------
 
 #' Daemon Instance
@@ -96,28 +80,43 @@
 #'
 #' @export
 #'
-daemon <- function(url, dispatcher = FALSE, ..., asyncdial = FALSE, autoexit = TRUE,
-                   cleanup = TRUE, output = FALSE, idletime = Inf, walltime = Inf,
-                   maxtasks = Inf, id = NULL, tls = NULL, rs = NULL) {
-
+daemon <- function(
+  url,
+  dispatcher = FALSE,
+  ...,
+  asyncdial = FALSE,
+  autoexit = TRUE,
+  cleanup = TRUE,
+  output = FALSE,
+  idletime = Inf,
+  walltime = Inf,
+  maxtasks = Inf,
+  id = NULL,
+  tls = NULL,
+  rs = NULL
+) {
   cv <- cv()
   sock <- socket(if (dispatcher) "poly" else "rep")
   on.exit(reap(sock))
-  `[[<-`(., "sock", sock)
-  autoexit && pipe_notify(sock, cv = cv, remove = TRUE, flag = autoexit)
+  autoexit && pipe_notify(sock, cv, remove = TRUE, flag = autoexit)
   if (length(tls)) tls <- tls_config(client = tls)
-  dial_and_sync_socket(sock, url, asyncdial = asyncdial, tls = tls)
+  dial_and_sync_socket(sock, url, autostart = asyncdial || NA, tls = tls)
 
+  `[[<-`(., "sock", sock)
+  on.exit(`[[<-`(., "sock", NULL), add = TRUE)
   if (is.numeric(rs)) `[[<-`(.GlobalEnv, ".Random.seed", as.integer(rs))
   if (!output) {
     devnull <- file(nullfile(), open = "w", blocking = FALSE)
     sink(file = devnull)
     sink(file = devnull, type = "message")
-    on.exit({
-      sink(type = "message")
-      sink()
-      close(devnull)
-    }, add = TRUE)
+    on.exit(
+      {
+        sink(type = "message")
+        sink()
+        close(devnull)
+      },
+      add = TRUE
+    )
   }
   snapshot()
   xc <- 0L
@@ -128,11 +127,10 @@ daemon <- function(url, dispatcher = FALSE, ..., asyncdial = FALSE, autoexit = T
   if (dispatcher) {
     aio <- recv_aio(sock, mode = 1L, cv = cv)
     if (is.numeric(id))
-      send(sock, c(.intmax, as.integer(id)), mode = 2L, block = TRUE)
+      send(sock, c(0L, as.integer(id)), mode = 2L, block = TRUE)
     wait(cv) || return(invisible(xc))
     serial <- collect_aio(aio)
-    if (is.list(serial))
-      `opt<-`(sock, "serial", serial)
+    if (is.list(serial)) `opt<-`(sock, "serial", serial)
     repeat {
       aio <- recv_aio(sock, mode = 1L, timeout = timeout, cv = cv)
       wait(cv) || break
@@ -179,7 +177,6 @@ daemon <- function(url, dispatcher = FALSE, ..., asyncdial = FALSE, autoexit = T
   }
 
   invisible(xc)
-
 }
 
 #' dot Daemon
@@ -194,20 +191,20 @@ daemon <- function(url, dispatcher = FALSE, ..., asyncdial = FALSE, autoexit = T
 #' @noRd
 #'
 .daemon <- function(url) {
-
   cv <- cv()
   sock <- socket("rep")
   on.exit(reap(sock))
-  pipe_notify(sock, cv = cv, remove = TRUE)
-  dial(sock, url = url, autostart = NA, error = TRUE)
+  pipe_notify(sock, cv, remove = TRUE)
+  dial(sock, url = url, autostart = NA, fail = 2L)
+  `[[<-`(., "sock", sock)
   data <- eval_mirai(recv(sock, mode = 1L, block = TRUE))
   send(sock, data, mode = 1L, block = TRUE) || until(cv, .limit_short)
-
 }
 
 # internals --------------------------------------------------------------------
 
-handle_mirai_error <- function(cnd) invokeRestart("mirai_error", cnd, sys.calls())
+handle_mirai_error <- function(cnd)
+  invokeRestart("mirai_error", cnd, sys.calls())
 
 handle_mirai_interrupt <- function(cnd) invokeRestart("mirai_interrupt")
 
@@ -228,18 +225,21 @@ eval_mirai <- function(._mirai_.) {
   )
 }
 
-dial_and_sync_socket <- function(sock, url, asyncdial = FALSE, tls = NULL) {
+dial_and_sync_socket <- function(sock, url, autostart = NA, tls = NULL) {
   cv <- cv()
-  pipe_notify(sock, cv = cv, add = TRUE)
-  dial(sock, url = url, autostart = asyncdial || NA, tls = tls, error = TRUE)
+  pipe_notify(sock, cv, add = TRUE)
+  dial(sock, url = url, autostart = autostart, tls = tls, fail = 2L)
   wait(cv)
-  pipe_notify(sock, cv = NULL, add = TRUE)
+  pipe_notify(sock, NULL, add = TRUE)
 }
 
 do_cleanup <- function() {
-  rm(list = (vars <- names(.GlobalEnv))[!vars %in% .[["vars"]]], envir = .GlobalEnv)
-  lapply((new <- search())[!new %in% .[["se"]]], detach, character.only = TRUE)
+  vars <- names(.GlobalEnv)
+  rm(list = vars[!vars %in% .[["vars"]]], envir = .GlobalEnv)
+  new <- search()
+  lapply(new[!new %in% .[["se"]]], detach, character.only = TRUE)
   options(.[["op"]])
 }
 
-snapshot <- function() `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", names(.GlobalEnv))
+snapshot <- function()
+  `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", names(.GlobalEnv))

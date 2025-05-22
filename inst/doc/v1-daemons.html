@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="generator" content="litedown 0.7">
+<title></title>
+<style type="text/css">
+body {
+  font-family: sans-serif;
+  max-width: 800px;
+  margin: auto;
+  padding: 1em;
+  line-height: 1.5;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+body, .abstract, code, .footnotes, footer, #refs, .caption { font-size: .9em; }
+li li { font-size: .95em; }
+ul:has(li > input[type="checkbox"]) { list-style: none; padding-left: 1em; }
+*, :before, :after { box-sizing: border-box; }
+a { color: steelblue; }
+pre, img { max-width: 100%; }
+pre { white-space: pre-wrap; word-break: break-word; }
+pre code { display: block; padding: 1em; overflow-x: auto; }
+code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
+:not(pre, th) > code, code[class], div > .caption { background: #f8f8f8; }
+pre > code:is(:not([class]), .language-plain, .language-none, .plain), .box, .figure, .table { background: inherit; border: 1px solid #eee; }
+pre > code {
+  &.message { border-color: #9eeaf9; }
+  &.warning { background: #fff3cd; border-color: #fff3cd; }
+  &.error { background: #f8d7da; border-color: #f8d7da; }
+}
+.fenced-chunk { border-left: 1px solid #666; }
+.code-fence {
+  opacity: .4;
+  border: 1px dashed #666;
+  border-left: 2px solid;
+  &:hover { opacity: inherit; }
+}
+.box, .figure, .table, table { margin: 1em auto; }
+div > .caption { padding: 1px 1em; }
+.figure { p:has(img, svg), pre:has(svg) { text-align: center; } }
+.flex-col { display: flex; justify-content: space-between; }
+table {
+  &:only-child:not(.table > *) { margin: auto; }
+  th, td { padding: 5px; font-variant-numeric: tabular-nums; }
+  thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
+  thead th { border-bottom: 1px solid #ddd; }
+  &:not(.datatable-table) {
+    border-top: 1px solid #666;
+    border-bottom: 1px solid #666;
+  }
+}
+blockquote {
+  color: #666;
+  margin: 0;
+  padding: 1px 1em;
+  border-left: .5em solid #eee;
+}
+hr, .footnotes::before { border: 1px dashed #ddd; }
+.frontmatter { text-align: center; }
+#TOC {
+  a { text-decoration: none; }
+  ul { list-style: none; padding-left: 1em; }
+  & > ul { padding: 0; }
+  ul ul { border-left: 1px solid lightsteelblue; }
+}
+.body h2 { border-bottom: 1px solid #666; }
+.body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
+.main-number::after { content: "."; }
+span[class^="ref-number-"] { font-weight: bold; }
+.ref-number-fig::after, .ref-number-tab::after { content: ":"; }
+.cross-ref-chp::before { content: "Chapter "; }
+.cross-ref-sec::before { content: "Section "; }
+.cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
+.cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
+.abstract, #refs {
+  &::before { display: block; margin: 1em auto; font-weight: bold; }
+}
+.abstract::before { content: "Abstract"; text-align: center; }
+#refs::before { content: "Bibliography"; font-size: 1.5em; }
+.ref-paren-open::before { content: "("; }
+.ref-paren-close::after { content: ")"; }
+.ref-semicolon::after { content: "; "; }
+.ref-and::after { content: " and "; }
+.ref-et-al::after { content: " et al."; font-style: italic; }
+.footnote-ref a {
+  &::before { content: "["; }
+  &::after { content: "]"; }
+}
+section.footnotes {
+  margin-top: 2em;
+  &::before { content: ""; display: block; max-width: 20em; }
+}
+.fade {
+  background: repeating-linear-gradient(135deg, white, white 30px, #ddd 32px, #ddd 32px);
+  opacity: 0.6;
+}
+
+@media print {
+  body { max-width: 100%; }
+  tr, img { break-inside: avoid; }
+}
+@media only screen and (min-width: 992px) {
+  body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.61/css/prism-xcode.min.css">
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
+</head>
+<body>
+<div class="frontmatter">
+<div class="title"><h1><ol>
+<li>Daemons</li>
+</ol></h1></div>
+</div>
+<div class="body">
+<h3 id="sec:table-of-contents">Table of Contents</h3>
+<ol>
+<li><a href="#local-daemons">Local Daemons</a></li>
+<li><a href="#remote-daemons">Remote Daemons</a></li>
+<li><a href="#launching-remote-daemons">Launching Remote Daemons</a></li>
+<li><a href="#tls-secure-connections">TLS Secure Connections</a></li>
+<li><a href="#compute-profiles">Compute Profiles</a></li>
+</ol>
+<h3 id="sec:local-daemons">Local Daemons</h3>
+<p>Daemons, or persistent background processes, may be set to receive ‘mirai’ requests.</p>
+<p>This is typically going to be more efficient as new processes no longer need to be created on an <em>ad hoc</em> basis.</p>
+<blockquote>
+<p>Daemons inherit the default system configuration and read in the relevant ‘.Renviron’ and ‘.Rprofile’ etc. on startup.
+They also load the default packages.
+To instead only load the <code>base</code> package (which cuts out more than half of R’s startup time), the environment variable <code>R_SCRIPT_DEFAULT_PACKAGES=NULL</code> may be set prior to launching daemons.</p>
+</blockquote>
+<h4 id="sec:with-dispatcher-default">With Dispatcher (default)</h4>
+<p>Call <code>daemons()</code> specifying the number of daemons to launch.</p>
+<pre><code class="language-r">daemons(6)
+#&gt; [1] 6
+</code></pre>
+<p>The default <code>dispatcher = TRUE</code> creates a <code>dispatcher()</code> background process that connects to individual daemon processes on the local machine.
+This ensures that tasks are dispatched efficiently on a first-in first-out (FIFO) basis to daemons for processing.
+Tasks are queued at dispatcher and sent to a daemon as soon as it can accept the task for immediate execution.</p>
+<p>Dispatcher uses synchronisation primitives from <a href="https://nanonext.r-lib.org"><code>nanonext</code></a>, waiting upon tasks rather than polling for them at intervals.
+This event-driven approach is efficient both in consuming no resources while waiting, whilst also having no latency being fully synchronised with events.</p>
+<p>To view the current status, <code>status()</code> provides:</p>
+<ol>
+<li>The number of active connections,</li>
+<li>The URL daemons connect to, and</li>
+<li>A task summary:</li>
+</ol>
+<ul>
+<li><code>waiting</code> number of tasks queued for execution at dispatcher</li>
+<li><code>assigned</code> number of tasks sent to a daemon for execution</li>
+<li><code>complete</code> number of tasks for which the result has been received (either completed or cancelled)</li>
+</ul>
+<pre><code class="language-r">status()
+#&gt; $connections
+#&gt; [1] 6
+#&gt; 
+#&gt; $daemons
+#&gt; [1] &quot;ipc:///tmp/c2c44fbab84c2abdc1dcec50&quot;
+#&gt; 
+#&gt; $mirai
+#&gt;  awaiting executing completed 
+#&gt;         0         0         0
+</code></pre>
+<pre><code class="language-r">daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p>Set the number of daemons to zero to reset.
+This reverts to the default of creating a new background process for each ‘mirai’ request.</p>
+<h4 id="sec:without-dispatcher">Without Dispatcher</h4>
+<p>Alternatively, specifying <code>dispatcher = FALSE</code>, the background daemons connect directly to the host process.</p>
+<pre><code class="language-r">daemons(6, dispatcher = FALSE)
+#&gt; [1] 6
+</code></pre>
+<p>This means that tasks are sent immediately in a round-robin fashion, which ensures that they are evenly-distributed amongst daemons.
+This does not however guarantee optimal scheduling, as the duration of tasks cannot be known <em>a priori</em>.
+As an example, tasks could be queued at a daemon behind a long-running task, whilst other daemons are idle having already completed their tasks.</p>
+<p>The advantage of this approach is that it is resource-light and does not require an additional dispatcher process.
+It is suited to working with similar-length tasks, or where concurrent tasks typically do not exceed available daemons.</p>
+<p>Requesting the status now shows 6 connections, along with the host URL:</p>
+<pre><code class="language-r">status()
+#&gt; $connections
+#&gt; [1] 6
+#&gt; 
+#&gt; $daemons
+#&gt; [1] &quot;ipc:///tmp/092bfa33b8c79e58a666b322&quot;
+</code></pre>
+<h4 id="sec:everywhere">Everywhere</h4>
+<p><code>everywhere()</code> may be used to evaluate an expression on all connected daemons and persist the resultant state, regardless of a daemon’s ‘cleanup’ setting.</p>
+<pre><code class="language-r">everywhere(library(DBI))
+</code></pre>
+<p>The above keeps the <a href="https://dbi.r-dbi.org/"><code>DBI</code></a> package loaded for all evaluations.
+Other types of setup task may also be performed, including making a common resource available, such as a database connection:</p>
+<pre><code class="language-r">everywhere(con &lt;&lt;- dbConnect(RSQLite::SQLite(), file), file = tempfile())
+</code></pre>
+<p>By super-assignment, the conenction ‘con’ will be available in the global environment of all daemon instances.
+Subsequent mirai calls may then make use of ‘con’.</p>
+<pre><code class="language-r">mirai(exists(&quot;con&quot;))[]
+#&gt; [1] TRUE
+</code></pre>
+<p>Disconnect from the database everywhere:</p>
+<pre><code class="language-r">everywhere(dbDisconnect(con))
+</code></pre>
+<blockquote>
+<p>Sometimes it may be necessary to evaluate an expression in the global environment of each daemon.
+As mirai evaluation does not occur in the global environment itself, but one inheriting from it, an explicit call to <code>evalq(envir = .GlobalEnv)</code> achieves this.
+An example use case is <code>box::use()</code> to import a module or package:</p>
+</blockquote>
+<pre><code class="language-r">everywhere(
+  evalq(
+    box::use(dplyr[select], mirai[...]),
+    envir = .GlobalEnv
+  )
+)
+
+daemons(0)
+#&gt; [1] 0
+</code></pre>
+<h4 id="sec:with-method">With Method</h4>
+<p><code>daemons()</code> has a <code>with()</code> method, which evaluates an expression with daemons created for the duration of the expression and automatically torn down upon completion.</p>
+<p>It was originally designed for running a Shiny app with the desired number of daemons, as in the example below:</p>
+<pre><code class="language-r">with(daemons(4), shiny::runApp(app))
+</code></pre>
+<blockquote>
+<p>Note: it is assumed the app is already created.
+Wrapping a call to <code>shiny::shinyApp()</code> would not work as <code>runApp()</code> is implicitly called when the app is printed, however printing occurs only after <code>with()</code> has returned, hence the app would run outside of the scope of the <code>with()</code> statement.</p>
+</blockquote>
+<p>In the case of a Shiny app, all mirai calls will be executed before the app returns as the app itself is blocking.
+In the case of other expressions, be sure to call the results (or collect the values) of all mirai within the expression to ensure that they all complete before the daemons are torn down.</p>
+<p>If specifying a compute profile for the <code>daemons()</code> call (see below), all calls with <code>.compute = NULL</code> within the <code>with()</code> clause will default to this compute profile.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="sec:remote-daemons">Remote Daemons</h3>
+<p>The daemons interface may also be used to send tasks for computation to remote daemon processes on the network.</p>
+<p>Call <code>daemons()</code> specifying ‘url’ as a character string such as: ‘tcp://10.75.32.70:5555’ at which daemon processes should connect.
+Alternatively, use <code>host_url()</code> to automatically construct a valid URL.
+The host (or dispatcher) listens at this address, utilising a single port.</p>
+<blockquote>
+<p>IPv6 addresses are also supported and must be enclosed in square brackets <code>[]</code> to avoid confusion with the final colon separating the port.
+For example, port 5555 on the IPv6 address <code>::ffff:a6f:50d</code> would be specified as <code>tcp://[::ffff:a6f:50d]:5555</code>.</p>
+</blockquote>
+<p>For options on actually launching the daemons, please see the next section.</p>
+<p>Below, calling <code>host_url()</code> without a port value uses the default of ‘0’.
+This is a wildcard value that will automatically assigns a free ephemeral port:</p>
+<pre><code class="language-r">daemons(url = host_url())
+#&gt; [1] 0
+</code></pre>
+<p>The actual assigned port may be queried at any time via <code>status()</code>:</p>
+<pre><code class="language-r">status()
+#&gt; $connections
+#&gt; [1] 0
+#&gt; 
+#&gt; $daemons
+#&gt; [1] &quot;tcp://192.168.2.179:61815&quot;
+#&gt; 
+#&gt; $mirai
+#&gt;  awaiting executing completed 
+#&gt;         0         0         0
+</code></pre>
+<p>The number of daemons connected at any time may be dynamically scaled up or down, according to requirements.</p>
+<p>To reset all connections and revert to default behaviour:</p>
+<pre><code class="language-r">daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p>Closing the connection causes all connected daemons to exit automatically. If using dispatcher, it will cause dispatcher to exit, and in turn all connected daemons when their respective connections with the dispatcher are terminated.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="sec:launching-remote-daemons">Launching Remote Daemons</h3>
+<p>To launch remote daemons, supply a remote launch configuration to the ‘remote’ argument of <code>daemons()</code>, or <code>launch_remote()</code> at any time thereafter.</p>
+<p>There are currently two options for generating remote launch configurations:</p>
+<ol>
+<li><code>ssh_config()</code> if there is SSH access to the remote machine.</li>
+<li><code>remote_config()</code> provides a flexible method for using cluster resource managers, or a custom launcher.</li>
+</ol>
+<h4 id="sec:ssh-direct-connection">SSH Direct Connection</h4>
+<p>This method is appropriate for internal networks and in trusted, properly-configured environments where it is safe for your machine to accept incoming connections on certain ports.
+In the examples below, the remote daemons connect back directly to port 5555 on the local machine.</p>
+<p>In these cases, using TLS is often desirable to provide additional security to the connections.</p>
+<p>The first example below launches 4 daemons on the machine 10.75.32.90 (using the default SSH port of 22 as this was not specified), connecting back to the host URL:</p>
+<pre><code class="language-r">daemons(
+  n = 4,
+  url = host_url(tls = TRUE, port = 5555),
+  remote = ssh_config(&quot;ssh://10.75.32.90&quot;)
+)
+</code></pre>
+<p>The second example below launches one daemon on each of 10.75.32.90 and 10.75.32.91 using the custom SSH port of 222:</p>
+<pre><code class="language-r">daemons(
+  n = 1,
+  url = host_url(tls = TRUE, port = 5555),
+  remote = ssh_config(c(&quot;ssh://10.75.32.90:222&quot;, &quot;ssh://10.75.32.91:222&quot;))
+)
+</code></pre>
+<h4 id="sec:ssh-tunnelling">SSH Tunnelling</h4>
+<p>Use SSH tunnelling to launch daemons on any machine you are able to access via SSH, whether on the local network or the cloud.
+SSH key-based authentication must already be in place, but no other configuration is required.</p>
+<p>This provides a convenient way to launch remote daemons without them needing to directly access the host.
+Firewall configurations or security policies often prevent opening a port to accept outside connections.
+In these cases, SSH tunnelling creates a tunnel once the initial SSH connection is made.
+For simplicity, the implementation in mirai uses the same tunnel port on both the host and daemon.</p>
+<p>To use tunnelling, supply a URL with hostname of ‘127.0.0.1’ to ‘url’ for the <code>daemons()</code> call.</p>
+<ul>
+<li><code>local_url(tcp = TRUE)</code> does this for you.</li>
+<li>The default uses the wildcard port of ‘0’, which assigns a free ephemeral port.</li>
+<li>Whilst convenient, there is a small possibility that this port may not be available on all daemons.</li>
+<li>It is hence preferable to specify a specific port that has been whitelisted for use, where possible.</li>
+</ul>
+<p>For example, if <code>local_url(tcp = TRUE, port = 5555)</code> is specified, the tunnel is created using port 5555 on each machine.
+The host listens to <code>127.0.0.1:5555</code> on its side, and the daemons each dial into <code>127.0.0.1:5555</code> on their own respective machines.</p>
+<p>The below example launches 2 daemons on the remote machine 10.75.32.90 using SSH tunnelling:</p>
+<pre><code class="language-r">daemons(
+  n = 2,
+  url = local_url(tcp = TRUE),
+  remote = ssh_config(&quot;ssh://10.75.32.90&quot;, tunnel = TRUE)
+)
+</code></pre>
+<h4 id="sec:cluster-resource-managers">Cluster Resource Managers</h4>
+<p><code>remote_config()</code> may be used to run a command to deploy daemons using a resource manager.</p>
+<p>Taking Slurm as an example, the following uses <code>sbatch</code> to launch a daemon on the cluster, with some additional arguments to <code>sbatch</code> specifying the resource allocation:</p>
+<pre><code class="language-r">daemons(
+  n = 2,
+  url = host_url(),
+  remote = remote_config(
+    command = &quot;sbatch&quot;,
+    args = c(&quot;--mem 512&quot;, &quot;-n 1&quot;, &quot;--wrap&quot;, &quot;.&quot;),
+    rscript = file.path(R.home(&quot;bin&quot;), &quot;Rscript&quot;),
+    quote = TRUE
+  )
+)
+</code></pre>
+<h4 id="sec:manual-deployment">Manual Deployment</h4>
+<p>As an alternative to automated launches, calling <code>launch_remote()</code> without specifying ‘remote’ may be used to return the shell commands for deploying daemons manually.</p>
+<p>The printed return values may then be copy / pasted directly to a remote machine e.g. via a terminal session.</p>
+<pre><code class="language-r">daemons(url = host_url())
+#&gt; [1] 0
+launch_remote(2)
+#&gt; [1]
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.2.179:61819&quot;,dispatcher=TRUE,rs=c(10407,91257334,-1959188481,-1949566412,1212153765,450893858,-19985093))'
+#&gt; 
+#&gt; [2]
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.2.179:61819&quot;,dispatcher=TRUE,rs=c(10407,-1946146075,-207229660,280621307,1679686356,-432010903,1372300061))'
+daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="sec:tls-secure-connections">TLS Secure Connections</h3>
+<p>TLS provides a robust solution for securing communications from the local machine to remote daemons.</p>
+<h4 id="sec:automatic-zero-configuration-default">Automatic Zero-configuration Default</h4>
+<p>Simply specify a secure URL using the scheme <code>tls+tcp://</code> when setting daemons, or use <code>host_url(tls = TRUE)</code>, for example:</p>
+<pre><code class="language-r">daemons(url = host_url(tls = TRUE))
+#&gt; [1] 0
+</code></pre>
+<p>Single-use keys and certificates are automatically generated and configured, without requiring any further intervention.
+The private key is always retained on the host machine and never transmitted.</p>
+<p>The generated self-signed certificate is available via <code>launch_remote()</code>, where it is included as part of the shell command for manually launching a daemon on a remote machine.</p>
+<pre><code class="language-r">launch_remote(1)
+#&gt; [1]
+#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://192.168.2.179:61823&quot;,dispatcher=TRUE,tls=c(&quot;-----BEGIN CERTIFICATE-----
+#&gt; MIIFQTCCAymgAwIBAgIBATANBgkqhkiG9w0BAQsFADA4MRYwFAYDVQQDDA0xOTIu
+#&gt; MTY4LjIuMTc5MREwDwYDVQQKDAhOYW5vbmV4dDELMAkGA1UEBhMCSlAwHhcNMDEw
+#&gt; MTAxMDAwMDAwWhcNMzAxMjMxMjM1OTU5WjA4MRYwFAYDVQQDDA0xOTIuMTY4LjIu
+#&gt; MTc5MREwDwYDVQQKDAhOYW5vbmV4dDELMAkGA1UEBhMCSlAwggIiMA0GCSqGSIb3
+#&gt; DQEBAQUAA4ICDwAwggIKAoICAQC1rQfohQMGO1G/nJfPXKwRIyTOh0+YN3rPb8Fq
+#&gt; 9YQisNJsZSAYWOCBZtcvfkhp6H3T8PkpHQpRvMqJRscvwBIGj5Q0wt9YlOiUL0nL
+#&gt; lKgrc06HpzTCMDkd+gDXFFzpIkC9kywycou5EJCbHPX35G1DWUnk5EFljq/Rphgt
+#&gt; oqF8orky7uxvV0okEN0/G4owdutIu7oj1bDDkyeAv2YwnQXhqd7qAtRlwBF25EMN
+#&gt; sHb7CEdW9L8W0W0delwdey0HjgNZulq5FE7Jhzh9w0fjSQU+bz+T2lxFZhdMa8AB
+#&gt; jwvOTFu+ruDd0H0N19u8yjc2hTjDLGSme4YoHsc0r8sFW2ebDSelPLiY4i+6RDud
+#&gt; m2DPve12LYd6L/qOPayE/IFOm3+L0DZeicy5e+qhmbnkQMy83wX4MXcxFME4e+oR
+#&gt; HiJjpR7VsmaCaDkWPQOA8K9+CMwhrCE1TJ8TNL6lQVf/jCwLFH11K24j2xFJd3xr
+#&gt; qqNaeSeTo7J+e9hgX+UCgT9Y01fzwaZIo9xmXtd7VwLlvh6MtJXhH6G47OiqqPVT
+#&gt; JDlQpqEilrxQgeOtvpzpVAafwUqeyTELwo6vovrOXZd++3v4ofPVYmZdLH+/fC1h
+#&gt; vyoflaga5LmkJqXvfNFUl/qW9VqsZJtD+ugMesWaFvISWLcmTw+fpxibaucX1mC+
+#&gt; QA/+aQIDAQABo1YwVDASBgNVHRMBAf8ECDAGAQH/AgEAMB0GA1UdDgQWBBTx8Dh/
+#&gt; y5xUx7oDd91v+d4RGDKiNDAfBgNVHSMEGDAWgBTx8Dh/y5xUx7oDd91v+d4RGDKi
+#&gt; NDANBgkqhkiG9w0BAQsFAAOCAgEAWd25sLJY/CCuHO4+AhT3PHJms9M9FkMrlfbA
+#&gt; ZXh/40UaNjFgFBYbJprPrQWZgH55Me29badP4OMcGpP+Jwfb1mE9CGq7iTIPEkoN
+#&gt; bQ12OQJIjj7CQZaEsukrnQPwj6aXZjHnDVA8GiMizEmEzEEj54qaEOCb+N1OsobI
+#&gt; vvFZGcHi2ktVMugGnCgIf1R5/2ojul+lArbPeItbOBf1EzEyIObVWG6NeFU9pcQ3
+#&gt; 18zSoBS3qhL44yxbmxponMf/Izw5AGtI6Ue1rLTab3lNp0eC8qt6buhs5Nef2gar
+#&gt; iTWjqhrChzdwc6a1rFkdpzA5xZqp6hE7Q3x0XSK5qZkixdOt6Y4yHcWkKXaKLOVN
+#&gt; o7M4UVw0b37oDXJc1lMoupUj8i+On34BpqU1A7EMNeSA64tSus15wUi8laIExpjc
+#&gt; UpfBLeSU5tayz43EXX1wZAXRLLOYGE4z4jmRcFzhwzLFKOZZJayD8uXWAN58wR0E
+#&gt; H4Y3RGWtINvz/H/k9lGYSYjXkQNnzpdBXxGD2TigCuINMpAzlhmlef72G3Cmv0+K
+#&gt; yxZwaM1h216NGGn4JXYbExwMJ2Ea1lFK57jLCidBeDJtKOu//0YBAZI+GUia8QdU
+#&gt; WqTluR6AP275Z7EG7oet2PYRrwvX30+OmFKDTrPFVupSTcnGAOlhAPAGtweFsrwo
+#&gt; zLI1mR8=
+#&gt; -----END CERTIFICATE-----
+#&gt; &quot;,&quot;&quot;),rs=c(10407,-1505249000,-2064814023,-250690906,-1957016337,2049359460,-2028631531))'
+</code></pre>
+<pre><code class="language-r">daemons(0)
+#&gt; [1] 0
+</code></pre>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h4 id="sec:ca-signed-certificates">CA Signed Certificates</h4>
+<p>As an alternative to the zero-configuration default, a certificate may also be generated via a Certificate Signing Request (CSR) to a Certificate Authority (CA).
+The CA may be a public CA or internal to an organisation.</p>
+<ol>
+<li>Generate a private key and CSR. The following resources describe how to do so:</li>
+</ol>
+<ul>
+<li>using Mbed TLS: <a href="https://mbed-tls.readthedocs.io/en/latest/kb/how-to/generate-a-certificate-request-csr/">https://mbed-tls.readthedocs.io/en/latest/kb/how-to/generate-a-certificate-request-csr/</a></li>
+<li>using OpenSSL: <a href="https://www.feistyduck.com/library/openssl-cookbook/online/">https://www.feistyduck.com/library/openssl-cookbook/online/</a> (Chapter 1.2 Key and Certificate Management)</li>
+</ul>
+<ol start="2">
+<li>Provide the generated CSR to the CA for it to sign a new TLS certificate.</li>
+</ol>
+<ul>
+<li>The common name (CN) of the certificate must be identical to the hostname or IP address actually used for the connection. As this is verified, it will fail if not the same.</li>
+<li>The received certificate should comprise a block of cipher text between the markers <code>-----BEGIN CERTIFICATE-----</code> and <code>-----END CERTIFICATE-----</code>. Make sure to request the certificate in the PEM format. If only available in other formats, the TLS library used should usually provide conversion utilities.</li>
+<li>Check also that the private key is a block of cipher text between the markers <code>-----BEGIN PRIVATE KEY-----</code> and <code>-----END PRIVATE KEY-----</code>.</li>
+</ul>
+<ol start="3">
+<li>When setting daemons, the TLS certificate and private key should be provided to the ‘tls’ argument of <code>daemons()</code>.</li>
+</ol>
+<ul>
+<li>If the certificate and private key have been imported as character strings <code>cert</code> and <code>key</code> respectively, then the ‘tls’ argument may be specified as the character vector <code>c(cert, key)</code>.</li>
+<li>Alternatively, the certificate may be copied to a new text file, with the private key appended, in which case the path/filename of this file may be provided to the ‘tls’ argument.</li>
+</ul>
+<ol start="4">
+<li>When launching daemons, the certificate chain to the CA should be supplied to the ‘tls’ argument of <code>daemon()</code> or <code>launch_remote()</code>.</li>
+</ol>
+<ul>
+<li>The certificate chain should comprise multiple certificates, each between <code>-----BEGIN CERTIFICATE-----</code> and <code>-----END CERTIFICATE-----</code> markers. The first one should be the newly-generated TLS certificate, the same supplied to <code>daemons()</code>, and the final one should be a CA root certificate.</li>
+<li>These are the only certificates required if the certificate was signed directly by a CA. If not, then the intermediate certificates should be included in a certificate chain that starts with the TLS certificate and ends with the certificate of the CA.</li>
+<li>If these are concatenated together as a single character string <code>certchain</code>, then the character vector comprising this and an empty character string <code>c(certchain, &quot;&quot;)</code> may be supplied to the relevant ‘tls’ argument.</li>
+<li>Alternatively, if these are written to a file (and the file replicated on the remote machines), then the ‘tls’ argument may also be specified as a path/filename (assuming these are the same on each machine).</li>
+</ul>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="sec:compute-profiles">Compute Profiles</h3>
+<p>The <code>daemons()</code> interface also allows the specification of compute profiles for managing tasks with heterogeneous compute requirements:</p>
+<ul>
+<li>send tasks to different daemons or clusters of daemons with the appropriate specifications (in terms of CPUs / memory / GPU / accelerators etc.)</li>
+<li>split tasks between local and remote computation</li>
+</ul>
+<p>Simply specify the argument <code>.compute</code> with a character profile name (which, if <code>NULL</code>, is ‘default’).
+The daemons settings are saved under the named profile.</p>
+<p>To create a ‘mirai’ task using a specific compute profile, specify the ‘.compute’ argument to <code>mirai()</code>, which uses the ‘default’ compute profile if this is <code>NULL</code>.</p>
+<p>Similarly, functions such as <code>status()</code>, <code>launch_local()</code> or <code>launch_remote()</code> should be specified with the desired ‘.compute’ argument.</p>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+</div>
+</body>
+</html>

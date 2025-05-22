@@ -4,7 +4,7 @@
 \alias{mirai}
 \title{mirai (Evaluate Async)}
 \usage{
-mirai(.expr, ..., .args = list(), .timeout = NULL, .compute = "default")
+mirai(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL)
 }
 \arguments{
 \item{.expr}{an expression to evaluate asynchronously (of arbitrary length,
@@ -25,8 +25,9 @@ below.}
 milliseconds. A mirai will resolve to an 'errorValue' 5 (timed out) if
 evaluation exceeds this limit.}
 
-\item{.compute}{[default 'default'] character value for the compute profile
-to use (each compute profile has its own independent set of daemons).}
+\item{.compute}{[default NULL] character value for the compute profile
+to use (each has its own independent set of daemons), or NULL to use the
+'default' profile.}
 }
 \value{
 A 'mirai' object.
@@ -76,8 +77,11 @@ being found.
 
 
 Specifying the \code{.timeout} argument ensures that the mirai always resolves.
-However, the task may not have completed and still be ongoing in the daemon
-process. Use \code{\link[=stop_mirai]{stop_mirai()}} instead to explicitly stop and interrupt a task.
+When using dispatcher, the mirai will be cancelled after it times out (as if
+\code{\link[=stop_mirai]{stop_mirai()}} had been called). As in that case, there is no guarantee that
+any cancellation will be successful, if the code cannot be interrupted for
+instance. When not using dispatcher, the mirai task will continue to
+completion in the daemon process, even if it times out in the host process.
 }
 
 \section{Errors}{
@@ -97,7 +101,7 @@ interrupts, and timeouts.
 }
 
 \examples{
-\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 # specifying objects via '...'
 n <- 3
 m <- mirai(x + y + 2, x = 2, y = n)

@@ -1,3 +1,26 @@
+# mirai 2.3.0
+
+#### Behavioural Changes
+
+* `mirai()` argument `.timeout` is upgraded to automatically cancel ongoing mirai upon timeout when using dispatcher (thanks @be-marc, @sebffischer #251).
+* `serial_config()` now accepts vector arguments to register multiple custom serialization configurations. Argument `vec` is dropped as internal optimizations mean this option no longer needs to be set.
+
+#### New Features
+
+* `host_url()` is upgraded to return all local IP addresses (named by network interface), which provides a more comprehensive solution than just using a hostname.
+* Adds `register_serial()` to register serialization configurations for all `daemons()` calls (may be used by package authors as a convenience).
+* Adds `on_daemon()` which returns a logical value, whether or not evaluation is taking place within a mirai call on a daemon.
+* Adds `daemons_set()` which returns a logical value, whether or not daemons are set for a given compute profile.
+* `daemons()` now supports initial synchronization exceeding 10s (between host/dispatcher/daemons). This is particularly relevant for HPC setups (thanks @sebffischer, #275).
+
+#### Updates
+
+* For all functions that use `.compute`, this argument has a new default of `NULL`, which continues to use the `default` profile (and hence should not result in any change in behaviour).
+* Fixes `stop_mirai()` failing to interrupt in certain cases on non-Windows platforms, and more robust interruption if `tools::SIGINT` is supplied or passed through to the `autoexit` argument of `daemon()` (thanks @LennardLux, #240).
+* `daemons()` dispatcher argument 'process', deprecated in mirai v2.1.0, is removed.
+* Requires nanonext >= 1.6.0.
+* Package is re-licensed under the MIT license.
+
 # mirai 2.2.0
 
 #### Behavioural Changes

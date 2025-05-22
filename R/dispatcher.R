@@ -1,19 +1,3 @@
-# Copyright (C) 2023-2025 Hibiki AI Limited <info@hibiki-ai.com>
-#
-# This file is part of mirai.
-#
-# mirai is free software: you can redistribute it and/or modify it under the
-# terms of the GNU General Public License as published by the Free Software
-# Foundation, either version 3 of the License, or (at your option) any later
-# version.
-#
-# mirai is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with
-# mirai. If not, see <https://www.gnu.org/licenses/>.
-
 # mirai ------------------------------------------------------------------------
 
 #' Dispatcher
@@ -55,43 +39,50 @@
 #'
 #' @export
 #'
-dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
-                       rs = NULL) {
-
+dispatcher <- function(
+  host,
+  url = NULL,
+  n = NULL,
+  ...,
+  tls = NULL,
+  pass = NULL,
+  rs = NULL
+) {
   n <- if (is.numeric(n)) as.integer(n) else length(url)
   n > 0L || stop(._[["missing_url"]])
 
   cv <- cv()
   sock <- socket("rep")
   on.exit(reap(sock))
-  pipe_notify(sock, cv = cv, remove = TRUE, flag = TRUE)
+  pipe_notify(sock, cv, remove = TRUE, flag = TRUE)
   dial_and_sync_socket(sock, host)
 
   ctx <- .context(sock)
-  sync <- recv(ctx, mode = 1L, block = .limit_long)
-  is.object(sync) && stop(._[["sync_dispatcher"]])
-  if (nzchar(sync[[1L]]))
-    Sys.setenv(R_DEFAULT_PACKAGES = sync[[1L]]) else
-      Sys.unsetenv("R_DEFAULT_PACKAGES")
+  req <- recv_aio(ctx, mode = 1L, cv = cv)
+  while(!until(cv, .limit_long))
+    cv_signal(cv) || wait(cv) || return()
+  res <- collect_aio(req)
+
+  if (nzchar(res[[1L]])) Sys.setenv(R_DEFAULT_PACKAGES = res[[1L]]) else
+    Sys.unsetenv("R_DEFAULT_PACKAGES")
 
   auto <- is.null(url)
   if (auto) {
     url <- local_url()
   } else {
-    if (is.character(sync[[2L]]) && is.null(tls)) {
-      tls <- sync[[2L]]
-      pass <- sync[[3L]]
+    if (is.character(res[[2L]]) && is.null(tls)) {
+      tls <- res[[2L]]
+      pass <- res[[3L]]
     }
-    if (length(tls))
-      tls <- tls_config(server = tls, pass = pass)
+    if (length(tls)) tls <- tls_config(server = tls, pass = pass)
   }
   pass <- NULL
-  serial <- sync[[4L]]
+  serial <- res[[4L]]
 
   psock <- socket("poly")
   on.exit(reap(psock), add = TRUE, after = TRUE)
   m <- monitor(psock, cv)
-  listen(psock, url = url, tls = tls, error = TRUE)
+  listen(psock, url = url, tls = tls, fail = 2L)
 
   msgid <- 0L
   inq <- outq <- list()
@@ -104,15 +95,19 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
     for (i in seq_len(n))
       launch_daemon(wa3(url, dots, next_stream(envir)), output)
     for (i in seq_len(n))
-      until(cv, .limit_long) || stop(._[["sync_daemons"]])
+      while(!until(cv, .limit_long))
+        cv_signal(cv) || wait(cv) || return()
 
     changes <- read_monitor(m)
     for (item in changes)
       item > 0 && {
-        outq[[as.character(item)]] <- as.environment(list(pipe = item, msgid = 0L, ctx = NULL))
+        outq[[as.character(item)]] <- as.environment(list(
+          pipe = item,
+          msgid = 0L,
+          ctx = NULL
+        ))
         send(psock, serial, mode = 1L, block = TRUE, pipe = item)
       }
-
   } else {
     listener <- attr(psock, "listener")[[1L]]
     url <- opt(listener, "url")
@@ -127,22 +122,29 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
   res <- recv_aio(psock, mode = 8L, cv = cv)
 
   suspendInterrupts(
-    repeat {
-
-      wait(cv) || break
+    while (wait(cv)) {
 
       changes <- read_monitor(m)
-      length(changes) && {
+      is.null(changes) || {
         for (item in changes) {
           if (item > 0) {
-            outq[[as.character(item)]] <- as.environment(list(pipe = item, msgid = 0L, ctx = NULL))
+            outq[[as.character(item)]] <- as.environment(list(
+              pipe = item,
+              msgid = 0L,
+              ctx = NULL
+            ))
             send(psock, serial, mode = 1L, block = TRUE, pipe = item)
             cv_signal(cv)
           } else {
             id <- as.character(-item)
             if (length(outq[[id]])) {
               outq[[id]][["msgid"]] &&
-                send(outq[[id]][["ctx"]], .connectionReset, mode = 1L, block = TRUE)
+                send(
+                  outq[[id]][["ctx"]],
+                  .connectionReset,
+                  mode = 1L,
+                  block = TRUE
+                )
               if (length(outq[[id]][["dmnid"]]))
                 events <- c(events, outq[[id]][["dmnid"]])
               outq[[id]] <- NULL
@@ -183,40 +185,37 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
                 }
           }
           send(ctx, found, mode = 2L, block = TRUE)
-
         } else {
           msgid <- msgid + 1L
           inq[[length(inq) + 1L]] <- list(ctx = ctx, req = value, msgid = msgid)
         }
         ctx <- .context(sock)
         req <- recv_aio(ctx, mode = 8L, cv = cv)
-
       } else if (!unresolved(res)) {
         value <- .subset2(res, "value")
-        id <- as.character(.subset2(res, "aio"))
+        id <- as.character(pipe_id(res))
         res <- recv_aio(psock, mode = 8L, cv = cv)
         outq[[id]][["msgid"]] < 0 && {
           `[[<-`(outq[[id]], "msgid", 0L)
           cv_signal(cv)
           next
         }
-        if (value[4L]) {
-          if (value[4L] == 1L) {
+        .read_marker(value) && {
             send(outq[[id]][["ctx"]], value, mode = 2L, block = TRUE)
             send(psock, 0L, mode = 2L, pipe = outq[[id]][["pipe"]], block = TRUE)
             if (length(outq[[id]][["dmnid"]]))
               events <- c(events, outq[[id]][["dmnid"]])
             outq[[id]] <- NULL
-          } else {
-            dmnid <- readBin(value, "integer", n = 2L)[2L]
-            events <- c(events, dmnid)
-            `[[<-`(outq[[id]], "dmnid", -dmnid)
-          }
           next
-        } else {
-          send(outq[[id]][["ctx"]], value, mode = 2L, block = TRUE)
-          `[[<-`(outq[[id]], "msgid", 0L)
         }
+        as.logical(value[1L]) || {
+          dmnid <- readBin(value, "integer", n = 2L)[2L]
+          events <- c(events, dmnid)
+          `[[<-`(outq[[id]], "dmnid", -dmnid)
+          next
+        }
+        send(outq[[id]][["ctx"]], value, mode = 2L, block = TRUE)
+        `[[<-`(outq[[id]], "msgid", 0L)
       }
 
       if (length(inq))
@@ -228,8 +227,6 @@ dispatcher <- function(host, url = NULL, n = NULL, ..., tls = NULL, pass = NULL,
             inq[[1L]] <- NULL
             break
           }
-
     }
   )
-
 }

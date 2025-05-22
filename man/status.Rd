@@ -4,11 +4,11 @@
 \alias{status}
 \title{Status Information}
 \usage{
-status(.compute = "default")
+status(.compute = NULL)
 }
 \arguments{
-\item{.compute}{[default 'default'] character compute profile (each compute
-profile has its own set of daemons for connecting to different resources).
+\item{.compute}{[default NULL] character value for the compute profile to
+query, or NULL to query the 'default' profile.
 
 \strong{or} a 'miraiCluster' to obtain its status.}
 }
@@ -39,7 +39,7 @@ status query are returned.
 }
 
 \examples{
-\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 status()
 daemons(url = "tcp://[::1]:0")
 status()

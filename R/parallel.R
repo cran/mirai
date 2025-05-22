@@ -1,19 +1,3 @@
-# Copyright (C) 2023-2025 Hibiki AI Limited <info@hibiki-ai.com>
-#
-# This file is part of mirai.
-#
-# mirai is free software: you can redistribute it and/or modify it under the
-# terms of the GNU General Public License as published by the Free Software
-# Foundation, either version 3 of the License, or (at your option) any later
-# version.
-#
-# mirai is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with
-# mirai. If not, see <https://www.gnu.org/licenses/>.
-
 # mirai x parallel -------------------------------------------------------------
 
 #' Make Mirai Cluster
@@ -91,14 +75,19 @@
 #' @export
 #'
 make_cluster <- function(n, url = NULL, remote = NULL, ...) {
-
   id <- sprintf("`%d`", length(..))
   cvs <- cv()
 
   if (is.character(url)) {
-
-    url <- url[1L]
-    daemons(n, url = url, remote = remote, dispatcher = FALSE, cleanup = FALSE, ..., .compute = id)
+    daemons(
+      n,
+      url = url,
+      remote = remote,
+      dispatcher = FALSE,
+      cleanup = FALSE,
+      ...,
+      .compute = id
+    )
 
     if (is.null(remote)) {
       if (missing(n)) n <- 1L
@@ -109,7 +98,6 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
       args <- remote[["args"]]
       n <- if (is.list(args)) length(args) else 1L
     }
-
   } else {
     is.numeric(n) || stop(._[["numeric_n"]])
     n >= 1L || stop(._[["n_one"]])
@@ -120,7 +108,6 @@ make_cluster <- function(n, url = NULL, remote = NULL, ...) {
 
   cl <- lapply(seq_len(n), create_node, id = id)
   `attributes<-`(cl, list(class = c("miraiCluster", "cluster"), id = id))
-
 }
 
 #' Stop Mirai Cluster
@@ -142,7 +129,6 @@ stopCluster.miraiCluster <- stop_cluster
 #' @exportS3Method parallel::sendData
 #'
 sendData.miraiNode <- function(node, data) {
-
   id <- attr(node, "id")
   envir <- ..[[id]]
   is.null(envir) && stop(._[["cluster_inactive"]])
@@ -151,10 +137,14 @@ sendData.miraiNode <- function(node, data) {
   tagged <- !is.null(value[["tag"]])
   if (tagged) set_cv(envir) else unset_cv(envir)
 
-  m <- mirai(do.call(node, data, quote = TRUE), node = value[["fun"]], data = value[["args"]], .compute = id)
+  m <- mirai(
+    do.call(node, data, quote = TRUE),
+    node = value[["fun"]],
+    data = value[["args"]],
+    .compute = id
+  )
   if (tagged) `[[<-`(m, "tag", value[["tag"]])
   `[[<-`(node, "mirai", m)
-
 }
 
 #' @exportS3Method parallel::recvData
@@ -164,22 +154,26 @@ recvData.miraiNode <- function(node) call_aio(.subset2(node, "mirai"))
 #' @exportS3Method parallel::recvOneData
 #'
 recvOneData.miraiCluster <- function(cl) {
-
   wait(..[[attr(cl, "id")]][["cv"]])
   node <- which.min(lapply(cl, node_unresolved))
   m <- .subset2(.subset2(cl, node), "mirai")
   list(node = node, value = `class<-`(m, NULL))
-
 }
 
 #' @export
 #'
 print.miraiCluster <- function(x, ...) {
-
   id <- attr(x, "id")
-  cat(sprintf("< miraiCluster | ID: %s nodes: %d active: %s >\n", id, length(x), as.logical(length(..[[id]]))), file = stdout())
+  cat(
+    sprintf(
+      "< miraiCluster | ID: %s nodes: %d active: %s >\n",
+      id,
+      length(x),
+      !is.null(..[[id]])
+    ),
+    file = stdout()
+  )
   invisible(x)
-
 }
 
 #' @export
@@ -189,10 +183,15 @@ print.miraiCluster <- function(x, ...) {
 #' @export
 #'
 print.miraiNode <- function(x, ...) {
-
-  cat(sprintf("< miraiNode | node: %d cluster ID: %s >\n", attr(x, "node"), attr(x, "id")), file = stdout())
+  cat(
+    sprintf(
+      "< miraiNode | node: %d cluster ID: %s >\n",
+      attr(x, "node"),
+      attr(x, "id")
+    ),
+    file = stdout()
+  )
   invisible(x)
-
 }
 
 # internals --------------------------------------------------------------------

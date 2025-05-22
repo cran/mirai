@@ -1,19 +1,3 @@
-# Copyright (C) 2023-2025 Hibiki AI Limited <info@hibiki-ai.com>
-#
-# This file is part of mirai.
-#
-# mirai is free software: you can redistribute it and/or modify it under the
-# terms of the GNU General Public License as published by the Free Software
-# Foundation, either version 3 of the License, or (at your option) any later
-# version.
-#
-# mirai is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along with
-# mirai. If not, see <https://www.gnu.org/licenses/>.
-
 # mirai ------------------------------------------------------------------------
 
 #' Next >> Developer Interface
@@ -85,18 +69,28 @@ nextget <- function(x, .compute = "default") ..[[.compute]][[x]]
 #' @export
 #'
 nextcode <- function(xc)
-  sprintf("%d | Daemon %s", xc, switch(xc + 1L, "connection terminated", "idletime limit reached", "walltime limit reached", "task limit reached"))
+  sprintf(
+    "%d | Daemon %s",
+    xc,
+    switch(
+      xc + 1L,
+      "connection terminated",
+      "idletime limit reached",
+      "walltime limit reached",
+      "task limit reached"
+    )
+  )
 
 # internals --------------------------------------------------------------------
 
 next_stream <- function(envir) {
   stream <- envir[["stream"]]
-  if (length(stream)) `[[<-`(envir, "stream", parallel::nextRNGStream(stream))
+  if (is.integer(stream)) `[[<-`(envir, "stream", parallel::nextRNGStream(stream))
   stream
 }
 
 next_msgid <- function(envir) {
-  msgid <- envir[["msgid"]] + 1L
-  `[[<-`(envir, "msgid", msgid)
-  msgid
+  prev <- envir[["msgid"]]
+  is.null(prev) && return()
+  envir[["msgid"]] <- prev + 1L
 }

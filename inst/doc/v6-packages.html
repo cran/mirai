@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="generator" content="litedown 0.7">
+<title></title>
+<style type="text/css">
+body {
+  font-family: sans-serif;
+  max-width: 800px;
+  margin: auto;
+  padding: 1em;
+  line-height: 1.5;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+body, .abstract, code, .footnotes, footer, #refs, .caption { font-size: .9em; }
+li li { font-size: .95em; }
+ul:has(li > input[type="checkbox"]) { list-style: none; padding-left: 1em; }
+*, :before, :after { box-sizing: border-box; }
+a { color: steelblue; }
+pre, img { max-width: 100%; }
+pre { white-space: pre-wrap; word-break: break-word; }
+pre code { display: block; padding: 1em; overflow-x: auto; }
+code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
+:not(pre, th) > code, code[class], div > .caption { background: #f8f8f8; }
+pre > code:is(:not([class]), .language-plain, .language-none, .plain), .box, .figure, .table { background: inherit; border: 1px solid #eee; }
+pre > code {
+  &.message { border-color: #9eeaf9; }
+  &.warning { background: #fff3cd; border-color: #fff3cd; }
+  &.error { background: #f8d7da; border-color: #f8d7da; }
+}
+.fenced-chunk { border-left: 1px solid #666; }
+.code-fence {
+  opacity: .4;
+  border: 1px dashed #666;
+  border-left: 2px solid;
+  &:hover { opacity: inherit; }
+}
+.box, .figure, .table, table { margin: 1em auto; }
+div > .caption { padding: 1px 1em; }
+.figure { p:has(img, svg), pre:has(svg) { text-align: center; } }
+.flex-col { display: flex; justify-content: space-between; }
+table {
+  &:only-child:not(.table > *) { margin: auto; }
+  th, td { padding: 5px; font-variant-numeric: tabular-nums; }
+  thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
+  thead th { border-bottom: 1px solid #ddd; }
+  &:not(.datatable-table) {
+    border-top: 1px solid #666;
+    border-bottom: 1px solid #666;
+  }
+}
+blockquote {
+  color: #666;
+  margin: 0;
+  padding: 1px 1em;
+  border-left: .5em solid #eee;
+}
+hr, .footnotes::before { border: 1px dashed #ddd; }
+.frontmatter { text-align: center; }
+#TOC {
+  a { text-decoration: none; }
+  ul { list-style: none; padding-left: 1em; }
+  & > ul { padding: 0; }
+  ul ul { border-left: 1px solid lightsteelblue; }
+}
+.body h2 { border-bottom: 1px solid #666; }
+.body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
+.main-number::after { content: "."; }
+span[class^="ref-number-"] { font-weight: bold; }
+.ref-number-fig::after, .ref-number-tab::after { content: ":"; }
+.cross-ref-chp::before { content: "Chapter "; }
+.cross-ref-sec::before { content: "Section "; }
+.cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
+.cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
+.abstract, #refs {
+  &::before { display: block; margin: 1em auto; font-weight: bold; }
+}
+.abstract::before { content: "Abstract"; text-align: center; }
+#refs::before { content: "Bibliography"; font-size: 1.5em; }
+.ref-paren-open::before { content: "("; }
+.ref-paren-close::after { content: ")"; }
+.ref-semicolon::after { content: "; "; }
+.ref-and::after { content: " and "; }
+.ref-et-al::after { content: " et al."; font-style: italic; }
+.footnote-ref a {
+  &::before { content: "["; }
+  &::after { content: "]"; }
+}
+section.footnotes {
+  margin-top: 2em;
+  &::before { content: ""; display: block; max-width: 20em; }
+}
+.fade {
+  background: repeating-linear-gradient(135deg, white, white 30px, #ddd 32px, #ddd 32px);
+  opacity: 0.6;
+}
+
+@media print {
+  body { max-width: 100%; }
+  tr, img { break-inside: avoid; }
+}
+@media only screen and (min-width: 992px) {
+  body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
+}
+</style>
+</head>
+<body>
+<div class="frontmatter">
+<div class="title"><h1><ol start="6">
+<li>Guidance for Package Authors</li>
+</ol></h1></div>
+</div>
+<div class="body">
+<h3 id="sec:table-of-contents">Table of Contents</h3>
+<ol>
+<li><a href="#developer-interfaces">Developer Interfaces</a></li>
+<li><a href="#points-to-note">Points to Note</a></li>
+</ol>
+<h3 id="sec:developer-interfaces">Developer Interfaces</h3>
+<p>mirai offers the following functions primarily for package authors wishing to build on mirai:</p>
+<ol>
+<li>
+<p><code>daemons_set()</code> may be used to detect if daemons have already been set and prompt the user to set daemons if not.</p>
+</li>
+<li>
+<p><code>on_daemon()</code> may be used to detect if code is running on a daemon, i.e. within a <code>mirai()</code> call.</p>
+</li>
+<li>
+<p><code>nextget()</code>, for querying values for a compute profile, such as ‘urls’, described in the function’s documentation. Note: only the specifically-documented values are supported interfaces.</p>
+</li>
+</ol>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="sec:points-to-note">Points to Note</h3>
+<p>mirai as a framework is designed to support completely transparent and inter-operable use within packages.
+A core design precept of not relying on global options or environment variables minimises the likelihood of conflict between use by different packages.</p>
+<p>There are hence only a few important points to note:</p>
+<ol>
+<li><code>daemons()</code> settings should wherever possible be left to end-users.
+This means that as a package author, you should just consider that mirai are run on whatever resources are available to the user at the time the code is run.
+You do not need to anticipate whether an end-user will run the code on their own machine, distributed over the network, or a mixture of both.</li>
+</ol>
+<ul>
+<li>Consider pointing to the documentation for <code>mirai::daemons()</code>, or re-exporting <code>daemons()</code> in your package as a convenience.</li>
+<li>Never include a call to <code>daemons()</code> when using <code>mirai_map()</code>.
+This is important to ensure that there is no unintentional recursive creation of daemons on the same machine, for example if your function is used within another package’s function that also uses mirai.</li>
+<li>Including a <code>daemons()</code> call may exceptionally be appropriate for async operations using only one dedicated daemon.
+A representative example of this usage pattern is <code>logger::appender_async()</code>, where the logger package’s ‘namespace’ concept maps directly to mirai’s ‘compute profile’.</li>
+</ul>
+<ol start="2">
+<li>
+<p>The shape and contents of a <code>status()</code> call must not be used programatically, as this user interface is subject to change at any time. Use <code>nextget()</code> instead.</p>
+</li>
+<li>
+<p>The functions <code>unresolved()</code>, <code>is_error_value()</code>, <code>is_mirai_error()</code>, and <code>is_mirai_interrupt()</code> should be used to test for the relevant state of a mirai or its value.</p>
+</li>
+</ol>
+<ul>
+<li>The characteristics of how they are currently implemented, e.g. as a logical NA for an ‘unresolvedValue’, should not be relied upon, as these are subject to change at any time.</li>
+</ul>
+<ol start="4">
+<li>Testing on CRAN should respect it’s 2-core usage limit.</li>
+</ol>
+<ul>
+<li>These limits apply only to tests on CRAN, and more complex tests may be run elsewhere.</li>
+<li>This practically means limiting tests to using one daemon (with <code>dispatcher = FALSE</code>) to ensure that only one additional process is used.</li>
+<li>Always reset daemons when done and then allow at least a one-second sleep to ensure all background processes have properly exited.</li>
+</ul>
+<p><a href="#table-of-contents">« Back to ToC</a></p>
+</div>
+</body>
+</html>
