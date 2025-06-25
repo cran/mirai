@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 <meta name="generator" content="litedown 0.7">
-<title></title>
+<title>For Package Authors</title>
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -110,31 +110,19 @@ section.footnotes {
 </head>
 <body>
 <div class="frontmatter">
-<div class="title"><h1><ol start="6">
-<li>Guidance for Package Authors</li>
-</ol></h1></div>
+<div class="title"><h1>For Package Authors</h1></div>
 </div>
 <div class="body">
-<h3 id="sec:table-of-contents">Table of Contents</h3>
+<h3 id="sec:1-developer-interfaces">1. Developer Interfaces</h3>
+<p>mirai offers the following functions primarily for package authors using mirai:</p>
 <ol>
-<li><a href="#developer-interfaces">Developer Interfaces</a></li>
-<li><a href="#points-to-note">Points to Note</a></li>
+<li><code>require_daemons()</code> will error and prompt the user to set daemons (with a clickable function link if the cli package is available) if daemons are not already set.</li>
+<li><code>daemons_set()</code>, to detect if daemons have already been set and prompt the user to set daemons if not.</li>
+<li><code>on_daemon()</code>, to detect if code is already running on a daemon, i.e. within a <code>mirai()</code> call.</li>
+<li><code>register_serial()</code> to register custom serialization functions, which are automatically available by default for all subsequent <code>daemons()</code> calls.</li>
+<li><code>nextget()</code>, for querying values for a compute profile, such as ‘url’, described in the function’s documentation. Note: only the specifically-documented values are supported interfaces.</li>
 </ol>
-<h3 id="sec:developer-interfaces">Developer Interfaces</h3>
-<p>mirai offers the following functions primarily for package authors wishing to build on mirai:</p>
-<ol>
-<li>
-<p><code>daemons_set()</code> may be used to detect if daemons have already been set and prompt the user to set daemons if not.</p>
-</li>
-<li>
-<p><code>on_daemon()</code> may be used to detect if code is running on a daemon, i.e. within a <code>mirai()</code> call.</p>
-</li>
-<li>
-<p><code>nextget()</code>, for querying values for a compute profile, such as ‘urls’, described in the function’s documentation. Note: only the specifically-documented values are supported interfaces.</p>
-</li>
-</ol>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:points-to-note">Points to Note</h3>
+<h3 id="sec:2-guidance">2. Guidance</h3>
 <p>mirai as a framework is designed to support completely transparent and inter-operable use within packages.
 A core design precept of not relying on global options or environment variables minimises the likelihood of conflict between use by different packages.</p>
 <p>There are hence only a few important points to note:</p>
@@ -146,8 +134,8 @@ You do not need to anticipate whether an end-user will run the code on their own
 <ul>
 <li>Consider pointing to the documentation for <code>mirai::daemons()</code>, or re-exporting <code>daemons()</code> in your package as a convenience.</li>
 <li>Never include a call to <code>daemons()</code> when using <code>mirai_map()</code>.
-This is important to ensure that there is no unintentional recursive creation of daemons on the same machine, for example if your function is used within another package’s function that also uses mirai.</li>
-<li>Including a <code>daemons()</code> call may exceptionally be appropriate for async operations using only one dedicated daemon.
+This is important to ensure that there is no accidental recursive creation of daemons on the same machine, for example if your function is used within another package’s function that also uses mirai.</li>
+<li>Exceptionally, including a <code>daemons()</code> call may be appropriate for async operations using a single dedicated non-dispatcher daemon.
 A representative example of this usage pattern is <code>logger::appender_async()</code>, where the logger package’s ‘namespace’ concept maps directly to mirai’s ‘compute profile’.</li>
 </ul>
 <ol start="2">
@@ -159,17 +147,16 @@ A representative example of this usage pattern is <code>logger::appender_async()
 </li>
 </ol>
 <ul>
-<li>The characteristics of how they are currently implemented, e.g. as a logical NA for an ‘unresolvedValue’, should not be relied upon, as these are subject to change at any time.</li>
+<li>The characteristics of their current implementation, e.g. as a logical NA for an ‘unresolvedValue’, should not be relied upon, as these are subject to change at any time.</li>
 </ul>
 <ol start="4">
-<li>Testing on CRAN should respect it’s 2-core usage limit.</li>
+<li>For CRAN packages, all examples and tests should respect the following rules when running on CRAN:</li>
 </ol>
 <ul>
-<li>These limits apply only to tests on CRAN, and more complex tests may be run elsewhere.</li>
-<li>This practically means limiting tests to using one daemon (with <code>dispatcher = FALSE</code>) to ensure that only one additional process is used.</li>
-<li>Always reset daemons when done and then allow at least a one-second sleep to ensure all background processes have properly exited.</li>
+<li>Use only one daemon (with <code>dispatcher = FALSE</code>) to ensure that only one additional process is used, to remain within the 2-core limit.</li>
+<li>Always reset daemons at the end of each example or test file. Allow at least a one-second sleep to ensure that all background processes have properly exited and that no ‘detritus’ from the processes remains.</li>
+<li>Never modify the default value of <code>asyncdial</code> or <code>autoexit</code> for <code>daemon()</code>, in that function or any functions that pass arguments through to it such as <code>daemons()</code>. This is to ensure that processes exit as soon as the host process does.</li>
 </ul>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
 </div>
 </body>
 </html>

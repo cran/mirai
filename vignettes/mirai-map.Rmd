@@ -1,36 +1,34 @@
 ---
-title: "2. Async Parallel Map"
+title: "Mirai Map"
 vignette: >
-  %\VignetteIndexEntry{2. Async Parallel Map}
+  %\VignetteIndexEntry{Mirai Map}
   %\VignetteEngine{litedown::vignette}
   %\VignetteEncoding{UTF-8}
 ---
 
 
-### Table of Contents
 
-1. [Introduction and Key Advantages](#introduction-and-key-advantages)
-1. [Collecting Results](#collecting-results)
-1. [Multiple Map](#multiple-map)
-
-### Introduction and Key Advantages
+### 1. Introduction
 
 `mirai_map()` performs asynchronous parallel/distributed map using `mirai`.
 
-This function is similar to `purrr::map()`, but returns a 'mirai_map' object.
-It is also more advanced as it allows multiple map over the rows of a dataframe or matrix.
-It is in fact used to implement all parallel map variations from that package.
+This function is similar to `purrr::map()`, but instead of a list of values, returns a 'mirai_map' object, which is a list of mirai.
 
-The results of a mirai_map `x` may be collected using `x[]`.
+Incidentally, purrr's `in_parallel()` parallel map capability is based entirely on `mirai_map()`, but does not extend in the same way to async usage, as there you'd wait for completion in all cases.
+
+A `mirai_map()` call returns almost immediately on the other hand.
+The results of a mirai_map `x` may be collected using `x[]` or `collect_mirai(x)`, the same as for a mirai.
 This waits for all asynchronous operations to complete if still in progress.
 
-It offers the following key advantages:
+Use of `mirai_map()` requires that `daemons()` have previously been set, and will error if this is not the case (rather than launching potentially too many *ephemeral daemons* if the map is over a large number of elements).
+
+### 2. Key Advantages
 
 1. Returns immediately with all evaluations taking place asynchronously. Printing a 'mirai map' object shows the current completion progress.
-1. The '.promise' argument allows a promise to registered against each mirai, which can be used to perform side-effects (such as checkpointing or sending a progress update).
-1. Returns evaluation errors as 'miraiError' or 'errorValue' as the case may be, rather than causing the entire operation to fail. This allows more efficient recovery from partial failure.
+1. The '.promise' argument allows a promise action to be registered against each iteration. This can be used to perform side-effects when each iteration completes (such as checkpointing or sending a progress update).
+1. Returns evaluation errors as 'miraiError' or 'errorValue' as the case may be, rather than causing the entire map to fail. This allows more efficient recovery from partial failure.
 1. Does not rely on a 'chunking' algorithm that attempts to split work into batches according to the number of available daemons, as implemented for instance in the `parallel` package. 
-Chunking cannot take into account varying or unpredictable compute times over the indices, which `mirai` scheduling is designed to deal with optimally. This is demonstrated in the example below.
+Chunking cannot take into account varying or unpredictable compute times over the indices, which `mirai` scheduling is designed to deal with optimally. This is demonstrated in the example below:
 
 ``` r
 library(mirai)
@@ -41,14 +39,14 @@ daemons(4)
 vec <- c(1, 1, 4, 4, 1, 1, 1, 1)
 system.time(mirai_map(vec, Sys.sleep)[])
 #>    user  system elapsed 
-#>   0.003   0.009   4.007
+#>   0.026   0.290   4.008
 system.time(parLapply(cl, vec, Sys.sleep))
 #>    user  system elapsed 
-#>   0.006   0.017   8.004
+#>   0.008   0.003   8.011
 daemons(0)
 #> [1] 0
 ```
-`.args` is used to specify further constant arguments to `.f` - the 'mean' and 'sd' in the example below:
+`.args` is used to specify further constant arguments to `.f` - the `mean` and `sd` in the example below:
 
 ``` r
 with(
@@ -56,15 +54,15 @@ with(
   mirai_map(1:3, rnorm, .args = list(mean = 20, sd = 2))[]
 )
 #> [[1]]
-#> [1] 21.4368
+#> [1] 18.34921
 #> 
 #> [[2]]
-#> [1] 18.48262 25.45403
+#> [1] 20.92965 18.65826
 #> 
 #> [[3]]
-#> [1] 19.16141 22.79903 19.24614
+#> [1] 22.05289 17.32964 21.19244
 ```
-Use `...` to further specify objects referenced but not defined in `.f` - the 'do' in the anonymous function below:
+Use `...` to further specify objects referenced but not defined in `.f` - the function `do` below:
 
 ``` r
 daemons(4)
@@ -75,23 +73,19 @@ ml <- mirai_map(
   do = nanonext::random
 )
 ml
-#> < mirai map [0/3] >
+#> < mirai map [2/3] >
 ml[]
 #> $a
-#> [1] "6a"
+#> [1] "67"
 #> 
 #> $b
-#> [1] 42 b7
+#> [1] e6 51
 #> 
 #> $c
-#> [1] "08cbc5"
+#> [1] "23b40b"
 ```
 
-> Use of `mirai_map()` requires that `daemons()` have previously been set, and will error if this is not the case.
-
-[&laquo; Back to ToC](#table-of-contents)
-
-### Collecting Results
+### 3. Collecting Results
 
 When collecting the results, optionally specify arguments to `[]`:
 
@@ -116,11 +110,9 @@ with(
 #> NULL
 ```
 
-[&laquo; Back to ToC](#table-of-contents)
+### 4. Multiple Map
 
-### Multiple Map
-
-Multiple map is performed over the **rows** of a dataframe or matrix, as this is most often the desired behaviour.
+When a dataframe or matrix is passed as `.x`, multiple map is automatically performed over its **rows**, as this is most often the desired behaviour.
 
 > As a dataframe often contains columns of differing type, it is unusual to want to map over the **columns**, however this is possible by simply transforming it beforehand into a list using `as.list()`.
 
@@ -159,4 +151,24 @@ daemons(0)
 #> [1] 0
 ```
 
-[&laquo; Back to ToC](#table-of-contents)
+### 5. Nested Maps
+
+In certain cases it may be desirable to perform maps within maps. To do this, the function provided to the outer map needs to include a call to `daemons()` to set daemons used by the inner map.
+
+To prevent accidental proliferation of processes on the same machine, setting local daemons of the form `daemons(6)` from within a function provided to `mirai_map()` will error. As an example, 8 daemons created in the outer map, which each then create 8 in the inner map leads to 64 daemons being created.
+
+It is far more common (and useful) for these to be created across different machines. Creating and launching remote daemons is permitted in all cases.
+
+The above limitation does however prevent a legitimate use pattern: when the outer daemons are launched on remote machines, and you wish to launch inner daemons locally on each of those machines.
+
+The solution in such a case is to use 'remote' daemons which are in fact identical to local daemons.
+Instead of a single call to:
+```r
+daemons(n)
+```
+Instead, make 2 separate calls to:
+```r
+⁠daemons(url = local_url())
+launch_local(n)
+```
+This is permitted from within a mirai map operation.

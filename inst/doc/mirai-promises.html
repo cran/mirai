@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 <meta name="generator" content="litedown 0.7">
-<title></title>
+<title>Promises - Shiny and Plumber</title>
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -113,34 +113,20 @@ section.footnotes {
 </head>
 <body>
 <div class="frontmatter">
-<div class="title"><h1><ol start="3">
-<li>Promises - Shiny and Plumber</li>
-</ol></h1></div>
+<div class="title"><h1>Promises - Shiny and Plumber</h1></div>
 </div>
 <div class="body">
-<h3 id="sec:table-of-contents">Table of Contents</h3>
-<ol>
-<li><a href="#event-driven-promises">Event-driven Promises</a></li>
-<li><a href="#the-one-million-promises-challenge">The One Million Promises Challenge</a></li>
-<li><a href="#shiny-extendedtask-introduction">Shiny ExtendedTask: Introduction</a></li>
-<li><a href="#shiny-extendedtask-cancellation">Shiny ExtendedTask: Cancellation</a></li>
-<li><a href="#shiny-extendedtask-generative-art">Shiny ExtendedTask: Generative Art</a></li>
-<li><a href="#shiny-extendedtask-mirai-map">Shiny ExtendedTask: mirai map</a></li>
-<li><a href="#shiny-async-coin-flips">Shiny Async: Coin Flips</a></li>
-<li><a href="#shiny-async-progress-bar">Shiny Async: Progress Bar</a></li>
-<li><a href="#plumber-get-endpoint">Plumber GET Endpoint</a></li>
-<li><a href="#plumber-post-endpoint">Plumber POST Endpoint</a></li>
-</ol>
-<h3 id="sec:event-driven-promises">Event-driven promises</h3>
-<p><code>mirai</code> supplies its own <code>as.promise()</code> method, allowing it to be used as a promise from the <a href="https://rstudio.github.io/promises/"><code>promises</code></a> package.</p>
-<p>These are next-generation, event-driven promises, developed in collaboration with Joe Cheng (creator of Shiny).</p>
+<h3 id="sec:1-event-driven-promises">1. Event-driven promises</h3>
+<p><code>mirai</code> supplies its own <code>as.promise()</code> method, allowing it to be readily converted to a promise from the <a href="https://rstudio.github.io/promises/"><code>promises</code></a> package. See the vignettes for the promises package for a full treatment.</p>
+<p>A mirai may be piped directly using the promise pipe <code>%...&gt;%</code>, which implicitly calls <code>as.promise()</code> on it. Similarly, all promise-aware functions such as <code>promises::then()</code> or <code>shiny::ExtendedTask$new()</code> accept a mirai directly.</p>
+<p>Alternatively, a mirai may be explicitly converted to a promise by <code>as.promise()</code>, which then allows using the methods <code>$then()</code>, <code>$finally()</code> etc. directly from the promise object.</p>
+<p>Whilst normal usage of a mirai involves collecting its value, a promise instead registers an action to be taken as soon as a mirai resolves. This will happen automatically if the R session is idle at the top prompt, or if within a loop or function where <code>later::run_now()</code> is being called periodically to service promise actions (e.g. in Shiny).</p>
+<p>For a mirai promise, the mirai’s value is passed to the <code>onFulfilled</code> argument of <code>promises::then()</code> if no error has occurred, and the mirai’s <code>errorValue</code> is passed to the <code>onRejected</code> argument if an error has occured.</p>
+<p>Promises converted from mirai are next-generation, event-driven promises, developed in collaboration with Joe Cheng (creator of Shiny).</p>
 <ul>
-<li>Does not require each promise to be polled for completion in a background loop like other promises.</li>
-<li>Instead, promise actions are automatically triggered as soon as each ‘mirai’ resolves (asynchronously).</li>
-<li>Allows for much higher responsiveness (zero latency) and massive scalability (thousands or even millions of promises).</li>
+<li>Promise actions are triggered as soon as each mirai resolves, without time-polling for completion as a <code>future_promise()</code> does.</li>
+<li>Allows for much higher responsiveness (zero latency) and massive scalability (thousands or even millions of concurrent promises).</li>
 </ul>
-<p>A ‘mirai’ may be piped directly using the promise pipe <code>%...&gt;%</code>, which implicitly calls <code>as.promise()</code> on the ‘mirai’. Similarly all promise-aware functions such as <code>promises::then()</code> or <code>shiny::ExtendedTask$new()</code> which take a promise can also take a ‘mirai’ (using <code>promises</code> &gt;= 1.3.0).</p>
-<p>Alternatively, a ‘mirai’ may be explicitly converted into a promise by <code>as.promise()</code>, which then allows using the methods <code>$then()</code>, <code>$finally()</code> etc. directly.</p>
 <p>The following example outputs “hello” to the console after one second when the ‘mirai’ resolves.</p>
 <pre><code class="language-r">library(mirai)
 library(promises)
@@ -166,9 +152,8 @@ m[]
 <pre><code class="language-r">env$res
 #&gt; [1] &quot;hello&quot;
 </code></pre>
-<p>A <code>mirai_map</code> also has an <code>as.promise()</code> method. It will resolve when the entire map operation completes or at least one mirai in the map is rejected.</p>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:the-one-million-promises-challenge">The One Million Promises Challenge</h3>
+<p>A <code>mirai_map</code> also has an <code>as.promise()</code> method. It resolves when the entire map operation completes or at least one mirai in the map is rejected.</p>
+<h3 id="sec:2-the-one-million-promises-challenge">2. The One Million Promises Challenge</h3>
 <p>The code below is taken from the challenge to launch and collect one million promises. For illustration, the example is scaled down to ten thousand.</p>
 <pre><code class="language-r">library(mirai)
 daemons(8, dispatcher = FALSE)
@@ -177,7 +162,7 @@ r &lt;- 0
 start &lt;- Sys.time()
 m &lt;- mirai_map(1:10000, \(x) x, .promise = \(x) r &lt;&lt;- r + x)
 Sys.time() - start
-#&gt; Time difference of 2.327623 secs
+#&gt; Time difference of 3.19889 secs
 later::run_now()
 r
 #&gt; [1] 50005000
@@ -185,10 +170,9 @@ daemons(0)
 #&gt; [1] 0
 </code></pre>
 <p>The one million promises challenge took 6 mins 25 secs to complete using an Intel i7 11th gen mobile processor with 16GB RAM.</p>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:shiny-extendedtask-introduction">Shiny ExtendedTask: Introduction</h3>
+<h3 id="sec:3-shiny-extendedtask-introduction">3. Shiny ExtendedTask: Introduction</h3>
 <p>mirai is an asynchronous backend to scale <a href="https://shiny.posit.co/">Shiny</a> applications.
-Depending on the options supplied to <code>daemons()</code>, mirai tasks may be distributed across local background processes or networked servers in an efficient and performant manner.</p>
+Depending on the options supplied to <code>daemons()</code>, mirai tasks may be distributed across parallel processes locally or across the network.</p>
 <p>Shiny ExtendedTask allows the creation of scalable Shiny apps, which remain responsive intra-session for each user, as well as inter-session for multiple concurrent users.</p>
 <p>In the example below, the app remains responsive, with the clock continuing to tick whilst the simulated expensive computation is running asynchronously in a parallel process. Also the button is disabled and the plot greyed out until the computation is complete.</p>
 <blockquote>
@@ -255,9 +239,8 @@ shinyApp(ui = ui, server = server)
 </ol>
 <pre><code class="language-r">output$plot &lt;- renderPlot(hist(task$result()))
 </code></pre>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:shiny-extendedtask-cancellation">Shiny ExtendedTask: Cancellation</h3>
-<p>The app below is a demonstration of the cancellation capability added in mirai v2.</p>
+<h3 id="sec:4-shiny-extendedtask-cancellation">4. Shiny ExtendedTask: Cancellation</h3>
+<p>The app below is a demonstration of mirai’s cancellation capability. Cancellation is performed in the same way irrespective of where the mirai task may be executing, locally or remotely.</p>
 <p>It builds on the introductory app by adding a button that sends an infinite sleep extendedTask. This will block execution as we are using a single daemon - any new extendedTasks will be queued behind this never-ending task.
 There is also a button to cancel that blocking task and allow any queued plots to continue processing.</p>
 <p>It works by assigning a reference to the mirai created in the <code>extendedTask$new()</code> method, which can then be passed to <code>stop_mirai()</code>.</p>
@@ -314,8 +297,7 @@ onStop(function() daemons(0))
 shinyApp(ui = ui, server = server)
 </code></pre>
 <p><em>Thanks to Joe Cheng for providing examples on which the above is based.</em></p>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:shiny-extendedtask-generative-art">Shiny ExtendedTask: Generative Art</h3>
+<h3 id="sec:5-shiny-extendedtask-generative-art">5. Shiny ExtendedTask: Generative Art</h3>
 <p>The following app produces pretty spiral patterns.</p>
 <p>The user can add multiple plots, making use of Shiny modules, each having a different calculation time.</p>
 <p>The plots are generated asynchronously, and it is easy to see the practical limitations of the number of daemons set. For example, if updating 4 plots, and there are only 3 daemons, the 4th plot will not start to be generated until one of the other plots has finished.</p>
@@ -421,7 +403,7 @@ with(daemons(3), runApp(app))
 </ol>
 <pre><code class="language-r">output$plot &lt;- renderPlot(plot_result(task$result()))
 </code></pre>
-<h3 id="sec:shiny-extendedtask-mirai-map">Shiny ExtendedTask: mirai map</h3>
+<h3 id="sec:6-shiny-extendedtask-mirai-map">6. Shiny ExtendedTask: mirai map</h3>
 <p>A <code>mirai_map</code> also has an <code>as.promise()</code> method, which allows it to be used directly in a Shiny ExtendedTask. It will resolve when the entire map operation completes or at least one mirai in the map is rejected.</p>
 <p>This example, uses <code>mirai_map()</code> to perform multiple calculations simultaneously in multiple daemons, returning the results asynchronously.</p>
 <pre><code class="language-r">library(shiny)
@@ -467,8 +449,7 @@ server &lt;- function(input, output) {
 app &lt;- shinyApp(ui, server)
 with(daemons(4), runApp(app))
 </code></pre>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:shiny-async-coin-flips">Shiny Async: Coin Flips</h3>
+<h3 id="sec:7-shiny-async-coin-flips">7. Shiny Async: Coin Flips</h3>
 <p>The below example demonstrates how to integrate a <code>mirai_map()</code> operation into a Shiny app in an observer, without using ExtendedTask.</p>
 <p>By specifying the ‘.promise’ argument, this registers a promise action against each mapped operation. These can then be used to update reactive values or otherwise interact with the Shiny app.</p>
 <pre><code class="language-r">library(shiny)
@@ -529,8 +510,7 @@ with(daemons(8, dispatcher = FALSE), {
 })
 </code></pre>
 <p><em>This is an adaptation of an original example provided by Will Landau for use of <code>crew</code> with Shiny. Please see <a href="https://wlandau.github.io/crew/articles/shiny.html">https://wlandau.github.io/crew/articles/shiny.html</a>.</em></p>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:shiny-async-progress-bar">Shiny Async: Progress Bar</h3>
+<h3 id="sec:8-shiny-async-progress-bar">8. Shiny Async: Progress Bar</h3>
 <p>The below example uses a <code>mirai_map()</code> operation in an observer to update a Shiny progress bar with custom messages, and also to update a reactive value once the entire map operation has completed (asynchronously).</p>
 <pre><code class="language-r">library(shiny)
 library(mirai)
@@ -590,15 +570,13 @@ app &lt;- shinyApp(ui, server)
 with(daemons(8), runApp(app))
 </code></pre>
 <p><em>This example adapts a contribution from Davide Magno.</em></p>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:plumber-get-endpoint">Plumber GET Endpoint</h3>
+<h3 id="sec:9-plumber-get-endpoint">9. Plumber GET Endpoint</h3>
 <p>mirai may be used as an asynchronous backend for <a href="https://www.rplumber.io/"><code>plumber</code></a> pipelines.</p>
-<p>In this example, the plumber router code is run in a daemon process itself so that it does not block the interactive process.</p>
+<p>In this example, the plumber router code is run in a daemon process itself so that it does not block the current process - this is useful in interactive sessions, but otherwise just taking the code within the outer <code>mirai()</code> call will suffice.</p>
 <p>The /echo endpoint takes a GET request, sleeps for 1 second (simulating an expensive computation) and simply returns the ‘msg’ request header together with a timestamp and the process ID of the process it is run on.</p>
 <pre><code class="language-r">library(mirai)
 
-# supply SIGINT so the plumber server is interrupted and exits cleanly when finished
-daemons(1L, dispatcher = FALSE, autoexit = tools::SIGINT)
+daemons(1L, dispatcher = FALSE)
 #&gt; [1] 1
 
 m &lt;- mirai({
@@ -645,40 +623,38 @@ res &lt;- lapply(
 )
 collect_aio(res)
 #&gt; [[1]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:55\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[24581]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:39\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[45605]}&quot;
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:55\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[24583]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:40\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[45607]}&quot;
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:55\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[24593]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:40\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[45603]}&quot;
 #&gt; 
 #&gt; [[4]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:56\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[24583]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:39\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[45610]}&quot;
 #&gt; 
 #&gt; [[5]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:55\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[24599]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:39\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[45607]}&quot;
 #&gt; 
 #&gt; [[6]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:56\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[24593]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:40\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[45610]}&quot;
 #&gt; 
 #&gt; [[7]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:56\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[24581]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:39\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[45603]}&quot;
 #&gt; 
 #&gt; [[8]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:56\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[24599]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:40\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[45605]}&quot;
 
 daemons(0)
 #&gt; [1] 0
 </code></pre>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:plumber-post-endpoint">Plumber POST Endpoint</h3>
+<h3 id="sec:10-plumber-post-endpoint">10. Plumber POST Endpoint</h3>
 <p>This is the equivalent using a POST endpoint, accepting a JSON instruction sent as request data.</p>
 <p>Note that <code>req$postBody</code> should always be accessed in the router process and passed in as an argument to the ‘mirai’, as this is retrieved using a connection that is not serializable.</p>
 <pre><code class="language-r">library(mirai)
 
-# supply SIGINT so the plumber server is interrupted and exits cleanly when finished
-daemons(1L, dispatcher = FALSE, autoexit = tools::SIGINT)
+daemons(1L, dispatcher = FALSE)
 #&gt; [1] 1
 
 m &lt;- mirai({
@@ -727,33 +703,32 @@ res &lt;- lapply(
 )
 collect_aio(res)
 #&gt; [[1]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:59\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[24656]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:43\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[45889]}&quot;
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:59\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[24658]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:43\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[45882]}&quot;
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:29:00\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[24656]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:43\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[45886]}&quot;
 #&gt; 
 #&gt; [[4]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:59\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[24664]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:44\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[45884]}&quot;
 #&gt; 
 #&gt; [[5]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:29:00\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[24664]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:43\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[45884]}&quot;
 #&gt; 
 #&gt; [[6]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:29:00\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[24674]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:44\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[45882]}&quot;
 #&gt; 
 #&gt; [[7]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:28:59\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[24674]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:44\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[45889]}&quot;
 #&gt; 
 #&gt; [[8]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-05-22 11:29:00\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[24658]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-06-24 21:29:44\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[45886]}&quot;
 
 daemons(0)
 #&gt; [1] 0
 </code></pre>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
 </div>
 </body>
 </html>

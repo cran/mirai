@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 <meta name="generator" content="litedown 0.7">
-<title></title>
+<title>Community FAQs</title>
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -113,21 +113,32 @@ section.footnotes {
 </head>
 <body>
 <div class="frontmatter">
-<div class="title"><h1><ol start="7">
-<li>Community FAQs</li>
-</ol></h1></div>
+<div class="title"><h1>Community FAQs</h1></div>
 </div>
 <div class="body">
-<h3 id="sec:table-of-contents">Table of Contents</h3>
-<ol>
-<li><a href="#migration-from-future_promise">Migration from future_promise</a></li>
-<li><a href="#setting-the-random-seed">Setting the Random Seed</a></li>
-</ol>
-<h3 id="sec:migration-from-future-promise">Migration from future_promise</h3>
-<p>It should be mostly straightforward translating ExtendedTask code that was originally written for use with a <code>future_promise()</code>.</p>
-<p>The most important difference is that a <code>future_promise()</code> tries to infer all the global variables that are required by the expression. However this can easily run into edge cases, or behave in a way that you would not expect. As this behaviour is not transparent, in the best case you will know something has gone wrong, but in the worst case could silently produce the wrong result. In both cases, you would not know until you are trying to debug the situation.</p>
-<p>A mirai on the other hand, requires that the expression be self-contained, hence any variables or helper functions are passed in via the <code>...</code> of <code>mirai()</code>. This simple requirement allows for transparent and reliable behaviour that remains completely robust over time. It also means that you can easily reason about your code, and is designed to save you time in the long run.</p>
-<h4 id="sec:special-case-example">Special Case: <code>...</code> Example</h4>
+<p>This vignette is designed to provide a knowledgebase for questions posed by the community, and will be added to over time.</p>
+<h3 id="sec:1-migration-from-future-promise">1. Migration from <code>future_promise()</code></h3>
+<p>For use within Shiny, it should be straightforward translating ExtendedTask or other async code that was originally written for use with a <code>promises::future_promise()</code>.</p>
+<p>Note: <code>future_promise()</code> exists in the promises package as we had to find a workaround to make <code>future(...)</code> always async.
+<code>future(...)</code> by itself is not always async as it blocks as soon as it runs out of parallel processes on which to run tasks.</p>
+<p><code>mirai()</code> on the other hand is built as an async framework, so there’s no need for an additional function from the promises package.
+You should simply use a <code>mirai()</code> directly in place of a <code>future_promise()</code>.</p>
+<p><strong>Globals:</strong></p>
+<p>One important difference is that a <code>future_promise()</code> by default tries to infer all the global variables that are required by the expression.
+If your code depended on this convenience feature then you will need to instead pass these in via the <code>...</code> of <code>mirai()</code>.
+A mirai requires that the expression be self-contained, with any variables or helper functions explicitly supplied to it.</p>
+<p>On the other hand, if your code previously used the <code>globals</code> argument to supply these variables, then you can often pass that directly to the <code>.args</code> of <code>mirai()</code>.
+Note that this would only work in the case of a named list and not the other forms that <code>globals</code> can take.</p>
+<p>Regardless of using a <code>mirai()</code> or <code>future_promise()</code>, we recommend that you pass globals explicitly in production code.
+This is as globals detection is never 100% perfect, and there is always some element of guesswork.
+Edge cases can lead to unpredictable failures or silently incorrect results.
+Explicit passing of variables allows for transparent and reliable behaviour, that remains completely robust over time.</p>
+<p><strong>Capture globals using <code>environment()</code>:</strong></p>
+<p><code>mirai()</code> allows passing an environment to <code>...</code> or to <code>.args</code>.
+This is especially useful for Shiny ExtendedTask, where it is invoked with a set of arguments.
+By using <code>mirai::mirai({...}, environment())</code> you automatically capture the variables provided to the invoke method.
+See the Shiny vignette for example usage.</p>
+<p><strong>Special Case: <code>...</code>:</strong></p>
 <p>A Shiny app may use the following <code>future_promise()</code> code within the server component:</p>
 <pre><code class="language-r">func &lt;- function(x, y){
   Sys.sleep(y)
@@ -140,18 +151,13 @@ task &lt;- ExtendedTask$new(
 
 observeEvent(input$btn, task$invoke(input$n, input$delay))
 </code></pre>
-<p>The equivalent may be achieved in <code>mirai()</code> in the following way:</p>
+<p>The equivalent in <code>mirai()</code> is achieved by:</p>
 <pre><code class="language-r">task &lt;- ExtendedTask$new(
   function(...) mirai(func(...), func = func, .args = environment())
 ) |&gt; bind_task_button(&quot;btn&quot;)
 </code></pre>
-<ol>
-<li><code>environment()</code> captures the <code>...</code> to be used by the function within the mirai expression, and can be supplied via <code>.args</code>.</li>
-<li>The definition for <code>func</code> is passed through in the usual way.</li>
-</ol>
-<p><em>This example comes from a question raised by Simon Smart.</em></p>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:setting-the-random-seed">Setting the Random Seed</h3>
+<p>Note that here <code>environment()</code> captures the <code>...</code> that’s then used within the mirai expression.</p>
+<h3 id="sec:2-setting-the-random-seed">2. Setting the random seed</h3>
 <p>The following example was raised as being potentially counter-intuitive, given that default ‘cleanup’ settings at each daemon ensures that variables in the global environment, of which <code>.Random.seed</code> is one, do not carry over to subsequent runs.</p>
 <pre><code class="language-r">library(mirai)
 daemons(4)
@@ -163,10 +169,10 @@ vec2 &lt;- 4:6
 # Returns different values: good
 mirai_map(list(vec, vec2), \(x) rnorm(x))[]
 #&gt; [[1]]
-#&gt; [1]  0.4182510 -0.1533799  0.4631808
+#&gt; [1]  0.3339189 -0.6827722 -0.3222064
 #&gt; 
 #&gt; [[2]]
-#&gt; [1]  0.7438234 -1.5495708  1.3562752
+#&gt; [1] -0.4858116  0.2750812 -0.1216267
 
 # Set the seed in the function
 mirai_map(list(vec, vec2), \(x) {
@@ -196,8 +202,9 @@ The random seed is not reset after each mirai call to ensure that however many r
 <p>Hence normally, the random seed should be set once on the host process when daemons are created, rather than in each daemon.</p>
 <p>If it is required to set the seed in each daemon, this should be done using an independent method and set each time random draws are required.
 Another option would be to set the random seed within a local execution scope to prevent the global random seed on each daemon from being affected.</p>
-<p><em>This example comes from a question raised by Etienne Bacher.</em></p>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
+<h3 id="sec:3-accessing-package-functions-during-development">3. Accessing package functions during development</h3>
+<p>A mirai call usually requires package-namespaced functions. However the latest version of a package in development is often loaded dynamically by <code>devtools::load_all()</code> or the underlying <code>pkgload::load_all()</code> for quick iteration.</p>
+<p>In this case, use <code>everywhere()</code> to also call <code>devtools::load_all()</code> on all (local) daemons. They will then have access to the same functions as your host session for subsequent <code>mirai()</code> calls.</p>
 </div>
 </body>
 </html>

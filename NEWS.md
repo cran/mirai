@@ -1,3 +1,28 @@
+# mirai 2.4.0
+
+#### Behavioural Changes
+
+* An ephemeral daemon started by `mirai()` without setting daemons now exits as soon as the parent process does rather than finish the task.
+  For previous behaviour use: `with(daemons(1L, dispatcher = FALSE, autoexit = NA), mirai(...))`.
+* Change in `daemon()` defaults:
+  + Argument `autoexit` default of `TRUE` now ensures daemons are terminated along with the parent process.
+    Set to `NA` to retain the previous behaviour of having them automatically exit after completing any in-progress tasks.
+  + Argument `dispatcher` now defaults to `TRUE`.
+* Calling `daemons()` to create local daemons now errors if performed within a `mirai_map()` call.
+  This guards against excessive spawning of local processes on a single machine.
+
+#### New Features
+
+* Adds `cluster_config()` to launch remote daemons via HPC resource managers for Slurm, SGE, Torque, PBS and LSF clusters.
+* Adds `require_daemons()` as a developer function that prompts the user to set daemons if not already set, with a clickable function link if the cli package is available.
+
+#### Updates
+
+* Simplifies launches when using dispatcher - `launch_remote()` commands are now the same irrespective of the number of launches.
+  This is as daemons now retrieve the next RNG stream from dispatcher rather than the `rs` argument to `daemon()`.
+* Deprecated `call_mirai_()` is now removed.
+* Requires nanonext >= 1.6.1.
+
 # mirai 2.3.0
 
 #### Behavioural Changes

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 <meta name="generator" content="litedown 0.7">
-<title></title>
+<title>Communications Backend for R</title>
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -113,21 +113,14 @@ section.footnotes {
 </head>
 <body>
 <div class="frontmatter">
-<div class="title"><h1><ol start="5">
-<li>Mirai Clusters - Base R</li>
-</ol></h1></div>
+<div class="title"><h1>Communications Backend for R</h1></div>
 </div>
 <div class="body">
-<h3 id="sec:table-of-contents">Table of Contents</h3>
-<ol>
-<li><a href="#alternative-communications-backend-for-r">Alternative Communications Backend for R</a></li>
-<li><a href="#foreach-support">Foreach Support</a></li>
-</ol>
-<h3 id="sec:alternative-communications-backend-for-r">Alternative Communications Backend for R</h3>
+<h3 id="sec:1-mirai-parallel-clusters">1. Mirai Parallel Clusters</h3>
 <p>mirai provides an alternative communications backend for R.
 This functionality was developed to fulfil a request by R Core at R Project Sprint 2023.</p>
-<p>A ‘miraiCluster’ is recognised as one of the official cluster types, and may be created by <code>parallel::makeCluster(type = &quot;MIRAI&quot;)</code> from R 4.5 onwards.
-This function calls <code>make_cluster()</code>, which may also be used to directly create a ‘miraiCluster’.</p>
+<p>A ‘miraiCluster’ is recognised as one of the official cluster types in R 4.5, and may be created by <code>parallel::makeCluster(type = &quot;MIRAI&quot;)</code>.
+This function calls <code>make_cluster()</code>, which may also be used to create a ‘miraiCluster’ directly.</p>
 <ul>
 <li>Specify ‘n’ to launch nodes on the local machine.</li>
 <li>Specify ‘url’ for receiving connections from remote nodes.</li>
@@ -139,7 +132,7 @@ library(mirai)
 
 cl &lt;- makeCluster(6, type = &quot;MIRAI&quot;)
 cl
-#&gt; &lt; miraiCluster | ID: `0` nodes: 6 active: TRUE &gt;
+#&gt; &lt; miraiCluster | ID: `26` nodes: 6 active: TRUE &gt;
 parLapply(cl, iris, mean)
 #&gt; $Sepal.Length
 #&gt; [1] 5.843333
@@ -162,7 +155,7 @@ parLapply(cl, iris, mean)
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;ipc:///tmp/468d15baad12987297924d3a&quot;
+#&gt; [1] &quot;abstract://eb809f13097f9a03ba5cb5bb&quot;
 stopCluster(cl)
 </code></pre>
 <p>Making a cluster specifying ‘url’ without ‘remote’ causes the shell commands for manual deployment of nodes to be printed to the console.</p>
@@ -170,19 +163,16 @@ stopCluster(cl)
 #&gt; Shell commands for deployment on nodes:
 #&gt; 
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.2.179:49947&quot;,dispatcher=FALSE,cleanup=FALSE,rs=c(10407,1353351353,-1043629786,-29560465,-1602291484,-248192363,-1183841710))'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.1.71:45111&quot;,dispatcher=FALSE,cleanup=FALSE,rs=c(10407,2115398811,-2011965664,-789584735,1666662894,1025958295,-751939348))'
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.2.179:49947&quot;,dispatcher=FALSE,cleanup=FALSE,rs=c(10407,-440398556,800923107,1329159622,2121404046,1811662990,825393618))'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.1.71:45111&quot;,dispatcher=FALSE,cleanup=FALSE,rs=c(10407,1495377764,161492535,-451945023,2093847167,-1105055737,1737365375))'
 stop_cluster(cl)
 </code></pre>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
-<h3 id="sec:foreach-support">Foreach Support</h3>
+<h3 id="sec:2-foreach-support">2. Foreach Support</h3>
 <p>A ‘miraiCluster’ may also be registered by <a href="https://cran.r-project.org/package=doParallel"><code>doParallel</code></a> for use with the <a href="https://cran.r-project.org/package=foreach"><code>foreach</code></a> package.</p>
 <p>Running some parallel examples for the <code>foreach()</code> function:</p>
 <pre><code class="language-r">library(doParallel)
-#&gt; Loading required package: foreach
-#&gt; Loading required package: iterators
 library(foreach)
 
 cl &lt;- makeCluster(6, type = &quot;MIRAI&quot;)
@@ -192,10 +182,10 @@ registerDoParallel(cl)
 m &lt;- matrix(rnorm(9), 3, 3)
 foreach(i = 1:nrow(m), .combine = rbind) %dopar%
   (m[i, ] / mean(m[i, ]))
-#&gt;                [,1]        [,2]      [,3]
-#&gt; result.1   1.101225   0.4266552  1.472120
-#&gt; result.2  -1.268963   1.0011693  3.267793
-#&gt; result.3 -10.306468 -20.4872993 33.793767
+#&gt;              [,1]       [,2]       [,3]
+#&gt; result.1 5.989529  1.1456413 -4.1351703
+#&gt; result.2 3.745199 -0.5989935 -0.1462058
+#&gt; result.3 3.007812  2.0183943 -2.0262067
 
 # simple parallel matrix multiply
 a &lt;- matrix(1:16, 4, 4)
@@ -210,7 +200,6 @@ foreach(b = iterators::iter(b, by='col'), .combine = cbind) %dopar%
 
 stopCluster(cl)
 </code></pre>
-<p><a href="#table-of-contents">« Back to ToC</a></p>
 </div>
 </body>
 </html>

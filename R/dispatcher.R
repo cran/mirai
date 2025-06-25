@@ -3,8 +3,8 @@
 #' Dispatcher
 #'
 #' Dispatches tasks from a host to daemons for processing, using FIFO
-#' scheduling, queuing tasks as required. Daemon / dispatcher settings may be
-#' controlled by [daemons()] and this function should not need to be invoked
+#' scheduling, queuing tasks as required. Daemon / dispatcher settings are
+#' controlled by [daemons()] and this function should not need to be called
 #' directly.
 #'
 #' The network topology is such that a dispatcher acts as a gateway between the
@@ -14,9 +14,8 @@
 #' task.
 #'
 #' @inheritParams daemon
-#' @param host the character host URL to dial (where tasks are sent from),
-#'   including the port to connect to e.g. 'tcp://hostname:5555' or
-#'   'tcp://10.75.32.70:5555'.
+#' @param host the character URL dispatcher should dial in to, typically an IPC
+#'   address.
 #' @param url (optional) the character URL dispatcher should listen at (and
 #'   daemons should dial in to), including the port to connect to e.g.
 #'   'tcp://hostname:5555' or 'tcp://10.75.32.70:5555'. Specify 'tls+tcp://' to
@@ -54,15 +53,10 @@ dispatcher <- function(
   cv <- cv()
   sock <- socket("rep")
   on.exit(reap(sock))
-  pipe_notify(sock, cv, remove = TRUE, flag = TRUE)
-  dial_and_sync_socket(sock, host)
+  pipe_notify(sock, cv, remove = TRUE, flag = flag_value())
+  dial_sync_socket(sock, host)
 
-  ctx <- .context(sock)
-  req <- recv_aio(ctx, mode = 1L, cv = cv)
-  while(!until(cv, .limit_long))
-    cv_signal(cv) || wait(cv) || return()
-  res <- collect_aio(req)
-
+  res <- recv(sock, mode = 1L, block = TRUE)
   if (nzchar(res[[1L]])) Sys.setenv(R_DEFAULT_PACKAGES = res[[1L]]) else
     Sys.unsetenv("R_DEFAULT_PACKAGES")
 
@@ -84,16 +78,16 @@ dispatcher <- function(
   m <- monitor(psock, cv)
   listen(psock, url = url, tls = tls, fail = 2L)
 
-  msgid <- 0L
   inq <- outq <- list()
   events <- integer()
+  count <- 0L
   envir <- new.env(hash = FALSE)
   if (is.numeric(rs)) `[[<-`(envir, "stream", as.integer(rs))
   if (auto) {
     dots <- parse_dots(...)
     output <- attr(dots, "output")
     for (i in seq_len(n))
-      launch_daemon(wa3(url, dots, next_stream(envir)), output)
+      launch_daemon(wa3(url, dots), output)
     for (i in seq_len(n))
       while(!until(cv, .limit_long))
         cv_signal(cv) || wait(cv) || return()
@@ -101,12 +95,8 @@ dispatcher <- function(
     changes <- read_monitor(m)
     for (item in changes)
       item > 0 && {
-        outq[[as.character(item)]] <- as.environment(list(
-          pipe = item,
-          msgid = 0L,
-          ctx = NULL
-        ))
-        send(psock, serial, mode = 1L, block = TRUE, pipe = item)
+        outq[[as.character(item)]] <- `[[<-`(`[[<-`(`[[<-`(new.env(), "pipe", item), "msgid", 0L), "ctx", NULL)
+        send(psock, list(next_stream(envir), serial), mode = 1L, block = TRUE, pipe = item)
       }
   } else {
     listener <- attr(psock, "listener")[[1L]]
@@ -115,7 +105,7 @@ dispatcher <- function(
       url <- sub_real_port(opt(listener, "tcp-bound-port"), url)
   }
 
-  send(ctx, c(Sys.getpid(), url), mode = 2L, block = TRUE)
+  send(sock, c(Sys.getpid(), url), mode = 2L, block = TRUE)
 
   ctx <- .context(sock)
   req <- recv_aio(ctx, mode = 8L, cv = cv)
@@ -128,23 +118,14 @@ dispatcher <- function(
       is.null(changes) || {
         for (item in changes) {
           if (item > 0) {
-            outq[[as.character(item)]] <- as.environment(list(
-              pipe = item,
-              msgid = 0L,
-              ctx = NULL
-            ))
-            send(psock, serial, mode = 1L, block = TRUE, pipe = item)
+            outq[[as.character(item)]] <- `[[<-`(`[[<-`(`[[<-`(new.env(), "pipe", item), "msgid", 0L), "ctx", NULL)
+            send(psock, list(next_stream(envir), serial), mode = 1L, block = TRUE, pipe = item)
             cv_signal(cv)
           } else {
             id <- as.character(-item)
             if (length(outq[[id]])) {
               outq[[id]][["msgid"]] &&
-                send(
-                  outq[[id]][["ctx"]],
-                  .connectionReset,
-                  mode = 1L,
-                  block = TRUE
-                )
+                send(outq[[id]][["ctx"]], .connectionReset, mode = 1L, block = TRUE)
               if (length(outq[[id]][["dmnid"]]))
                 events <- c(events, outq[[id]][["dmnid"]])
               outq[[id]] <- NULL
@@ -164,6 +145,7 @@ dispatcher <- function(
               length(outq),
               length(inq),
               sum(as.logical(unlist(lapply(outq, .subset2, "msgid"), use.names = FALSE))),
+              count,
               events
             )
             events <- integer()
@@ -186,8 +168,8 @@ dispatcher <- function(
           }
           send(ctx, found, mode = 2L, block = TRUE)
         } else {
-          msgid <- msgid + 1L
-          inq[[length(inq) + 1L]] <- list(ctx = ctx, req = value, msgid = msgid)
+          count <- count + 1L
+          inq[[length(inq) + 1L]] <- list(ctx = ctx, req = value, msgid = .read_header(value))
         }
         ctx <- .context(sock)
         req <- recv_aio(ctx, mode = 8L, cv = cv)

@@ -2,14 +2,13 @@
 #'
 #' Designed for simplicity, a 'mirai' evaluates an R expression asynchronously
 #' in a parallel process, locally or distributed over the network. Modern
-#' networking and concurrency, built on 'nanonext' and 'NNG' (Nanomsg Next Gen),
-#' ensures reliable and efficient scheduling over fast inter-process
-#' communications or TCP/IP secured by TLS. Distributed computing can launch
-#' remote resources via SSH or cluster managers. A queued architecture readily
-#' handles more tasks than available processes, requiring no storage on the file
-#' system. Innovative features include event-driven promises, asynchronous
-#' parallel map, and automatic serialization of otherwise non-exportable
-#' reference objects.
+#' networking and concurrency, built on 'nanonext' and 'NNG', ensures reliable
+#' scheduling over fast inter-process communications or TCP/IP secured by TLS.
+#' Launch remote resources via SSH or cluster managers for distributed
+#' computing. The queued architecture scales efficiently to millions of tasks
+#' over thousands of connections, requiring no storage on the file system.
+#' Innovative features include event-driven promises, asynchronous parallel map,
+#' and seamless serialization of otherwise non-exportable reference objects.
 #'
 #' @section Notes:
 #'
@@ -26,11 +25,11 @@
 #' `vignette("mirai", package = "mirai")`
 #'
 #' @importFrom nanonext .advance call_aio call_aio_ collect_aio collect_aio_
-#'   .context cv cv_signal cv_value dial .interrupt ip_addr is_error_value .keep
-#'   listen .mark mclock monitor msleep nng_error opt opt<- parse_url pipe_id
-#'   pipe_notify random .read_marker read_monitor reap recv recv_aio request
-#'   send socket stat stop_aio tls_config unresolved .unresolved until wait
-#'   write_cert
+#'   .context cv cv_signal cv_value dial .interrupt ip_addr
+#'   is_error_value .keep listen .mark mclock monitor msleep nng_error opt opt<-
+#'   parse_url pipe_id pipe_notify random .read_header .read_marker read_monitor
+#'   reap recv recv_aio request send serial_config socket stat stop_aio
+#'   tls_config unresolved .unresolved until wait write_cert
 #'
 "_PACKAGE"
 
@@ -83,23 +82,9 @@
     n_zero = "the number of daemons must be zero or greater",
     not_found = "compute profile `%s` not found",
     numeric_n = "`n` must be numeric, did you mean to provide `url`?",
-    requires_daemons = "daemons must be set prior to a map operation",
     sync_daemons = "mirai: initial sync with daemon(s) [%d secs elapsed]",
-    sync_dispatcher = "mirai: initial sync with dispatcher [%d secs elapsed]"
+    sync_dispatcher = "mirai: initial sync with dispatcher [%d secs elapsed]",
+    within_map = "cannot create local daemons from within mirai map"
   ),
   hash = TRUE
 )
-
-# Deprecated  ------------------------------------------------------------------
-
-#' Call mirai
-#'
-#' `call_mirai_` is deprecated and exported for historical compatibility only.
-#' It will be removed in a future package version. Use [call_mirai()] instead.
-#'
-#' @inheritParams call_mirai
-#'
-#' @keywords internal
-#' @export
-#'
-call_mirai_ <- call_aio_

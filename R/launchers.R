@@ -10,9 +10,11 @@
 #'
 #' Daemons must already be set for launchers to work.
 #'
-#' The generated command contains the argument `rs` specifying the length 7
-#' L'Ecuyer-CMRG random seed supplied to the daemon. The values will be
-#' different each time the function is called.
+#' The generated command for non-dispatcher daemons contain the argument `rs`
+#' specifying the length 7 L'Ecuyer-CMRG random seed supplied to the daemon. The
+#' values will be different each time the function is called. For dispatcher
+#' daemons, the equivalent random seed is obtained automatically from
+#' dispatcher, and hence `rs` is not specified in this case.
 #'
 #' @inheritParams mirai
 #' @param n integer number of daemons.
@@ -54,8 +56,8 @@ launch_local <- function(n = 1L, ..., tls = NULL, .compute = NULL) {
   if (is.null(.compute)) .compute <- .[["cp"]]
   envir <- ..[[.compute]]
   is.null(envir) && stop(._[["daemons_unset"]])
-  url <- envir[["urls"]]
-  write_args <- if (is.null(envir[["msgid"]])) wa2 else wa3
+  url <- envir[["url"]]
+  write_args <- if (is.null(envir[["dispatcher"]])) wa2 else wa3
   dots <- if (missing(..1)) envir[["dots"]] else parse_dots(...)
   output <- attr(dots, "output")
   if (is.null(tls)) tls <- envir[["tls"]]
@@ -98,8 +100,8 @@ launch_remote <- function(
   n <- as.integer(n)
   envir <- ..[[.compute]]
   is.null(envir) && stop(._[["daemons_unset"]])
-  url <- envir[["urls"]]
-  write_args <- if (is.null(envir[["msgid"]])) wa2 else wa3
+  url <- envir[["url"]]
+  write_args <- if (is.null(envir[["dispatcher"]])) wa2 else wa3
   dots <- if (missing(..1)) envir[["dots"]] else parse_dots(...)
   if (is.null(tls)) tls <- envir[["tls"]]
 
@@ -162,17 +164,22 @@ launch_remote <- function(
     for (cmd in cmds)
       system2(
         command,
-        args = `[<-`(args, find_dot(args), if (quote) shQuote(cmd) else cmd),
+        args = if (is.null(quote)) {
+          arg <- `[<-`(args, find_dot(args), cmd)
+          c("-c", shQuote(sprintf("%s%s%s", arg[1L], arg[2L], arg[3L])))
+        } else {
+          `[<-`(args, find_dot(args), if (quote) shQuote(cmd) else cmd)
+        },
         wait = FALSE
       )
 
   `class<-`(cmds, "miraiLaunchCmd")
 }
 
-#' Generic and SSH Remote Launch Configuration
+#' Generic Remote Launch Configuration
 #'
-#' `remote_config` provides a flexible generic framework for generating the
-#' shell commands to deploy daemons remotely.
+#' Provides a flexible generic framework for generating the shell commands to
+#' deploy daemons remotely.
 #'
 #' @param command the command used to effect the daemon launch on the remote
 #'   machine as a character string (e.g. `"ssh"`). Defaults to `"ssh"` for
@@ -184,16 +191,19 @@ launch_remote <- function(
 #'   that must include `"."` as an element, which will be substituted for the
 #'   daemon launch command. Alternatively, a list of such character vectors to
 #'   effect multiple launches (one for each list element).
-#' @param rscript (optional) name / path of the Rscript executable on the remote
-#'   machine. The default assumes `"Rscript"` is on the executable search
-#'   path. Prepend the full path if necessary. If launching on Windows,
-#'   `"Rscript"` should be replaced with `"Rscript.exe"`.
+#' @param rscript \[default "Rscript"\] assumes the R executable is on the
+#'   search path. Replace with the full path of the Rscript executable on the
+#'   remote machine if necessary. If launching on Windows, `"Rscript"` should be
+#'   replaced with `"Rscript.exe"`.
 #' @param quote \[default FALSE\] logical value whether or not to quote the
 #'   daemon launch command (not required for Slurm `"srun"` for example, but
 #'   required for Slurm `"sbatch"` or `"ssh"`).
 #'
 #' @return A list in the required format to be supplied to the `remote` argument
-#'   of [launch_remote()], [daemons()], or [make_cluster()].
+#'   of [daemons()] or [launch_remote()].
+#'
+#' @seealso [ssh_config()] for SSH launch configurations, or [cluster_config()]
+#'   for cluster resource manager launch configurations.
 #'
 #' @examples
 #' # Slurm srun example
@@ -203,15 +213,7 @@ launch_remote <- function(
 #'   rscript = file.path(R.home("bin"), "Rscript")
 #' )
 #'
-#' # Slurm sbatch requires 'quote = TRUE'
-#' remote_config(
-#'   command = "sbatch",
-#'   args = c("--mem 512", "-n 1", "--wrap", "."),
-#'   rscript = file.path(R.home("bin"), "Rscript"),
-#'   quote = TRUE
-#' )
-#'
-#' # SSH also requires 'quote = TRUE'
+#' # SSH requires 'quote = TRUE'
 #' remote_config(
 #'   command = "/usr/bin/ssh",
 #'   args = c("-fTp 22 10.75.32.90", "."),
@@ -233,19 +235,13 @@ remote_config <- function(
   quote = FALSE
 ) {
   if (is.list(args)) lapply(args, find_dot) else find_dot(args)
-  list(
-    command = command,
-    args = args,
-    rscript = rscript,
-    quote = quote,
-    tunnel = FALSE
-  )
+  list(command = command, args = args, rscript = rscript, quote = quote, tunnel = FALSE)
 }
 
 #' SSH Remote Launch Configuration
 #'
-#' `ssh_config` generates a remote configuration for launching daemons over
-#' SSH, with the option of SSH tunnelling.
+#' Generates a remote configuration for launching daemons over SSH, with the
+#' option of SSH tunnelling.
 #'
 #' @param remotes the character URL or vector of URLs to SSH into, using the
 #'   'ssh://' scheme and including the port open for SSH connections (defaults
@@ -255,6 +251,9 @@ remote_config <- function(
 #'   the 'SSH Tunnelling' section below for further details.
 #' @param timeout \[default 10\] maximum time allowed for connection setup in
 #'   seconds.
+#' @inheritParams remote_config
+#'
+#' @inherit remote_config return
 #'
 #' @section SSH Direct Connections:
 #'
@@ -289,6 +288,9 @@ remote_config <- function(
 #' This provides a means of launching daemons on any machine you are able to
 #' access via SSH, be it on the local network or the cloud.
 #'
+#' @seealso [cluster_config()] for cluster resource manager launch
+#'   configurations, or [remote_config()] for generic configurations.
+#'
 #' @examples
 #' # direct SSH example
 #' ssh_config(c("ssh://10.75.32.90:222", "ssh://nodename"), timeout = 5)
@@ -313,7 +315,6 @@ remote_config <- function(
 #' )
 #' }
 #'
-#' @rdname remote_config
 #' @export
 #'
 ssh_config <- function(
@@ -330,23 +331,105 @@ ssh_config <- function(
   args <- vector(mode = "list", length = length(remotes))
   for (i in seq_along(args)) {
     args[[i]] <- c(
-      sprintf(
-        "-o ConnectTimeout=%s -fTp %s",
-        as.character(timeout),
-        ports[[i]]
-      ),
+      sprintf("-o ConnectTimeout=%s -fTp %s", as.character(timeout), ports[[i]]),
       hostnames[[i]],
       "."
     )
   }
 
-  list(
-    command = command,
-    args = args,
-    rscript = rscript,
-    quote = TRUE,
-    tunnel = isTRUE(tunnel)
+  list(command = command, args = args, rscript = rscript, quote = TRUE, tunnel = isTRUE(tunnel))
+}
+
+#' Cluster Remote Launch Configuration
+#'
+#' Generates a remote configuration for launching daemons using an HPC cluster
+#' resource manager such as Slurm sbatch, SGE and Torque/PBS qsub or LSF bsub.
+#'
+#' @param command \[default "sbatch"\] for Slurm. Replace with "qsub" for
+#'   SGE / Torque / PBS, or "bsub" for LSF. See examples below.
+#' @param options \[default ""\] options as would be supplied inside a script
+#'   file passed to `command`, e.g. "#SBATCH --mem=10G", each separated by a new
+#'   line. See examples below.
+#'   \cr Other shell commands e.g. to change working directory may also be
+#'   included.
+#'   \cr For certain setups, "module load R" as a final line is required, or
+#'   for example "module load R/4.5.0" for a specific R version.
+#'   \cr For the avoidance of doubt, the initial shebang line such as
+#'   "#!/bin/bash" is not required.
+#' @inheritParams remote_config
+#'
+#' @inherit remote_config return
+#'
+#' @seealso [ssh_config()] for SSH launch configurations, or [remote_config()]
+#'   for generic configurations.
+#'
+#' @examples
+#' # Slurm Config:
+#' cluster_config(
+#'   command = "sbatch",
+#'   options = "#SBATCH --job-name=mirai
+#'              #SBATCH --mem=10G
+#'              #SBATCH --output=job.out
+#'              module load R/4.5.0",
+#'   rscript = file.path(R.home("bin"), "Rscript")
+#' )
+#'
+#' # SGE Config:
+#' cluster_config(
+#'   command = "qsub",
+#'   options = "#$ -N mirai
+#'              #$ -l mem_free=10G
+#'              #$ -o job.out
+#'              module load R/4.5.0",
+#'   rscript = file.path(R.home("bin"), "Rscript")
+#' )
+#'
+#' # Torque/PBS Config:
+#' cluster_config(
+#'   command = "qsub",
+#'   options = "#PBS -N mirai
+#'              #PBS -l mem=10gb
+#'              #PBS -o job.out
+#'              module load R/4.5.0",
+#'   rscript = file.path(R.home("bin"), "Rscript")
+#' )
+#'
+#' # LSF Config:
+#' cluster_config(
+#'   command = "bsub",
+#'   options = "#BSUB -J mirai
+#'              #BSUB -M 10000
+#'              #BSUB -o job.out
+#'              module load R/4.5.0",
+#'   rscript = file.path(R.home("bin"), "Rscript")
+#' )
+#'
+#' \dontrun{
+#'
+#' # Launch 2 daemons using the Slurm sbatch defaults:
+#' daemons(
+#'   n = 2,
+#'   url = host_url(),
+#'   remote = cluster_config())
+#' )
+#' }
+#'
+#' @export
+#'
+cluster_config <- function(
+    command = "sbatch",
+    options = "",
+    rscript = "Rscript"
+) {
+  command <- command[[1L]]
+  options <- sub("^[ \t]+", "", options, perl = TRUE)
+  options <- gsub("\n[ \t]+", "\n", options, perl = TRUE)
+  args <- c(
+    sprintf("%s<<'EOF'\n#!/bin/sh\n%s\n", command, options),
+    ".",
+    "\nEOF"
   )
+  list(command = "/bin/sh", args = args, rscript = rscript, quote = NULL)
 }
 
 #' URL Constructors

@@ -183,7 +183,7 @@ mirai <- function(
     recv_mode = 1L,
     timeout = .timeout,
     cv = envir[["cv"]],
-    id = next_msgid(envir)
+    id = envir[["dispatcher"]]
   )
 }
 
@@ -252,7 +252,7 @@ everywhere <- function(.expr, ..., .args = list(), .compute = NULL) {
     )
   )
 
-  if (is.null(envir[["msgid"]])) {
+  if (is.null(envir[["dispatcher"]])) {
     vec <- vector(
       mode = "list",
       length = max(stat(envir[["sock"]], "pipes"), envir[["n"]])
@@ -370,9 +370,8 @@ call_mirai <- call_aio_
 collect_mirai <- function(x, options = NULL) {
   is.list(x) && length(options) || return(collect_aio_(x))
 
-  ensure_cli_initialized()
   dots <- mget(options, envir = .)
-  map(x, dots)
+  mmap(x, dots)
 }
 
 #' mirai (Stop)
