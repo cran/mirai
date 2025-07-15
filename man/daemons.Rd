@@ -38,13 +38,16 @@ and should normally be kept on (for details see Dispatcher section below).}
 \code{\link[=daemon]{daemon()}} if launching daemons. These include \code{asyncdial}, \code{autoexit},
 \code{cleanup}, \code{output}, \code{maxtasks}, \code{idletime} and \code{walltime}.}
 
-\item{seed}{[default NULL] (optional) supply a random seed (single value,
-interpreted as an integer). This is used to inititalise the L'Ecuyer-CMRG
-RNG streams sent to each daemon. Note that reproducible results can be
-expected only for \code{dispatcher = FALSE}, as the unpredictable timing of task
-completions would otherwise influence the tasks sent to each daemon. Even
-for \code{dispatcher = FALSE}, reproducibility is not guaranteed if the order in
-which tasks are sent is not deterministic.}
+\item{seed}{[default NULL] (optional) The default of \code{NULL} initializes
+L'Ecuyer-CMRG RNG streams for each daemon, the same as base R's parallel
+package. Results are statistically-sound, although generally
+non-reproducible, as which tasks are sent to which daemons may be
+non-deterministic, and also depends on the number of daemons.
+\cr (experimental) supply an integer value to instead initialize a
+L'Ecuyer-CMRG RNG stream for the compute profile. This is advanced for each
+mirai evaluation, hence allowing for reproducible results, as the random
+seed is always associated with a given mirai, independently of where it is
+evaluated.}
 
 \item{serial}{[default NULL] (optional, requires dispatcher) a
 configuration created by \code{\link[=serial_config]{serial_config()}} to register serialization and
@@ -97,8 +100,7 @@ settings.
 
 If the host session ends, all connected dispatcher and daemon processes
 automatically exit as soon as their connections are dropped (unless the
-daemons were started with \code{autoexit = FALSE}). If a daemon is processing
-a task, it will exit as soon as the task is complete.
+daemons were started with \code{autoexit = FALSE}).
 
 To reset persistent daemons started with \code{autoexit = FALSE}, use
 \code{daemons(NULL)} instead, which also sends exit signals to all connected
@@ -110,12 +112,13 @@ optionally \code{.compute}) returns the value of \code{\link[=status]{status()}}
 \section{Local Daemons}{
 
 
-Daemons provide a potentially more efficient solution for asynchronous
-operations as new processes no longer need to be created on an \emph{ad hoc}
-basis.
+Setting daemons, or persistent background processes, is typically more
+efficient as it removes the need for, and overhead of, creating new processes
+for each mirai evaluation. It also provides control over the total number of
+processes at any one time.
 
 Supply the argument \code{n} to set the number of daemons. New background
-\code{\link[=daemon]{daemon()}} processes are automatically created on the local machine
+\code{\link[=daemon]{daemon()}} processes are automatically launched on the local machine
 connecting back to the host process, either directly or via dispatcher.
 }
 
@@ -139,16 +142,16 @@ or where concurrent tasks typically do not exceed available daemons.
 \section{Distributed Computing}{
 
 
-Specifying \code{url} as a character string allows tasks to be distributed across
-the network. \code{n} is only required in this case if providing a launch
-configuration to \code{remote} to launch remote daemons.
+Specify \code{url} as a character string to allow tasks to be distributed across
+the network (\code{n} is only required in this case if also providing a launch
+configuration to \code{remote}).
 
-Supply a URL with a 'tcp://' scheme, such as 'tcp://10.75.32.70:5555'. The
-host / dispatcher listens at this address, utilising a single port.
-Individual daemons (started with \code{\link[=daemon]{daemon()}}) may then dial in to this URL.
-Host / dispatcher automatically adjusts to the number of daemons actually
-connected, allowing dynamic upscaling or downscaling as required.
+The host / dispatcher listens at this URL, utilising a single port, and
+\code{\link[=daemon]{daemon()}} processes dial in to this URL. Host / dispatcher automatically
+adjusts to the number of daemons actually connected, allowing dynamic
+upscaling / downscaling.
 
+The URL should have a 'tcp://' scheme, such as 'tcp://10.75.32.70:5555'.
 Switching the URL scheme to 'tls+tcp://' automatically upgrades the
 connection to use TLS. The auxiliary function \code{\link[=host_url]{host_url()}} may be used to
 construct a valid host URL based on the computer's IP address.
@@ -162,17 +165,19 @@ Specifying the wildcard value zero for the port number e.g. 'tcp://[::1]:0'
 will automatically assign a free ephemeral port. Use \code{\link[=status]{status()}} to inspect
 the actual assigned port at any time.
 
-Specify \code{remote} with a call to \code{\link[=remote_config]{remote_config()}} or \code{\link[=ssh_config]{ssh_config()}} to launch
-daemons on remote machines. Otherwise, \code{\link[=launch_remote]{launch_remote()}} may be used to
-generate the shell commands to deploy daemons manually on remote resources.
+Specify \code{remote} with a call to \code{\link[=ssh_config]{ssh_config()}}, \code{\link[=cluster_config]{cluster_config()}} or
+\code{\link[=remote_config]{remote_config()}} to launch (programatically deploy) daemons on remote
+machines, from where they dial back to \code{url}. If not launching daemons,
+\code{\link[=launch_remote]{launch_remote()}} may be used to generate the shell commands for manual
+deployment.
 }
 
 \section{Compute Profiles}{
 
 
-If \code{NULL}, the \code{"default"} compute profile is used. Providing a character value
-for \code{.compute} creates a new compute profile with the name specified. Each
-compute profile retains its own daemons settings, and may be operated
+If \code{NULL}, the \code{"default"} compute profile is used. Providing a character
+value for \code{.compute} creates a new compute profile with the name specified.
+Each compute profile retains its own daemons settings, and may be operated
 independently of each other. Some usage examples follow:
 
 \strong{local / remote} daemons may be set with a host URL and specifying

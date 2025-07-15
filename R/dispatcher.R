@@ -13,7 +13,6 @@
 #' tasks are only sent to daemons that can begin immediate execution of the
 #' task.
 #'
-#' @inheritParams daemon
 #' @param host the character URL dispatcher should dial in to, typically an IPC
 #'   address.
 #' @param url (optional) the character URL dispatcher should listen at (and
@@ -24,15 +23,6 @@
 #'   this case, a local url is automatically generated.
 #' @param ... (optional) additional arguments passed through to [daemon()].
 #'   These include `asyncdial`, `autoexit`, and `cleanup`.
-#' @param tls \[default NULL\] (required for secure TLS connections) **either**
-#'   the character path to a file containing the PEM-encoded TLS certificate and
-#'   associated private key (may contain additional certificates leading to a
-#'   validation chain, with the TLS certificate first), **or** a length 2
-#'   character vector comprising \[i\] the TLS certificate (optionally
-#'   certificate chain) and \[ii\] the associated private key.
-#' @param pass \[default NULL\] (required only if the private key supplied to
-#'   `tls` is encrypted with a password) For security, should be provided
-#'   through a function that returns this value, rather than directly.
 #'
 #' @return Invisible NULL.
 #'
@@ -42,10 +32,7 @@ dispatcher <- function(
   host,
   url = NULL,
   n = NULL,
-  ...,
-  tls = NULL,
-  pass = NULL,
-  rs = NULL
+  ...
 ) {
   n <- if (is.numeric(n)) as.integer(n) else length(url)
   n > 0L || stop(._[["missing_url"]])
@@ -56,15 +43,18 @@ dispatcher <- function(
   pipe_notify(sock, cv, remove = TRUE, flag = flag_value())
   dial_sync_socket(sock, host)
 
-  res <- recv(sock, mode = 1L, block = TRUE)
+  raio <- recv_aio(sock, mode = 1L, cv = cv)
+  wait(cv) || return()
+  res <- collect_aio(raio)
   if (nzchar(res[[1L]])) Sys.setenv(R_DEFAULT_PACKAGES = res[[1L]]) else
     Sys.unsetenv("R_DEFAULT_PACKAGES")
 
+  tls <- NULL
   auto <- is.null(url)
   if (auto) {
     url <- local_url()
   } else {
-    if (is.character(res[[2L]]) && is.null(tls)) {
+    if (is.character(res[[2L]])) {
       tls <- res[[2L]]
       pass <- res[[3L]]
     }
@@ -72,6 +62,7 @@ dispatcher <- function(
   }
   pass <- NULL
   serial <- res[[4L]]
+  res <- res[[5L]]
 
   psock <- socket("poly")
   on.exit(reap(psock), add = TRUE, after = TRUE)
@@ -81,8 +72,8 @@ dispatcher <- function(
   inq <- outq <- list()
   events <- integer()
   count <- 0L
-  envir <- new.env(hash = FALSE)
-  if (is.numeric(rs)) `[[<-`(envir, "stream", as.integer(rs))
+  envir <- new.env(hash = FALSE, parent = emptyenv())
+  `[[<-`(envir, "stream", res)
   if (auto) {
     dots <- parse_dots(...)
     output <- attr(dots, "output")
@@ -95,7 +86,7 @@ dispatcher <- function(
     changes <- read_monitor(m)
     for (item in changes)
       item > 0 && {
-        outq[[as.character(item)]] <- `[[<-`(`[[<-`(`[[<-`(new.env(), "pipe", item), "msgid", 0L), "ctx", NULL)
+        outq[[as.character(item)]] <- `[[<-`(`[[<-`(`[[<-`(`[[<-`(new.env(parent = emptyenv()), "pipe", item), "msgid", 0L), "ctx", NULL), "sync", FALSE)
         send(psock, list(next_stream(envir), serial), mode = 1L, block = TRUE, pipe = item)
       }
   } else {
@@ -118,7 +109,7 @@ dispatcher <- function(
       is.null(changes) || {
         for (item in changes) {
           if (item > 0) {
-            outq[[as.character(item)]] <- `[[<-`(`[[<-`(`[[<-`(new.env(), "pipe", item), "msgid", 0L), "ctx", NULL)
+            outq[[as.character(item)]] <- `[[<-`(`[[<-`(`[[<-`(`[[<-`(new.env(parent = emptyenv()), "pipe", item), "msgid", 0L), "ctx", NULL), "sync", FALSE)
             send(psock, list(next_stream(envir), serial), mode = 1L, block = TRUE, pipe = item)
             cv_signal(cv)
           } else {
@@ -139,7 +130,7 @@ dispatcher <- function(
         value <- .subset2(req, "value")
 
         if (value[1L] == 0L) {
-          id <- readBin(value, "integer", n = 2L)[2L]
+          id <- readBin(value, integer(), n = 2L)[2L]
           if (id == 0L) {
             found <- c(
               length(outq),
@@ -169,10 +160,12 @@ dispatcher <- function(
           send(ctx, found, mode = 2L, block = TRUE)
         } else {
           count <- count + 1L
-          inq[[length(inq) + 1L]] <- list(ctx = ctx, req = value, msgid = .read_header(value))
+          msgid <- .read_header(value)
+          inq[[length(inq) + 1L]] <- list(ctx = ctx, req = value, msgid = msgid)
         }
         ctx <- .context(sock)
         req <- recv_aio(ctx, mode = 8L, cv = cv)
+
       } else if (!unresolved(res)) {
         value <- .subset2(res, "value")
         id <- as.character(pipe_id(res))
@@ -191,7 +184,7 @@ dispatcher <- function(
           next
         }
         as.logical(value[1L]) || {
-          dmnid <- readBin(value, "integer", n = 2L)[2L]
+          dmnid <- readBin(value, integer(), n = 2L)[2L]
           events <- c(events, dmnid)
           `[[<-`(outq[[id]], "dmnid", -dmnid)
           next
@@ -203,6 +196,12 @@ dispatcher <- function(
       if (length(inq))
         for (item in outq)
           item[["msgid"]] || {
+            if (.read_marker(inq[[1L]][["req"]])) {
+              item[["sync"]] && next
+              `[[<-`(item, "sync", TRUE)
+            } else if (item[["sync"]]) {
+              lapply(outq, `[[<-`, "sync", FALSE)
+            }
             send(psock, inq[[1L]][["req"]], mode = 2L, pipe = item[["pipe"]], block = TRUE)
             `[[<-`(item, "ctx", inq[[1L]][["ctx"]])
             `[[<-`(item, "msgid", inq[[1L]][["msgid"]])

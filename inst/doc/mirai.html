@@ -121,18 +121,18 @@ section.footnotes {
 <p>mirai (Japanese for ‘future’) implements the concept of <em>futures</em> in R.</p>
 <p>Futures are an abstraction that represent the result of code evaluation that will be available at some point in the future. The actual code evaluation is sent to and performed in a separate R process (<em>daemon</em>), and the result is sent back to the main (<em>host</em>) process when it completes.</p>
 <p>The package has one main function: <code>mirai()</code> to create a mirai object.</p>
-<p>This function returns almost immediately, and is never blocking. This is the essence of async: whilst the mirai evaluation is ongoing on the daemon, the host R process is free to continue.</p>
+<p>This function returns almost immediately, and is never blocking. This is the essence of async: whilst the mirai evaluation is ongoing on the daemon, the host R process is free to continue with other things.</p>
 <p>As the mirai expression is sent to another process, it must be self-contained.
 This means that any functions and variables used in it must be available in that process as well.
 This requires that:</p>
 <ul>
 <li>Package functions be namespaced using <code>::</code>, or <code>library()</code> calls be made within the expression.</li>
-<li>Other functions/data/objects required by the expression should be passed via the <code>...</code> argument, to be sent along to the daemon.</li>
+<li>Other functions/data/objects required by the expression should be passed via <code>...</code> or <code>.args</code> to be sent along to the daemon.</li>
 </ul>
-<p>A mirai is either <em>unresolved</em> if the result has yet to be received, or <em>resolved</em> if it has. <code>unresolved()</code> is helper function to check the state of a mirai.</p>
+<p>A mirai is either <em>unresolved</em> if the result has yet to be received, or <em>resolved</em> if it has. <code>unresolved()</code> is a helper function to check the state of a mirai.</p>
 <p>For a mirai <code>m</code>, the result is available at <code>m$data</code> once it has resolved.
-If successful, this will be the return value of the evaluated expression.
-If the expression errored or caused the process to crash then this will be an ‘errorValue’ instead.
+Normally this will be the return value of the evaluated expression.
+If the expression errored, caused the process to crash, or timed out then this will be an ‘errorValue’ instead.
 See the section <a href="#errors-in-a-mirai">Errors in a mirai</a> below.</p>
 <p>Rather than repeatedly checking <code>unresolved(m)</code>, it is more efficient to wait for and collect its value by using <code>m[]</code>.</p>
 <p>When a developer or code author writes a <code>mirai()</code> call, they should not be concerned about where or how execution of that code actually happens.
@@ -172,9 +172,9 @@ unresolved(m)
 # Do other stuff
 
 collect_mirai(m)
-#&gt; [1] 4.393826 3.289580 3.218941 2.785651 4.276051
+#&gt; [1] 2.774005 6.596121 5.710772 5.167702 2.612949
 m[]
-#&gt; [1] 4.393826 3.289580 3.218941 2.785651 4.276051
+#&gt; [1] 2.774005 6.596121 5.710772 5.167702 2.612949
 </code></pre>
 <p>For easy programmatic use of <code>mirai()</code>, ‘.expr’ accepts a pre-constructed language object, and also a list of named arguments passed via ‘.args’.
 So, the following would be equivalent to the above:</p>
@@ -184,9 +184,9 @@ args &lt;- list(time = 2L, mean = 4)
 m1 &lt;- mirai(.expr = expr, .args = args)
 m2 &lt;- mirai(.expr = expr, .args = args)
 m1[]
-#&gt; [1] 4.573154 4.507001 2.195403 2.917958 3.160021
+#&gt; [1] 3.654666 4.734716 4.882496 4.235157 4.958596
 m2[]
-#&gt; [1] 2.384668 4.595920 2.856312 4.273929 4.119159
+#&gt; [1] 4.695293 4.210651 4.383182 4.342163 4.497875
 </code></pre>
 <p>By running the above two calculations in parallel, they take roughly half the time as running sequentially (minus a relatively inconsequential parallelization overhead).</p>
 <h4 id="sec:unblock-i-o-bound-operations">Unblock I/O-bound Operations</h4>
@@ -233,10 +233,10 @@ for (i in 1:10) {
   cat(m$data)
 
 }
-#&gt; Error: random error
 #&gt; iteration 1 successful
 #&gt; iteration 2 successful
 #&gt; iteration 3 successful
+#&gt; Error: random error
 #&gt; iteration 4 successful
 #&gt; iteration 5 successful
 #&gt; iteration 6 successful
@@ -310,7 +310,7 @@ is_error_value(m5$data)
 </code></pre>
 <p><code>is_error_value()</code> tests for all mirai execution errors, user interrupts and timeouts.</p>
 <h3 id="sec:4-local-daemons">4. Local Daemons</h3>
-<p>Daemons, or persistent background processes, may be set to receive ‘mirai’ requests.</p>
+<p>Daemons, or persistent background processes, may be set to receive <code>mirai()</code> requests.</p>
 <blockquote>
 <p>Daemons inherit the default system configuration and read in the relevant ‘.Renviron’ and ‘.Rprofile’ etc. on startup.
 They also load the default packages.
@@ -341,7 +341,7 @@ Dispatcher employs an event-driven approach that is efficient both in terms of c
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://5fbc0d90e04a443f07687f1e&quot;
+#&gt; [1] &quot;ipc:///tmp/439b4a866d2400f60d7cd154&quot;
 #&gt; 
 #&gt; $mirai
 #&gt;  awaiting executing completed 
@@ -368,7 +368,7 @@ It is suited to working with similar-length tasks, or where concurrent tasks typ
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://8e8fccde572178a673639aac&quot;
+#&gt; [1] &quot;ipc:///tmp/643c70f2e3e1a8239530a95c&quot;
 </code></pre>
 <h4 id="sec:everywhere">Everywhere</h4>
 <p><code>everywhere()</code> may be used to evaluate an expression on all connected daemons and persist the resultant state, regardless of a daemon’s ‘cleanup’ setting.</p>
@@ -417,12 +417,11 @@ In the case of other expressions, be sure to call the results (or collect the va
 <p>The daemons interface may also be used to send tasks for computation to remote daemon processes on the network.</p>
 <p>Call <code>daemons()</code> specifying ‘url’ as a character string such as: ‘tcp://10.75.32.70:5555’ at which daemon processes should connect.
 Alternatively, use <code>host_url()</code> to automatically construct a valid URL.
-The host (or dispatcher) listens at this address, utilising a single port.</p>
+This acts like a ‘base station’, utilizing a single port to listen out for all daemons that dial in to the address. For launching the daemons (executing them on the machine of your choice), please see the next section.</p>
 <blockquote>
 <p>IPv6 addresses are also supported and must be enclosed in square brackets <code>[]</code> to avoid confusion with the final colon separating the port.
 For example, port 5555 on the IPv6 address <code>::ffff:a6f:50d</code> would be specified as <code>tcp://[::ffff:a6f:50d]:5555</code>.</p>
 </blockquote>
-<p>For options on actually launching the daemons, please see the next section.</p>
 <p>Below, calling <code>host_url()</code> without a port value uses the default of ‘0’.
 This is a wildcard value that will automatically assigns a free ephemeral port:</p>
 <pre><code class="language-r">daemons(url = host_url())
@@ -434,7 +433,7 @@ This is a wildcard value that will automatically assigns a free ephemeral port:<
 #&gt; [1] 0
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;tcp://192.168.1.71:36673&quot;
+#&gt; [1] &quot;tcp://10.37.61.241:51753&quot;
 #&gt; 
 #&gt; $mirai
 #&gt;  awaiting executing completed 
@@ -447,6 +446,8 @@ This is a wildcard value that will automatically assigns a free ephemeral port:<
 </code></pre>
 <p>Closing the connection causes all connected daemons to exit automatically. If using dispatcher, it will cause dispatcher to exit, and in turn all connected daemons when their respective connections with the dispatcher are terminated.</p>
 <h3 id="sec:6-launching-remote-daemons">6. Launching Remote Daemons</h3>
+<p>The launcher analogy is appropriate, as these are ways of executing a daemon on the machine of your choice, very much like launching a satellite. Once deployed, the daemon connects back to your host process through it’s own communications (TCP or TLS over TCP).</p>
+<p>The local launcher simply runs an <code>Rscript</code> instance via a local shell. The remote launcher uses a method to run this <code>Rscript</code> command on a remote machine.</p>
 <p>To launch remote daemons, supply a remote launch configuration to the ‘remote’ argument of <code>daemons()</code>, or <code>launch_remote()</code> at any time thereafter.</p>
 <p>There are currently 3 options for generating remote launch configurations:</p>
 <ol>
@@ -524,8 +525,8 @@ The host listens to <code>127.0.0.1:5555</code> on its side, and the daemons eac
 </code></pre>
 <ul>
 <li>As per the above, it is fine to pass this as a character string with the options each on a new line (whitespace is automatically handled), or else by explicitly using <code>\n</code> to denote a newline.</li>
-<li>It is also permissible to include other shell commands, for example to change working directory.</li>
-<li>For the avoidance of doubt, the initial shebang line of a script such as <code>#!/bin/bash</code> is not required.</li>
+<li>Other shell commands, for example to change working directory, may also be included.</li>
+<li>For the avoidance of doubt, the initial shebang line of a script such as <code>#!/bin/bash</code> should be omitted.</li>
 <li>For certain HPC setups, a final line which loads environment modules may be needed. This would usually be of the form:</li>
 </ul>
 <pre><code>module load R
@@ -537,6 +538,18 @@ The host listens to <code>127.0.0.1:5555</code> on its side, and the daemons eac
 <li>The third argument <code>rscript</code> defaults to <code>&quot;Rscript&quot;</code>, which assumes that R is on the file search path.
 This may be substituted for the full path to a specific R executable, such as that returned by <code>file.path(R.home(&quot;bin&quot;), &quot;Rscript&quot;)</code>.</li>
 </ol>
+<h5 id="sec:job-arrays">Job Arrays</h5>
+<p>If launching large numbers of daemons, it is often more appropriate to submit a single job to the cluster scheduler that launches daemons via a job array, rather than sending multiple individual jobs to the cluster.</p>
+<p>So instead of:</p>
+<pre><code class="language-r">daemons(n = 100, url = host_url(), remote = cluster_config())
+</code></pre>
+<p>rather use:</p>
+<pre><code class="language-r">daemons(
+  n = 1,
+  url = host_url(),
+  remote = cluster_config(options = &quot;#SBATCH --array=1-100&quot;)
+)
+</code></pre>
 <h4 id="sec:iv-generic-remote-configuration">iv. Generic Remote Configuration</h4>
 <p><code>remote_config()</code> provides a generic, flexible framework for running any shell command that may be used to deploy daemons.</p>
 <p>Conceptually, this function takes an <code>args</code> argument, which must contain “.”. The correctly-configured call to <code>daemon()</code> is substituted in for this “.”, so that <code>command</code> is run with this as one of its arguments.</p>
@@ -559,7 +572,7 @@ This may be substituted for the full path to a specific R executable, such as th
 #&gt; [1] 0
 launch_remote()
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.1.71:36635&quot;)'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://10.37.61.241:51757&quot;)'
 daemons(0)
 #&gt; [1] 0
 </code></pre>
@@ -575,36 +588,36 @@ The private key is always retained on the host machine and never transmitted.</p
 <p>The generated self-signed certificate is available via <code>launch_remote()</code>, where it is included as part of the shell command for manually launching a daemon on a remote machine.</p>
 <pre><code class="language-r">launch_remote(1)
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://192.168.1.71:33169&quot;,tls=c(&quot;-----BEGIN CERTIFICATE-----
-#&gt; MIIFPzCCAyegAwIBAgIBATANBgkqhkiG9w0BAQsFADA3MRUwEwYDVQQDDAwxOTIu
-#&gt; MTY4LjEuNzExETAPBgNVBAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDAeFw0wMTAx
-#&gt; MDEwMDAwMDBaFw0zMDEyMzEyMzU5NTlaMDcxFTATBgNVBAMMDDE5Mi4xNjguMS43
+#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://10.37.61.241:51761&quot;,tls=c(&quot;-----BEGIN CERTIFICATE-----
+#&gt; MIIFPzCCAyegAwIBAgIBATANBgkqhkiG9w0BAQsFADA3MRUwEwYDVQQDDAwxMC4z
+#&gt; Ny42MS4yNDExETAPBgNVBAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDAeFw0wMTAx
+#&gt; MDEwMDAwMDBaFw0zMDEyMzEyMzU5NTlaMDcxFTATBgNVBAMMDDEwLjM3LjYxLjI0
 #&gt; MTERMA8GA1UECgwITmFub25leHQxCzAJBgNVBAYTAkpQMIICIjANBgkqhkiG9w0B
-#&gt; AQEFAAOCAg8AMIICCgKCAgEA2+nAp9A8/TT/cMlt+iB0/if1x7alMqlWl3jJ5XW7
-#&gt; cq0Qu12MkPVHx5uTY3e7l1ln0ll9sBfSz4OycKrdnxCpJ7/B+4CjBmhM7cex0xpU
-#&gt; KvYOeHX4lVqxVA2zfTi5P+/2Iwl315h8dvGuUGnEkmoT28lbYGYN4xZ6X2ZxZDhZ
-#&gt; loVo88T9QpRMGLb9gLAq7w2/jBGievgwAJGrFRFjt1M5DCVkXMIcXhIihCs3YC2M
-#&gt; 0duXIdRAeAp6coqEIfHWoDuu19CpeWRi9CY9jqS2UbywTvf4MqLPMZ3T3j5WjCQ0
-#&gt; c3fkxx0zsU9k8ouejz6O3rHM++X4wFLU9OuDF7eldJixrTjNrrKNJmANu1zvSdq6
-#&gt; VvSVimmh6mZfqHTTi3ncv/fQLl80YBt6VMtxB3nxmYFS6KW+xaaxFBugjqOCTn5S
-#&gt; GFtM4v40rGQeFnAdRMl8G0fPjS3tNYrWKCOnpQJuR/9tsUsMnlcn1S1QIcZRImYY
-#&gt; 004fJw4+rMnq7dULJFwjiuhZqm5OYqjHrU6BGwLgr0Iy+1CcHC1JegbL3OGuictl
-#&gt; u1BQZuv6w/cSEXgDqu3NclVoVaVmRQaEP5qzMJNO4sqGqtkklESaz58cwvXAb76g
-#&gt; mhaoJJfscuPVz1pE+jROdDxx1Qj9PNfoHV2TzmliV+XqVfgnuunUXiGLMlFJooCZ
-#&gt; oh0CAwEAAaNWMFQwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQU/Zegy99x
-#&gt; ZnJ0iNaLHAURTqA2cN8wHwYDVR0jBBgwFoAU/Zegy99xZnJ0iNaLHAURTqA2cN8w
-#&gt; DQYJKoZIhvcNAQELBQADggIBAM7cgcvAdxa6liNn09XmH4x1VPmUKJY6qEYCQX5F
-#&gt; Hav5YGG3WmDhgNV2tB85e4ilPTx1IpFmsEVNzGPynMzRUXdZSa1t+TZfH+FN+gHS
-#&gt; OZb7RaTgX/K9E8zo7pKBQcMTIPD+5d/nrLRhUcWpH/vFCdk6l4fAC1BgqILv2fR6
-#&gt; z4Wp5TMKt52r9WH0xiHZifLIS+8CGZ2JwTrFHhJpmvJvaZwGzB6I7+/qVf8iwXXx
-#&gt; VZHG2kABT9odDTp51OUTMITSTglTprKExQmRjn/LIMAsa4Lm/Ja4GXkelOCcUwh5
-#&gt; vD4bzgCKR7im088UFzqV6MLAgwqHsWTw9EhyunLHq94knz0Cnya7zeaepSR/JcRT
-#&gt; uVeVtdRfQo023xFzMWNBRHulaKbipzjHDu6dcK4zvIdVYUc7AZg3r9naptHNPt/0
-#&gt; 17yCbW6unJuHwAxErxy/4kvHq0fnyGL+9cfEl+ng/iPfA4wNuY1m6H9reXQ++f3t
-#&gt; +LKO1YUXImA+IQZjOX0gGfuG2d1aGXRXFmgdrbZPjHyylEn7pL6lGtvdd6Wqo5z4
-#&gt; mS4BfPhC8QmT3MIJxg3a99aJs7F7munN2ragFIJlJuePWmwvy93XSFuZS3KlPLOU
-#&gt; aC/yT0GQWsMQ/mcieLcsq4jv/Yq3aTFTPDUBhII2vcc8hdQESDi0uK92CAgyQo92
-#&gt; 0OEj
+#&gt; AQEFAAOCAg8AMIICCgKCAgEA82d9JnxGaYPdqqBdkCkMAlMTx+bXtlqNDyfRDLUR
+#&gt; EfzRhMqa5r9vfZvA5aI1hCwSoaUf0T3xiMrmIcKjJTzwxmi6WmvXbLBdk1gyIJsB
+#&gt; sKizdOAnixLDEANkMsiO5+c5Wy/J/eJJbq3DptYBgRtsbJN9AYYhkNddncQHhx7u
+#&gt; flDlpyvLZZx+K/znuPyQkjHHg9HUtISNqmWlE4BKLstFrzS+L5aO4+iw17d/EOLe
+#&gt; ujY2xP3NZYOiPMTAtupQQPPdSFS4cr2utvfCUyrbAtej0a8wYMgb6DDIodqpzdpF
+#&gt; hh4G8Qgg/oKE294AQ8eHZjmF79bBqS2RQT/hP3AGPceRd6ndvMXyDet16okwFBvC
+#&gt; pRFPEIKn9/YEx5eMCt+N6QkXw+J48qxi0OFVH/NfwG7hVClfBC3ijPepAfknD4Z+
+#&gt; Fn+Ta4BpuMttGDYWumHkaY0u8qyDIdITwBlQM4+KVvt2QfnpOZvNx41YBRPOj4z2
+#&gt; A3VG+RHc04ZAk1KHq6xB24nfM/frSHvd48XvDICdDYrrkt7Zkukd+NE/fYyBB6+o
+#&gt; 4MKoor93cWrF3s+4chSlcDZZuejTFztiO98UfiG/j8rntrLUpSF35MSQ1dbenOlG
+#&gt; 8Q1XGZ2zU4p6UZBc3+et/tUvinfGGKa019d5HAKQ1DzZJM7ZUGvGNy0/KXnWGjhK
+#&gt; mPsCAwEAAaNWMFQwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQUKFrasGd6
+#&gt; TE+OISMiFEucFnqKAjMwHwYDVR0jBBgwFoAUKFrasGd6TE+OISMiFEucFnqKAjMw
+#&gt; DQYJKoZIhvcNAQELBQADggIBAMVcHXu3TDBEWW85foRuTVr1YG2PD3U8XUmd4B3Z
+#&gt; a6kr8d+P5XtF5hv4b2z/BcwWzFgrfdKMsU+7cw/dBN/WD22Ze3slDGB4z5Xbb5c7
+#&gt; cfVG2W97FoCLuBiPdw3j9/McOd+kXTI4cEpRH4ZQWRCSTb8nfnQuV1WKS3bT3CEa
+#&gt; XgD9IR0I4PUzBq2eqTJ7NLzH/GtreYCcPmbsgFZ3g20lAWULWyhRJyE2zRYz4e9c
+#&gt; +zvsYSlQYF6d/rC44ii2bpMfm/nAn4/rU6ZzxwF9Xi9nOzGMVLXowdpZ3vDEWgVj
+#&gt; V74U/kXkvwve0fSXylTU+JiRTOfa0hiUcvG7nIyhH0JyV5QU68gYFSVMJZt7VQn1
+#&gt; ya5E1SyPV+BwJ4HBnWPU0mS2RBlBQQ7uRypkKXsC3MPl0roGk6s3k/TO7SgT/U5U
+#&gt; UO7gbEim8jT9zj/oB6+W60VP+cldzIWyGoigV/4a8GQ4Njt8uwsCRKvKwiFMcyKH
+#&gt; aX1IRrF/kqhC8YnEIBaupIPoqX6j9tJeuD45YARmcaGiH9zQM2PalTNLhCnf8Plg
+#&gt; 7o+dyKyrn8bIvPboEI/PRT9Zl+U9o3qWP0izKyr6D54Wl5moqgfxYaWINZXsmZty
+#&gt; jCu5SBsFdfSE62PyioSGHt6On2Uck1xGJiNRZlO35VdVvwxqNqpJilzFRosx4KFb
+#&gt; PMyT
 #&gt; -----END CERTIFICATE-----
 #&gt; &quot;,&quot;&quot;))'
 </code></pre>

@@ -135,16 +135,17 @@ You do not need to anticipate whether an end-user will run the code on their own
 <li>Consider pointing to the documentation for <code>mirai::daemons()</code>, or re-exporting <code>daemons()</code> in your package as a convenience.</li>
 <li>Never include a call to <code>daemons()</code> when using <code>mirai_map()</code>.
 This is important to ensure that there is no accidental recursive creation of daemons on the same machine, for example if your function is used within another package’s function that also uses mirai.</li>
-<li>Exceptionally, including a <code>daemons()</code> call may be appropriate for async operations using a single dedicated non-dispatcher daemon.
+<li>Exceptionally, a <code>daemons(n = 1, dispatcher = FALSE, .compute = ...)</code> call may be used to set up a single dedicated daemon, but only if used with a unique value for <code>.compute</code>.
 A representative example of this usage pattern is <code>logger::appender_async()</code>, where the logger package’s ‘namespace’ concept maps directly to mirai’s ‘compute profile’.</li>
 </ul>
 <ol start="2">
-<li>
-<p>The shape and contents of a <code>status()</code> call must not be used programatically, as this user interface is subject to change at any time. Use <code>nextget()</code> instead.</p>
-</li>
-<li>
-<p>The functions <code>unresolved()</code>, <code>is_error_value()</code>, <code>is_mirai_error()</code>, and <code>is_mirai_interrupt()</code> should be used to test for the relevant state of a mirai or its value.</p>
-</li>
+<li>The shape and contents of a <code>status()</code> call must not be used programatically, as this user interface is subject to change at any time. Use <code>nextget()</code> where possible instead.</li>
+</ol>
+<ul>
+<li>An exception is that <code>status()$connections</code> may be used to return the total number of daemon connections at any time.</li>
+</ul>
+<ol start="3">
+<li>The functions <code>unresolved()</code>, <code>is_error_value()</code>, <code>is_mirai_error()</code>, and <code>is_mirai_interrupt()</code> should be used to test for the relevant state of a mirai or its value.</li>
 </ol>
 <ul>
 <li>The characteristics of their current implementation, e.g. as a logical NA for an ‘unresolvedValue’, should not be relied upon, as these are subject to change at any time.</li>

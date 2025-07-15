@@ -139,7 +139,7 @@ This is especially useful for Shiny ExtendedTask, where it is invoked with a set
 By using <code>mirai::mirai({...}, environment())</code> you automatically capture the variables provided to the invoke method.
 See the Shiny vignette for example usage.</p>
 <p><strong>Special Case: <code>...</code>:</strong></p>
-<p>A Shiny app may use the following <code>future_promise()</code> code within the server component:</p>
+<p>A Shiny app may have used <code>future_promise()</code> code similar to the following within the server component:</p>
 <pre><code class="language-r">func &lt;- function(x, y){
   Sys.sleep(y)
   runif(x)
@@ -169,10 +169,10 @@ vec2 &lt;- 4:6
 # Returns different values: good
 mirai_map(list(vec, vec2), \(x) rnorm(x))[]
 #&gt; [[1]]
-#&gt; [1]  0.3339189 -0.6827722 -0.3222064
+#&gt; [1] -0.03203249  0.06758411 -1.15134665
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] -0.4858116  0.2750812 -0.1216267
+#&gt; [1] -1.52548151  0.47057627  0.09368248
 
 # Set the seed in the function
 mirai_map(list(vec, vec2), \(x) {
@@ -205,6 +205,17 @@ Another option would be to set the random seed within a local execution scope to
 <h3 id="sec:3-accessing-package-functions-during-development">3. Accessing package functions during development</h3>
 <p>A mirai call usually requires package-namespaced functions. However the latest version of a package in development is often loaded dynamically by <code>devtools::load_all()</code> or the underlying <code>pkgload::load_all()</code> for quick iteration.</p>
 <p>In this case, use <code>everywhere()</code> to also call <code>devtools::load_all()</code> on all (local) daemons. They will then have access to the same functions as your host session for subsequent <code>mirai()</code> calls.</p>
+<h3 id="sec:4-why-does-it-take-time-for-mirai-to-execute-when-it-s-meant-to-return-immediately">4. Why does it take time for <code>mirai()</code> to execute when it’s meant to return immediately?</h3>
+<p>A <code>mirai()</code> call is meant to return almost instantaneously. The same when invoked by a Shiny <code>ExtendedTask</code>. The only reason it would take time is if you are passing through large objects, which then need to be serialized to be sent to the parallel process.</p>
+<p>Care should be taken when you pass a function or environment to <code>mirai()</code> in the <code>...</code> or <code>.args</code> arguments. This is as a function includes its closure (enclosing environment), and an environment its parent environments. This means you could be passing more than you bargained for.</p>
+<p>Generally, <code>obj_size()</code> from the lobstr package is a great function for checking the actual size of an object (capturing many cases more accurately than the base R <code>object.size</code>).</p>
+<p>As mitigation for accidentally passing large objects:</p>
+<ul>
+<li>For functions, use <code>crate()</code> from the carrier package. This is what we use in purrr, and it makes sure only what’s necessary is ‘crated’ with the function.</li>
+<li>For environments, consider using <code>parent.env(e) &lt;- emptyenv()</code>. This is not required for R6 classes as they are already isolated by default. Regardless of any parent environment, an environment / R6 class could still contain a lot of items that are not needed for the parallel process, in which case consider passing individual members rather than the entire object.</li>
+</ul>
+<p>mirai does not rely on options or environment variables at all, so there are no object size limits to set.</p>
+<p>This follows mirai’s philosophy of being an enabler to widen the possibility frontier for R code, but it does place a responsibility on the user to ensure that the code is sensible and does what is desired.</p>
 </div>
 </body>
 </html>

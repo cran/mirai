@@ -24,8 +24,7 @@
 #'
 #' If the host session ends, all connected dispatcher and daemon processes
 #' automatically exit as soon as their connections are dropped (unless the
-#' daemons were started with `autoexit = FALSE`). If a daemon is processing
-#' a task, it will exit as soon as the task is complete.
+#' daemons were started with `autoexit = FALSE`).
 #'
 #' To reset persistent daemons started with `autoexit = FALSE`, use
 #' `daemons(NULL)` instead, which also sends exit signals to all connected
@@ -35,7 +34,6 @@
 #' optionally `.compute`) returns the value of [status()].
 #'
 #' @inheritParams mirai
-#' @inheritParams dispatcher
 #' @param n integer number of daemons to launch.
 #' @param url \[default NULL\] if specified, a character string comprising a URL
 #'   at which to listen for remote daemons, including a port accepting incoming
@@ -51,13 +49,16 @@
 #' @param ... (optional) additional arguments passed through to
 #'   [daemon()] if launching daemons. These include `asyncdial`, `autoexit`,
 #'   `cleanup`, `output`, `maxtasks`, `idletime` and `walltime`.
-#' @param seed \[default NULL\] (optional) supply a random seed (single value,
-#'   interpreted as an integer). This is used to inititalise the L'Ecuyer-CMRG
-#'   RNG streams sent to each daemon. Note that reproducible results can be
-#'   expected only for `dispatcher = FALSE`, as the unpredictable timing of task
-#'   completions would otherwise influence the tasks sent to each daemon. Even
-#'   for `dispatcher = FALSE`, reproducibility is not guaranteed if the order in
-#'   which tasks are sent is not deterministic.
+#' @param seed \[default NULL\] (optional) The default of `NULL` initializes
+#'   L'Ecuyer-CMRG RNG streams for each daemon, the same as base R's parallel
+#'   package. Results are statistically-sound, although generally
+#'   non-reproducible, as which tasks are sent to which daemons may be
+#'   non-deterministic, and also depends on the number of daemons.
+#'   \cr (experimental) supply an integer value to instead initialize a
+#'   L'Ecuyer-CMRG RNG stream for the compute profile. This is advanced for each
+#'   mirai evaluation, hence allowing for reproducible results, as the random
+#'   seed is always associated with a given mirai, independently of where it is
+#'   evaluated.
 #' @param serial \[default NULL\] (optional, requires dispatcher) a
 #'   configuration created by [serial_config()] to register serialization and
 #'   unserialization functions for normally non-exportable reference objects,
@@ -71,18 +72,22 @@
 #'   with the TLS certificate first), **or** a length 2 character vector
 #'   comprising \[i\] the TLS certificate (optionally certificate chain) and
 #'   \[ii\] the associated private key.
+#' @param pass \[default NULL\] (required only if the private key supplied to
+#'   `tls` is encrypted with a password) For security, should be provided
+#'   through a function that returns this value, rather than directly.
 #'
 #' @return The integer number of daemons launched locally (zero if specifying
 #'   `url` or using a remote launcher).
 #'
 #' @section Local Daemons:
 #'
-#' Daemons provide a potentially more efficient solution for asynchronous
-#' operations as new processes no longer need to be created on an *ad hoc*
-#' basis.
+#' Setting daemons, or persistent background processes, is typically more
+#' efficient as it removes the need for, and overhead of, creating new processes
+#' for each mirai evaluation. It also provides control over the total number of
+#' processes at any one time.
 #'
 #' Supply the argument `n` to set the number of daemons. New background
-#' [daemon()] processes are automatically created on the local machine
+#' [daemon()] processes are automatically launched on the local machine
 #' connecting back to the host process, either directly or via dispatcher.
 #'
 #' @section Dispatcher:
@@ -102,16 +107,16 @@
 #'
 #' @section Distributed Computing:
 #'
-#' Specifying `url` as a character string allows tasks to be distributed across
-#' the network. `n` is only required in this case if providing a launch
-#' configuration to `remote` to launch remote daemons.
+#' Specify `url` as a character string to allow tasks to be distributed across
+#' the network (`n` is only required in this case if also providing a launch
+#' configuration to `remote`).
 #'
-#' Supply a URL with a 'tcp://' scheme, such as 'tcp://10.75.32.70:5555'. The
-#' host / dispatcher listens at this address, utilising a single port.
-#' Individual daemons (started with [daemon()]) may then dial in to this URL.
-#' Host / dispatcher automatically adjusts to the number of daemons actually
-#' connected, allowing dynamic upscaling or downscaling as required.
+#' The host / dispatcher listens at this URL, utilising a single port, and
+#' [daemon()] processes dial in to this URL. Host / dispatcher automatically
+#' adjusts to the number of daemons actually connected, allowing dynamic
+#' upscaling / downscaling.
 #'
+#' The URL should have a 'tcp://' scheme, such as 'tcp://10.75.32.70:5555'.
 #' Switching the URL scheme to 'tls+tcp://' automatically upgrades the
 #' connection to use TLS. The auxiliary function [host_url()] may be used to
 #' construct a valid host URL based on the computer's IP address.
@@ -125,15 +130,17 @@
 #' will automatically assign a free ephemeral port. Use [status()] to inspect
 #' the actual assigned port at any time.
 #'
-#' Specify `remote` with a call to [remote_config()] or [ssh_config()] to launch
-#' daemons on remote machines. Otherwise, [launch_remote()] may be used to
-#' generate the shell commands to deploy daemons manually on remote resources.
+#' Specify `remote` with a call to [ssh_config()], [cluster_config()] or
+#' [remote_config()] to launch (programatically deploy) daemons on remote
+#' machines, from where they dial back to `url`. If not launching daemons,
+#' [launch_remote()] may be used to generate the shell commands for manual
+#' deployment.
 #'
 #' @section Compute Profiles:
 #'
-#' If `NULL`, the `"default"` compute profile is used. Providing a character value
-#' for `.compute` creates a new compute profile with the name specified. Each
-#' compute profile retains its own daemons settings, and may be operated
+#' If `NULL`, the `"default"` compute profile is used. Providing a character
+#' value for `.compute` creates a new compute profile with the name specified.
+#' Each compute profile retains its own daemons settings, and may be operated
 #' independently of each other. Some usage examples follow:
 #'
 #' **local / remote** daemons may be set with a host URL and specifying
@@ -247,8 +254,8 @@ daemons <- function(
           if (is.null(serial)) serial <- .[["serial"]]
           if (is.list(serial)) `opt<-`(sock, "serial", serial)
           args <- wa5(urld, url, dots)
-          res <- launch_dispatcher(sock, args, output, serial, tls = tls, pass = pass)
-          store_dispatcher(envir, sock, cv, urld, res)
+          res <- launch_dispatcher(sock, args, output, serial, envir[["stream"]], tls = tls, pass = pass)
+          store_dispatcher(envir, cv, sock, urld, res)
         },
         stop(._[["dispatcher_args"]])
       )
@@ -298,9 +305,9 @@ daemons <- function(
           sock <- req_socket(urld)
           if (is.null(serial)) serial <- .[["serial"]]
           if (is.list(serial)) `opt<-`(sock, "serial", serial)
-          args <- wa4(urld, n, envir[["stream"]], dots)
-          res <- launch_dispatcher(sock, args, output, serial)
-          store_dispatcher(envir, sock, cv, urld, res)
+          args <- wa4(urld, n, dots)
+          res <- launch_dispatcher(sock, args, output, serial, envir[["stream"]])
+          store_dispatcher(envir, cv, sock, urld, res)
         },
         stop(._[["dispatcher_args"]])
       )
@@ -407,7 +414,7 @@ status <- function(.compute = NULL) {
   )
 }
 
-#' Daemons Set
+#' Query if Daemons are Set
 #'
 #' Returns a logical value, whether or not daemons have been set for a given
 #' compute profile.
@@ -538,20 +545,19 @@ init_envir_stream <- function(seed) {
   oseed <- .GlobalEnv[[".Random.seed"]]
   RNGkind("L'Ecuyer-CMRG")
   if (length(seed)) set.seed(seed)
-  envir <- `[[<-`(
-    new.env(hash = FALSE, parent = ..),
-    "stream",
-    .GlobalEnv[[".Random.seed"]]
-  )
+  envir <- new.env(hash = FALSE, parent = ..)
+  `[[<-`(envir, "stream", .GlobalEnv[[".Random.seed"]])
   `[[<-`(.GlobalEnv, ".Random.seed", oseed)
-  envir
+  `[[<-`(envir, "seed", seed)
 }
 
 req_socket <- function(url, tls = NULL)
   `opt<-`(socket("req", listen = url, tls = tls), "req:resend-time", 0L)
 
-parse_dispatcher <- function(x)
-  if (is.logical(x)) 1L + (!is.na(x) && x) else if (is.character(x)) 1L else 3L
+parse_dispatcher <- function(x) {
+  is.logical(x) && return(1L + (!is.na(x) && x))
+  is.character(x) && x == "none" || return(3L)
+}
 
 parse_dots <- function(...) {
   ...length() || return("")
@@ -594,13 +600,12 @@ wa3 <- function(url, dots, rs = NULL, tls = NULL)
     parse_tls(tls)
   ))
 
-wa4 <- function(urld, n, rs, dots)
+wa4 <- function(urld, n, dots)
   shQuote(sprintf(
-    ".libPaths(c(\"%s\",.libPaths()));mirai::dispatcher(\"%s\",n=%d,rs=c(%s)%s)",
+    ".libPaths(c(\"%s\",.libPaths()));mirai::dispatcher(\"%s\",n=%d%s)",
     libp(),
     urld,
     n,
-    paste0(rs, collapse = ","),
     dots
   ))
 
@@ -628,7 +633,7 @@ query_dispatcher <- function(sock, command, send_mode = 2L, recv_mode = 5L, bloc
   recv(sock, mode = recv_mode, block = block)
 }
 
-launch_dispatcher <- function(sock, args, output, serial, tls = NULL, pass = NULL) {
+launch_dispatcher <- function(sock, args, output, serial, stream, tls = NULL, pass = NULL) {
   pkgs <- Sys.getenv("R_DEFAULT_PACKAGES")
   system2(
     .command,
@@ -643,7 +648,13 @@ launch_dispatcher <- function(sock, args, output, serial, tls = NULL, pass = NUL
   while(!until(cv, .limit_long))
     message(sprintf(._[["sync_dispatcher"]], sync <- sync + .limit_long_secs))
   pipe_notify(sock, NULL, add = TRUE)
-  res <- request(.context(sock), list(pkgs, tls, pass, serial), send_mode = 1L, recv_mode = 2L, cv = cv)
+  res <- request(
+    .context(sock),
+    list(pkgs, tls, pass, serial, stream),
+    send_mode = 1L,
+    recv_mode = 2L,
+    cv = cv
+  )
   while(!until(cv, .limit_long))
     message(sprintf(._[["sync_dispatcher"]], sync <- sync + .limit_long_secs))
   collect_aio(res)
@@ -653,7 +664,7 @@ launch_daemons <- function(seq, sock, urld, dots, envir, output) {
   cv <- cv()
   pipe_notify(sock, cv, add = TRUE)
   for (i in seq)
-    launch_daemon(wa2(urld, dots, next_stream(envir)), output)
+    launch_daemon(wa2(urld, dots, maybe_next_stream(envir)), output)
   sync <- 0L
   for (i in seq)
     while(!until(cv, .limit_long))
@@ -661,11 +672,10 @@ launch_daemons <- function(seq, sock, urld, dots, envir, output) {
   pipe_notify(sock, NULL, add = TRUE)
 }
 
-store_dispatcher <- function(envir, sock, cv, urld, res) {
+store_dispatcher <- function(envir, cv, sock, urld, res) {
+  `[[<-`(envir, "cv", cv)
   `[[<-`(envir, "sock", sock)
   `[[<-`(envir, "dispatcher", urld)
-  `[[<-`(envir, "cv", cv)
-  `[[<-`(envir, "stream", NULL)
   `[[<-`(envir, "url", res[2L])
   `[[<-`(envir, "pid", as.integer(res[1L]))
 }

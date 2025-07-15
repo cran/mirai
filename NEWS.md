@@ -1,9 +1,26 @@
+# mirai 2.4.1
+
+#### New Features
+
+* Reproducible parallel RNG by setting the `seed` argument to `daemons()`:
+  + The default `NULL` uses L'Ecuyer-CMRG RNG streams advanced per daemon, the same as base R's parallel package, which produces statistically-sound yet generally non-reproducible results.
+  + Setting an integer seed now initializes a L'Ecuyer-CMRG RNG stream for the compute profile, which is advanced for each mirai evaluation, which does provide reproducible results.
+
+#### Updates
+
+* `everywhere()` has been updated for robustness and ease of use:
+  + Returns a `mirai_map` object for easier handling (rather than just a list of mirai).
+  + When using dispatcher, no longer has the potential to fail if sending large data (#326).
+* `dispatcher()` function signature simplified with `rs`, `tls` and `pass` arguments removed (no user-facing impact).
+* Fixes a bug where using non-dispatcher daemons, an `unresolvedValue` could be returned as the fulfilled value of a promise in extremely rare cases (thanks @James-G-Hill and @olivier7121, #243 and #317).
+* Fixes a regression in mirai 2.4.0 where the L'Ecuyer-CMRG seed was not being passed correctly for remote daemons (#333).
+* Requires nanonext >= 1.6.2.
+
 # mirai 2.4.0
 
 #### Behavioural Changes
 
 * An ephemeral daemon started by `mirai()` without setting daemons now exits as soon as the parent process does rather than finish the task.
-  For previous behaviour use: `with(daemons(1L, dispatcher = FALSE, autoexit = NA), mirai(...))`.
 * Change in `daemon()` defaults:
   + Argument `autoexit` default of `TRUE` now ensures daemons are terminated along with the parent process.
     Set to `NA` to retain the previous behaviour of having them automatically exit after completing any in-progress tasks.

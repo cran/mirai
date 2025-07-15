@@ -132,7 +132,7 @@ library(mirai)
 
 cl &lt;- makeCluster(6, type = &quot;MIRAI&quot;)
 cl
-#&gt; &lt; miraiCluster | ID: `26` nodes: 6 active: TRUE &gt;
+#&gt; &lt; miraiCluster | ID: `1` nodes: 6 active: TRUE &gt;
 parLapply(cl, iris, mean)
 #&gt; $Sepal.Length
 #&gt; [1] 5.843333
@@ -155,7 +155,7 @@ parLapply(cl, iris, mean)
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://eb809f13097f9a03ba5cb5bb&quot;
+#&gt; [1] &quot;abstract://1ffa515b477cb048623e8a7c&quot;
 stopCluster(cl)
 </code></pre>
 <p>Making a cluster specifying ‘url’ without ‘remote’ causes the shell commands for manual deployment of nodes to be printed to the console.</p>
@@ -163,16 +163,18 @@ stopCluster(cl)
 #&gt; Shell commands for deployment on nodes:
 #&gt; 
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.1.71:45111&quot;,dispatcher=FALSE,cleanup=FALSE,rs=c(10407,2115398811,-2011965664,-789584735,1666662894,1025958295,-751939348))'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.1.71:36061&quot;,dispatcher=FALSE,cleanup=FALSE,rs=c(10407,608223508,314351877,910111234,-668523109,970783776,-1964800607))'
 #&gt; 
 #&gt; [2]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.1.71:45111&quot;,dispatcher=FALSE,cleanup=FALSE,rs=c(10407,1495377764,161492535,-451945023,2093847167,-1105055737,1737365375))'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.1.71:36061&quot;,dispatcher=FALSE,cleanup=FALSE,rs=c(10407,1589879997,1665986728,-2021887029,-1113401414,1948876325,1799837871))'
 stop_cluster(cl)
 </code></pre>
 <h3 id="sec:2-foreach-support">2. Foreach Support</h3>
 <p>A ‘miraiCluster’ may also be registered by <a href="https://cran.r-project.org/package=doParallel"><code>doParallel</code></a> for use with the <a href="https://cran.r-project.org/package=foreach"><code>foreach</code></a> package.</p>
 <p>Running some parallel examples for the <code>foreach()</code> function:</p>
 <pre><code class="language-r">library(doParallel)
+#&gt; Loading required package: foreach
+#&gt; Loading required package: iterators
 library(foreach)
 
 cl &lt;- makeCluster(6, type = &quot;MIRAI&quot;)
@@ -182,10 +184,10 @@ registerDoParallel(cl)
 m &lt;- matrix(rnorm(9), 3, 3)
 foreach(i = 1:nrow(m), .combine = rbind) %dopar%
   (m[i, ] / mean(m[i, ]))
-#&gt;              [,1]       [,2]       [,3]
-#&gt; result.1 5.989529  1.1456413 -4.1351703
-#&gt; result.2 3.745199 -0.5989935 -0.1462058
-#&gt; result.3 3.007812  2.0183943 -2.0262067
+#&gt;                [,1]      [,2]      [,3]
+#&gt; result.1  0.5373009  1.073723  1.388976
+#&gt; result.2 -8.7848778  7.635917  4.148961
+#&gt; result.3 -3.6102409 10.285887 -3.675646
 
 # simple parallel matrix multiply
 a &lt;- matrix(1:16, 4, 4)
