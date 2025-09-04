@@ -28,6 +28,17 @@ still in progress, blocking but interruptible.
 
 \code{x[]} is an equivalent way to wait for and return the value of a mirai \code{x}.
 }
+\section{Options}{
+
+
+As an alternative to a character vector, a list where the names are the
+collection options is also accepted. The value for \code{.progress} is passed to
+the cli progress bar - if a character value as the name, and if a list as
+named parameters to \code{cli::cli_progress_bar}. Examples:
+\code{c(.stop = TRUE, .progress = "bar name")} or
+\code{c(.stop = TRUE, .progress = list(name = "bar", type = "tasks"))}
+}
+
 \section{Alternatively}{
 
 
@@ -46,7 +57,8 @@ If an error occurs in evaluation, the error message is returned as a
 character string of class 'miraiError' and 'errorValue'. \code{\link[=is_mirai_error]{is_mirai_error()}}
 may be used to test for this. The elements of the original condition are
 accessible via \code{$} on the error object. A stack trace comprising a list of
-calls is also available at \verb{$stack.trace}.
+calls is also available at \verb{$stack.trace}, and the original condition classes
+at \verb{$condition.class}.
 
 If a daemon crashes or terminates unexpectedly during evaluation, an
 'errorValue' 19 (Connection reset) is returned.

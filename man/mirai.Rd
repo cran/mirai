@@ -41,7 +41,9 @@ with a 'mirai', which will resolve to the evaluated result once complete.
 This function will return a 'mirai' object immediately.
 
 The value of a mirai may be accessed at any time at \verb{$data}, and if yet
-to resolve, an 'unresolved' logical NA will be returned instead.
+to resolve, an 'unresolved' logical NA will be returned instead. Each mirai
+has an attribute \code{id}, which is a monotonically increasing integer identifier
+in each session.
 
 \code{\link[=unresolved]{unresolved()}} may be used on a mirai, returning TRUE if a 'mirai' has yet to
 resolve and FALSE otherwise. This is suitable for use in control flow
@@ -91,7 +93,8 @@ If an error occurs in evaluation, the error message is returned as a
 character string of class 'miraiError' and 'errorValue'. \code{\link[=is_mirai_error]{is_mirai_error()}}
 may be used to test for this. The elements of the original condition are
 accessible via \code{$} on the error object. A stack trace comprising a list of
-calls is also available at \verb{$stack.trace}.
+calls is also available at \verb{$stack.trace}, and the original condition classes
+at \verb{$condition.class}.
 
 If a daemon crashes or terminates unexpectedly during evaluation, an
 'errorValue' 19 (Connection reset) is returned.

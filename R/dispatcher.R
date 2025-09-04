@@ -13,47 +13,44 @@
 #' tasks are only sent to daemons that can begin immediate execution of the
 #' task.
 #'
+#' @inheritParams daemons
 #' @param host the character URL dispatcher should dial in to, typically an IPC
 #'   address.
-#' @param url (optional) the character URL dispatcher should listen at (and
-#'   daemons should dial in to), including the port to connect to e.g.
-#'   'tcp://hostname:5555' or 'tcp://10.75.32.70:5555'. Specify 'tls+tcp://' to
-#'   use secure TLS connections.
-#' @param n (optional) if specified, the integer number of daemons to launch. In
-#'   this case, a local url is automatically generated.
-#' @param ... (optional) additional arguments passed through to [daemon()].
-#'   These include `asyncdial`, `autoexit`, and `cleanup`.
+#' @param url the character URL dispatcher should listen at (and daemons should
+#'   dial in to), including the port to connect to e.g. tcp://hostname:5555' or
+#'   'tcp://10.75.32.70:5555'. Specify 'tls+tcp://' to use secure TLS
+#'   connections.
+#' @param n \[default 0L\] if specified, the integer number of daemons to be
+#'   launched locally by the host process.
 #'
 #' @return Invisible NULL.
 #'
 #' @export
 #'
-dispatcher <- function(
-  host,
-  url = NULL,
-  n = NULL,
-  ...
-) {
-  n <- if (is.numeric(n)) as.integer(n) else length(url)
-  n > 0L || stop(._[["missing_url"]])
-
+dispatcher <- function(host, url = NULL, n = 0L, ...) {
   cv <- cv()
   sock <- socket("rep")
   on.exit(reap(sock))
   pipe_notify(sock, cv, remove = TRUE, flag = flag_value())
+
+  psock <- socket("poly")
+  on.exit(reap(psock), add = TRUE, after = TRUE)
+  m <- monitor(psock, cv)
+  n && listen(psock, url = url, fail = 2L)
+
   dial_sync_socket(sock, host)
 
   raio <- recv_aio(sock, mode = 1L, cv = cv)
   wait(cv) || return()
   res <- collect_aio(raio)
-  if (nzchar(res[[1L]])) Sys.setenv(R_DEFAULT_PACKAGES = res[[1L]]) else
+  if (nzchar(res[[1L]])) {
+    Sys.setenv(R_DEFAULT_PACKAGES = res[[1L]])
+  } else {
     Sys.unsetenv("R_DEFAULT_PACKAGES")
+  }
 
   tls <- NULL
-  auto <- is.null(url)
-  if (auto) {
-    url <- local_url()
-  } else {
+  if (!n) {
     if (is.character(res[[2L]])) {
       tls <- res[[2L]]
       pass <- res[[3L]]
@@ -64,38 +61,33 @@ dispatcher <- function(
   serial <- res[[4L]]
   res <- res[[5L]]
 
-  psock <- socket("poly")
-  on.exit(reap(psock), add = TRUE, after = TRUE)
-  m <- monitor(psock, cv)
-  listen(psock, url = url, tls = tls, fail = 2L)
-
   inq <- outq <- list()
   events <- integer()
-  count <- 0L
+  connections <- count <- 0L
   envir <- new.env(hash = FALSE, parent = emptyenv())
   `[[<-`(envir, "stream", res)
-  if (auto) {
-    dots <- parse_dots(...)
-    output <- attr(dots, "output")
-    for (i in seq_len(n))
-      launch_daemon(wa3(url, dots), output)
+
+  if (n) {
     for (i in seq_len(n))
       while(!until(cv, .limit_long))
         cv_signal(cv) || wait(cv) || return()
 
     changes <- read_monitor(m)
-    for (item in changes)
+    for (item in changes) {
       item > 0 && {
+        connections <- connections + 1L
         outq[[as.character(item)]] <- `[[<-`(`[[<-`(`[[<-`(`[[<-`(new.env(parent = emptyenv()), "pipe", item), "msgid", 0L), "ctx", NULL), "sync", FALSE)
         send(psock, list(next_stream(envir), serial), mode = 1L, block = TRUE, pipe = item)
       }
+    }
   } else {
+    listen(psock, url = url, tls = tls, fail = 2L)
     listener <- attr(psock, "listener")[[1L]]
     url <- opt(listener, "url")
-    if (parse_url(url)[["port"]] == "0")
+    if (parse_url(url)[["port"]] == "0") {
       url <- sub_real_port(opt(listener, "tcp-bound-port"), url)
+    }
   }
-
   send(sock, c(Sys.getpid(), url), mode = 2L, block = TRUE)
 
   ctx <- .context(sock)
@@ -109,16 +101,17 @@ dispatcher <- function(
       is.null(changes) || {
         for (item in changes) {
           if (item > 0) {
+            connections <- connections + 1L
             outq[[as.character(item)]] <- `[[<-`(`[[<-`(`[[<-`(`[[<-`(new.env(parent = emptyenv()), "pipe", item), "msgid", 0L), "ctx", NULL), "sync", FALSE)
             send(psock, list(next_stream(envir), serial), mode = 1L, block = TRUE, pipe = item)
             cv_signal(cv)
           } else {
             id <- as.character(-item)
             if (length(outq[[id]])) {
-              outq[[id]][["msgid"]] &&
-                send(outq[[id]][["ctx"]], .connectionReset, mode = 1L, block = TRUE)
-              if (length(outq[[id]][["dmnid"]]))
+              outq[[id]][["msgid"]] && send(outq[[id]][["ctx"]], .connectionReset, mode = 1L, block = TRUE)
+              if (length(outq[[id]][["dmnid"]])) {
                 events <- c(events, outq[[id]][["dmnid"]])
+              }
               outq[[id]] <- NULL
             }
           }
@@ -132,30 +125,36 @@ dispatcher <- function(
         if (value[1L] == 0L) {
           id <- readBin(value, integer(), n = 2L)[2L]
           if (id == 0L) {
+            awaiting <- length(inq)
+            executing <- sum(as.logical(unlist(lapply(outq, .subset2, "msgid"), use.names = FALSE)))
             found <- c(
               length(outq),
-              length(inq),
-              sum(as.logical(unlist(lapply(outq, .subset2, "msgid"), use.names = FALSE))),
-              count,
+              connections,
+              awaiting,
+              executing,
+              count - awaiting - executing,
               events
             )
             events <- integer()
           } else {
             found <- FALSE
-            for (item in outq)
+            for (item in outq) {
               item[["msgid"]] == id && {
                 send(psock, 0L, mode = 1L, pipe = item[["pipe"]], block = TRUE)
                 `[[<-`(item, "msgid", -1L)
                 found <- TRUE
                 break
               }
-            if (!found)
-              for (i in seq_along(inq))
+            }
+            if (!found) {
+              for (i in seq_along(inq)) {
                 inq[[i]][["msgid"]] == id && {
                   inq[[i]] <- NULL
                   found <- TRUE
                   break
                 }
+              }
+            }
           }
           send(ctx, found, mode = 2L, block = TRUE)
         } else {
@@ -178,8 +177,9 @@ dispatcher <- function(
         .read_marker(value) && {
             send(outq[[id]][["ctx"]], value, mode = 2L, block = TRUE)
             send(psock, 0L, mode = 2L, pipe = outq[[id]][["pipe"]], block = TRUE)
-            if (length(outq[[id]][["dmnid"]]))
+            if (length(outq[[id]][["dmnid"]])) {
               events <- c(events, outq[[id]][["dmnid"]])
+            }
             outq[[id]] <- NULL
           next
         }
@@ -193,8 +193,8 @@ dispatcher <- function(
         `[[<-`(outq[[id]], "msgid", 0L)
       }
 
-      if (length(inq))
-        for (item in outq)
+      if (length(inq)) {
+        for (item in outq) {
           item[["msgid"]] || {
             if (.read_marker(inq[[1L]][["req"]])) {
               item[["sync"]] && next
@@ -208,6 +208,8 @@ dispatcher <- function(
             inq[[1L]] <- NULL
             break
           }
+        }
+      }
     }
   )
 }

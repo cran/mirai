@@ -9,7 +9,9 @@
 #' This function will return a 'mirai' object immediately.
 #'
 #' The value of a mirai may be accessed at any time at `$data`, and if yet
-#' to resolve, an 'unresolved' logical NA will be returned instead.
+#' to resolve, an 'unresolved' logical NA will be returned instead. Each mirai
+#' has an attribute `id`, which is a monotonically increasing integer identifier
+#' in each session.
 #'
 #' [unresolved()] may be used on a mirai, returning TRUE if a 'mirai' has yet to
 #' resolve and FALSE otherwise. This is suitable for use in control flow
@@ -74,7 +76,8 @@
 #' character string of class 'miraiError' and 'errorValue'. [is_mirai_error()]
 #' may be used to test for this. The elements of the original condition are
 #' accessible via `$` on the error object. A stack trace comprising a list of
-#' calls is also available at `$stack.trace`.
+#' calls is also available at `$stack.trace`, and the original condition classes
+#' at `$condition.class`.
 #'
 #' If a daemon crashes or terminates unexpectedly during evaluation, an
 #' 'errorValue' 19 (Connection reset) is returned.
@@ -138,50 +141,52 @@
 #'
 #' @export
 #'
-mirai <- function(
-  .expr,
-  ...,
-  .args = list(),
-  .timeout = NULL,
-  .compute = NULL
-) {
+mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) {
   missing(.expr) && stop(._[["missing_expression"]])
-  if (is.null(.compute)) .compute <- .[["cp"]]
-  envir <- ..[[.compute]]
+  envir <- compute_env(.compute)
 
   expr <- substitute(.expr)
   globals <- list(...)
-  length(globals) &&
-    {
-      gn <- names(globals)
-      if (is.null(gn)) {
-        is.environment(globals[[1L]]) || stop(._[["named_dots"]])
-        globals <- as.list.environment(globals[[1L]], all.names = TRUE)
-        globals[[".Random.seed"]] <- NULL
-      }
-      all(nzchar(gn)) || stop(._[["named_dots"]])
+  length(globals) && {
+    gn <- names(globals)
+    if (is.null(gn)) {
+      is.environment(globals[[1L]]) || stop(._[["named_dots"]])
+      globals <- as.list.environment(globals[[1L]], all.names = TRUE)
+      globals[[".Random.seed"]] <- NULL
     }
-  if (length(envir[["seed"]]))
-    globals[[".Random.seed"]] <- next_stream(envir)
+    all(nzchar(gn)) || stop(._[["named_dots"]])
+  }
+  if (length(envir[["seed"]])) globals[[".Random.seed"]] <- next_stream(envir)
+
   data <- list(
-    ._mirai_globals_. = globals,
-    .expr = if (
+    ._expr_. = if (
       is.symbol(expr) &&
-        exists(as.character(expr), envir = parent.frame()) &&
-        is.language(.expr)
-    )
-      .expr else expr
+      exists(as.character(expr), envir = parent.frame()) &&
+      is.language(.expr)
+    ) .expr else expr,
+    ._globals_. = globals,
+    ._otel_. = if (otel_tracing && length(envir)) {
+      spn <- otel::start_local_active_span(
+        "mirai::mirai",
+        links = list(compute_profile = envir[["otel_span"]]),
+        options = list(kind = "client")
+      )
+      otel::pack_http_context()
+    }
   )
+
   if (length(.args)) {
-    if (is.environment(.args))
-      .args <- as.list.environment(.args, all.names = TRUE) else
+    if (is.environment(.args)) {
+      .args <- as.list.environment(.args, all.names = TRUE)
+    } else {
       length(names(.args)) && all(nzchar(names(.args))) || stop(._[["named_args"]])
+    }
     data <- c(.args, data)
   }
 
   is.null(envir) && return(ephemeral_daemon(data, .timeout))
 
-  request(
+  req <- request(
     .context(envir[["sock"]]),
     data,
     send_mode = 1L,
@@ -190,6 +195,8 @@ mirai <- function(
     cv = envir[["cv"]],
     id = envir[["dispatcher"]]
   )
+  if (otel_tracing) spn$set_attribute("mirai.id", attr(req, "id"))
+  invisible(req)
 }
 
 #' Evaluate Everywhere
@@ -202,9 +209,14 @@ mirai <- function(
 #'
 #' If using dispatcher, this function forces a synchronization point at
 #' dispatcher, whereby the [everywhere()] call must have been evaluated on all
-#' daemons prior to subsequent evaluations taking place. It is an error to call
-#' [everywhere()] successively without at least one [mirai()] call in between,
-#' as an ordinary mirai call is required to exit each synchronization point.
+#' daemons prior to subsequent mirai evaluations taking place.
+#'
+#' Calling [everywhere()] does not affect the RNG stream for mirai calls when
+#' using a reproducible `seed` value at [daemons()]. This allows the seed
+#' associated for each mirai call to be the same, regardless of the number of
+#' daemons actually used to evaluate the code. Note that this means the code
+#' evaluated in an [everywhere()] call is itself non-reproducible if it should
+#' involve random numbers.
 #'
 #' @inheritParams mirai
 #'
@@ -214,18 +226,22 @@ mirai <- function(
 #'
 #' @examplesIf interactive()
 #' daemons(1)
+#'
 #' # export common data by a super-assignment expression:
 #' everywhere(y <<- 3)
+#' mirai(y)[]
+#'
 #' # '...' variables are assigned to the global environment
 #' # '.expr' may be specified as an empty {} in such cases:
 #' everywhere({}, a = 1, b = 2)
-#' m <- mirai(a + b - y == 0L)
-#' m[]
-#' # everywhere() returns a list of mirai which may be waited for and inspected
-#' mlist <- everywhere("just a normal operation")
-#' collect_mirai(mlist)
-#' mlist <- everywhere(stop("error"))
-#' collect_mirai(mlist)
+#' mirai(a + b - y == 0L)[]
+#'
+#' # everywhere() returns a mirai_map object:
+#' mp <- everywhere("just a normal operation")
+#' mp
+#' mp[.flat]
+#' mp <- everywhere(stop("everywhere"))
+#' collect_mirai(mp)
 #' daemons(0)
 #'
 #' # loading a package on all daemons
@@ -238,9 +254,9 @@ mirai <- function(
 #' @export
 #'
 everywhere <- function(.expr, ..., .args = list(), .compute = NULL) {
+  require_daemons(.compute = .compute, call = environment())
   if (is.null(.compute)) .compute <- .[["cp"]]
   envir <- ..[[.compute]]
-  is.null(envir) && stop(sprintf(._[["not_found"]], .compute))
 
   expr <- substitute(.expr)
   .expr <- c(
@@ -248,26 +264,31 @@ everywhere <- function(.expr, ..., .args = list(), .compute = NULL) {
     as.expression(
       if (
         is.symbol(expr) &&
-          exists(as.character(expr), envir = parent.frame()) &&
-          is.language(.expr)
-      )
-        .expr else expr
+        exists(as.character(expr), envir = parent.frame()) &&
+        is.language(.expr)
+      ) .expr else expr
     )
   )
 
-  vec <- vector(
-    mode = "list",
-    length = if (is.null(envir[["dispatcher"]]))
-      max(stat(envir[["sock"]], "pipes"), envir[["n"]]) else
-        max(status(.compute)[["connections"]], 1L)
-  )
+  xlen <- if (is.null(envir[["dispatcher"]])) {
+    max(stat(envir[["sock"]], "pipes"), envir[["n"]])
+  } else {
+    max(info(.compute)[[1L]])
+  }
+  seed <- envir[["seed"]]
+  on.exit({
+    .mark(FALSE)
+    `[[<-`(envir, "seed", seed)
+  })
+  `[[<-`(envir, "seed", NULL)
   .mark()
-  on.exit(.mark(FALSE))
-  for (i in seq_along(vec))
-    vec[[i]] <- mirai(.expr, ..., .args = .args, .compute = .compute)
-
-  class(vec) <- "mirai_map"
-  invisible(envir[["everywhere"]] <- vec)
+  vec <- lapply(seq_len(xlen), function(i)
+    mirai(.expr, ..., .args = .args, .compute = .compute)
+  )
+  .mark(FALSE)
+  m <- mirai({})
+  `[[<-`(envir, "everywhere",  c(vec, list(m)))
+  invisible(`class<-`(vec, "mirai_map"))
 }
 
 #' mirai (Call Value)
@@ -344,6 +365,15 @@ call_mirai <- call_aio_
 #' @return An object (the return value of the 'mirai'), or a list of such
 #'   objects (the same length as `x`, preserving names).
 #'
+#' @section Options:
+#'
+#' As an alternative to a character vector, a list where the names are the
+#' collection options is also accepted. The value for `.progress` is passed to
+#' the cli progress bar - if a character value as the name, and if a list as
+#' named parameters to `cli::cli_progress_bar`. Examples:
+#' `c(.stop = TRUE, .progress = "bar name")` or
+#' `c(.stop = TRUE, .progress = list(name = "bar", type = "tasks"))`
+#'
 #' @inheritSection call_mirai Alternatively
 #' @inheritSection mirai Errors
 #'
@@ -368,6 +398,10 @@ call_mirai <- call_aio_
 collect_mirai <- function(x, options = NULL) {
   is.list(x) && length(options) || return(collect_aio_(x))
 
+  if (length(names(options))) {
+    `[[<-`(., "progress", options[[".progress"]])
+    options <- names(options)
+  }
   dots <- mget(options, envir = .)
   mmap(x, dots)
 }
@@ -403,16 +437,7 @@ collect_mirai <- function(x, options = NULL) {
 #'
 #' @export
 #'
-stop_mirai <- function(x) {
-  is.list(x) &&
-    return(invisible(rev(as.logical(lapply(rev(unclass(x)), stop_mirai)))))
-
-  stop_aio(x)
-  aio <- .subset2(x, "aio")
-  !is.integer(aio) &&
-    attr(aio, "id") > 0 &&
-    query_dispatcher(attr(aio, "context"), c(0L, attr(aio, "id")))
-}
+stop_mirai <- stop_request
 
 #' Query if a mirai is Unresolved
 #'
@@ -543,17 +568,14 @@ on_daemon <- function() !is.null(.[["sock"]])
 #' @export
 #'
 print.mirai <- function(x, ...) {
-  cat(
-    if (.unresolved(x)) "< mirai [] >\n" else "< mirai [$data] >\n",
-    file = stdout()
-  )
+  cat(if (.unresolved(x)) "< mirai [] >\n" else "< mirai [$data] >\n", file = stdout())
   invisible(x)
 }
 
 #' @export
 #'
 print.miraiError <- function(x, ...) {
-  cat(sprintf("'miraiError' chr %s", x), file = stdout())
+  cat(sprintf("'miraiError' chr %s\n", x), file = stdout())
   invisible(x)
 }
 
@@ -570,8 +592,9 @@ print.miraiInterrupt <- function(x, ...) {
 
 #' @exportS3Method utils::.DollarNames
 #'
-.DollarNames.miraiError <- function(x, pattern = "")
+.DollarNames.miraiError <- function(x, pattern = "") {
   grep(pattern, names(attributes(x)), value = TRUE, fixed = TRUE)
+}
 
 # internals --------------------------------------------------------------------
 
@@ -585,43 +608,43 @@ ephemeral_daemon <- function(data, timeout) {
     stderr = FALSE,
     wait = FALSE
   )
-  aio <- request(
+  req <- request(
     .context(sock),
     data,
     send_mode = 1L,
     recv_mode = 1L,
     timeout = timeout,
-    cv = NA
+    cv = substitute()
   )
-  `attr<-`(.subset2(aio, "aio"), "sock", sock)
-  aio
+  `attr<-`(.subset2(req, "aio"), "sock", sock)
+  invisible(req)
 }
 
-deparse_safe <- function(x)
-  if (length(x))
-    deparse(x, width.cutoff = 500L, backtick = TRUE, control = NULL, nlines = 1L)
+deparse_safe <- function(x) {
+  length(x) || return()
+  deparse(x, width.cutoff = 500L, backtick = TRUE, control = NULL, nlines = 1L)
+}
 
 mk_interrupt_error <- function() .miraiInterrupt
 
 mk_mirai_error <- function(cnd, sc) {
+  cnd[["condition.class"]] <- class(cnd)
   cnd[["call"]] <- `attributes<-`(.subset2(cnd, "call"), NULL)
   call <- deparse_safe(.subset2(cnd, "call"))
   msg <- if (
-    is.null(call) ||
-      call == "eval(._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = .GlobalEnv)"
-  )
-    sprintf("Error: %s", .subset2(cnd, "message")) else
+    is.null(call) || call == "eval(._mirai_.[[\"._expr_.\"]], envir = ._mirai_., enclos = .GlobalEnv)"
+  ) {
+    sprintf("Error: %s", .subset2(cnd, "message"))
+  } else {
     sprintf("Error in %s: %s", call, .subset2(cnd, "message"))
+  }
   idx <- max(which(as.logical(lapply(
-    sc,
-    `==`,
-    "eval(._mirai_.[[\".expr\"]], envir = ._mirai_., enclos = .GlobalEnv)"
+    sc, `==`, "eval(._mirai_.[[\"._expr_.\"]], envir = ._mirai_., enclos = .GlobalEnv)"
   ))))
   sc <- sc[(length(sc) - 1L):(idx + 1L)]
   if (sc[[1L]][[1L]] == ".handleSimpleError") sc <- sc[-1L]
-  sc <- lapply(sc, `attributes<-`, NULL)
-  out <- `attributes<-`(msg, `[[<-`(cnd, "stack.trace", sc))
-  `class<-`(out, c("miraiError", "errorValue", "try-error"))
+  cnd[["stack.trace"]] <- lapply(sc, `attributes<-`, NULL)
+  `class<-`(`attributes<-`(msg, cnd), c("miraiError", "errorValue", "try-error"))
 }
 
 .miraiInterrupt <- `class<-`("", c("miraiInterrupt", "errorValue", "try-error"))

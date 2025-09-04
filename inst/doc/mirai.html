@@ -117,49 +117,28 @@ section.footnotes {
 </div>
 <div class="body">
 <p>This is a reference vignette of the package’s core functionality. Other package vignettes cover additional features.</p>
-<h3 id="sec:1-the-mirai-concept">1. The mirai Concept</h3>
+<h3 id="sec:1-introduction">1. Introduction</h3>
 <p>mirai (Japanese for ‘future’) implements the concept of <em>futures</em> in R.</p>
 <p>Futures are an abstraction that represent the result of code evaluation that will be available at some point in the future. The actual code evaluation is sent to and performed in a separate R process (<em>daemon</em>), and the result is sent back to the main (<em>host</em>) process when it completes.</p>
+<h4 id="sec:mirai">mirai</h4>
 <p>The package has one main function: <code>mirai()</code> to create a mirai object.</p>
 <p>This function returns almost immediately, and is never blocking. This is the essence of async: whilst the mirai evaluation is ongoing on the daemon, the host R process is free to continue with other things.</p>
-<p>As the mirai expression is sent to another process, it must be self-contained.
-This means that any functions and variables used in it must be available in that process as well.
+<p>mirai adopts a clear and explicit model for evaluation: as the mirai expression is sent to another process, it must be self-contained.
 This requires that:</p>
 <ul>
 <li>Package functions be namespaced using <code>::</code>, or <code>library()</code> calls be made within the expression.</li>
-<li>Other functions/data/objects required by the expression should be passed via <code>...</code> or <code>.args</code> to be sent along to the daemon.</li>
+<li>Other functions/data/objects required by the expression should be passed explicitly via <code>...</code> or <code>.args</code>.</li>
 </ul>
-<p>A mirai is either <em>unresolved</em> if the result has yet to be received, or <em>resolved</em> if it has. <code>unresolved()</code> is a helper function to check the state of a mirai.</p>
-<p>For a mirai <code>m</code>, the result is available at <code>m$data</code> once it has resolved.
-Normally this will be the return value of the evaluated expression.
-If the expression errored, caused the process to crash, or timed out then this will be an ‘errorValue’ instead.
-See the section <a href="#errors-in-a-mirai">Errors in a mirai</a> below.</p>
-<p>Rather than repeatedly checking <code>unresolved(m)</code>, it is more efficient to wait for and collect its value by using <code>m[]</code>.</p>
-<p>When a developer or code author writes a <code>mirai()</code> call, they should not be concerned about where or how execution of that code actually happens.
-It is simply meant to be executed on the resources that are available to it at the time it is run.</p>
-<p>Instead, it is for the end-user running the code to declare the resources available for evaluating mirai calls. This is done using the package’s other main function: <code>daemons()</code>.</p>
-<p>If daemons have not been set, each <code>mirai()</code> call will by default create a new local background process (<em>ephemeral daemon</em>) on which to perform its evaluation.</p>
-<p>Instead, <code>daemons()</code> sets up persistent daemons on which to evaluate mirai expressions.</p>
-<ul>
-<li>Using persistent daemons eliminates the time and overhead of starting new processes for each evaluation, and limits the number of processes used at any one time.</li>
-<li>Even re-using the same daemon, cleanup steps performed between evaluations ensure that each mirai continues to be self-contained and unaffected by past evaluations.</li>
-</ul>
-<p>How to set up and launch daemons is covered in sections below, starting with <a href="#local-daemons">local daemons</a>.</p>
-<h3 id="sec:2-example-use-cases">2. Example Use Cases</h3>
-<h4 id="sec:parallelize-compute-intensive-tasks">Parallelize compute-intensive tasks</h4>
-<p>Multiple long computes (model fits etc.) can be performed in parallel on available computing cores.</p>
 <p>The following mimics an expensive calculation that eventually returns a random value.</p>
 <pre><code class="language-r">library(mirai)
-
-args &lt;- list(time = 2L, mean = 4)
 
 m &lt;- mirai(
   {
     Sys.sleep(time)
     rnorm(5L, mean)
   },
-  time = args$time,
-  mean = args$mean
+  time = 2L,
+  mean = 4.5
 )
 
 m
@@ -169,86 +148,58 @@ m$data
 unresolved(m)
 #&gt; [1] TRUE
 
-# Do other stuff
+# Do work whilst unresolved
 
-collect_mirai(m)
-#&gt; [1] 2.774005 6.596121 5.710772 5.167702 2.612949
 m[]
-#&gt; [1] 2.774005 6.596121 5.710772 5.167702 2.612949
+#&gt; [1] 4.476153 5.546561 5.275747 4.493184 5.143411
+m$data
+#&gt; [1] 4.476153 5.546561 5.275747 4.493184 5.143411
 </code></pre>
+<p>A mirai is either <em>unresolved</em> if the result has yet to be received, or <em>resolved</em> if it has. <code>unresolved()</code> is a helper function to check the state of a mirai.</p>
+<p>The result of a mirai <code>m</code> is available at <code>m$data</code> once it has resolved.
+Normally this will be the return value of the evaluated expression.
+If the expression errored, crashed, or timed out then this will be an ‘errorValue’ instead.
+See the section <a href="#error-handling">Error Handling</a> below.</p>
+<p>Rather than repeatedly checking <code>unresolved(m)</code>, it is more efficient to wait for and collect its value by using <code>m[]</code>.</p>
+<h4 id="sec:mirai-advanced">mirai (advanced)</h4>
 <p>For easy programmatic use of <code>mirai()</code>, ‘.expr’ accepts a pre-constructed language object, and also a list of named arguments passed via ‘.args’.
 So, the following would be equivalent to the above:</p>
 <pre><code class="language-r">expr &lt;- quote({Sys.sleep(time); rnorm(5L, mean)})
 args &lt;- list(time = 2L, mean = 4)
 
 m1 &lt;- mirai(.expr = expr, .args = args)
-m2 &lt;- mirai(.expr = expr, .args = args)
 m1[]
-#&gt; [1] 3.654666 4.734716 4.882496 4.235157 4.958596
-m2[]
-#&gt; [1] 4.695293 4.210651 4.383182 4.342163 4.497875
+#&gt; [1] 2.005464 3.797099 2.288692 4.184737 4.566824
 </code></pre>
-<p>By running the above two calculations in parallel, they take roughly half the time as running sequentially (minus a relatively inconsequential parallelization overhead).</p>
-<h4 id="sec:unblock-i-o-bound-operations">Unblock I/O-bound Operations</h4>
-<p>Problem: high-frequency real-time data cannot be written to file/database synchronously without disrupting the execution flow of ingesting the data.</p>
-<p>Solution: cache data in memory and use <code>mirai()</code> to perform periodic write operations asynchronously from a separate process.</p>
-<p>Below, ‘.args’ is used to pass <code>environment()</code>, which is the calling environment.
-This provides a convenient method of passing in existing objects, as as the <code>x</code> and <code>file</code> arguments to the <code>write.cv.async()</code> function.</p>
-<pre><code class="language-r">library(mirai)
-
-write.cv.async &lt;- function(x, file) {
+<p>The example below uses <code>mirai()</code> to perform a long-running write operation asynchronously from a separate process.
+Here <code>environment()</code>, which is the calling environment, is passed directly to ‘.args’.
+This is a convenient method for passing in objects existing in the environment, such as the <code>x</code> and <code>file</code> provided to the <code>write.csv.async()</code> function.</p>
+<pre><code class="language-r">write.csv.async &lt;- function(x, file) {
   mirai(write.csv(x, file), .args = environment())
 }
 
-m &lt;- write.cv.async(x = rnorm(1e6), file = tempfile())
+m &lt;- write.csv.async(x = rnorm(1e6), file = tempfile())
 
 while (unresolved(m)) {
   cat(&quot;Writing file...\n&quot;)
-  Sys.sleep(0.5)
+  Sys.sleep(0.5) # or do other work
 }
 #&gt; Writing file...
 #&gt; Writing file...
 cat(&quot;Write complete:&quot;, is.null(m$data))
 #&gt; Write complete: TRUE
 </code></pre>
-<h4 id="sec:resilient-pipelines">Resilient Pipelines</h4>
-<p>Code that can potentially fail is isolated in a separate process to ensure continued uptime.</p>
-<p>As part of a data science / machine learning pipeline, iterations of model training may periodically fail for stochastic reasons (e.g. problematic graphics cards memory management).</p>
-<p>Running each iteration in a mirai isolates this potentially problematic code such that it doesn’t bring down the entire pipeline, even if it fails.</p>
-<pre><code class="language-r">library(mirai)
-
-run_iteration &lt;- function(i) {
-  # simulates a stochastic error rate
-  if (runif(1) &lt; 0.1) stop(&quot;random error\n&quot;, call. = FALSE)
-  sprintf(&quot;iteration %d successful\n&quot;, i)
-}
-
-for (i in 1:10) {
-
-  m &lt;- mirai(run_iteration(i), environment())
-  while (is_error_value(m[])) {
-    cat(m$data)
-    m &lt;- mirai(run_iteration(i), environment())
-  }
-  cat(m$data)
-
-}
-#&gt; iteration 1 successful
-#&gt; iteration 2 successful
-#&gt; iteration 3 successful
-#&gt; Error: random error
-#&gt; iteration 4 successful
-#&gt; iteration 5 successful
-#&gt; iteration 6 successful
-#&gt; iteration 7 successful
-#&gt; Error: random error
-#&gt; iteration 8 successful
-#&gt; iteration 9 successful
-#&gt; iteration 10 successful
-</code></pre>
-<p>By testing the return value of each mirai for errors, error-handling code is able to automate recovery and re-attempts, as above.
-The result is a resilient and fault-tolerant pipeline that minimizes downtime by eliminating interruptions of long computes.</p>
-<h3 id="sec:3-errors-in-a-mirai">3. Errors in a mirai</h3>
+<h4 id="sec:daemons">daemons</h4>
+<p>When writing a <code>mirai()</code> call, you should not be concerned about where or how execution of that code actually happens.</p>
+<p>It is for the end-user running the code to declare the resources available for evaluating mirai calls. This is done using the package’s other main function: <code>daemons()</code>.</p>
+<p>If daemons have not been set, each <code>mirai()</code> call will by default create a new local background process (<em>ephemeral daemon</em>) on which to perform its evaluation.</p>
+<p>Instead, <code>daemons()</code> sets up persistent daemons on which to evaluate mirai expressions.</p>
+<ul>
+<li>Using persistent daemons eliminates the time and overhead of starting new processes for each evaluation, and limits the number of processes used at any one time.</li>
+<li>Even re-using the same daemon, cleanup steps performed between evaluations ensure that each mirai continues to be self-contained and unaffected by past evaluations.</li>
+</ul>
+<p>How to set up and launch daemons is covered in sections below, starting with <a href="#local-daemons">local daemons</a>.</p>
+<h3 id="sec:2-error-handling">2. Error Handling</h3>
 <p>If execution in a mirai fails, the error message is returned as a character string of class ‘miraiError’ and ‘errorValue’ to facilitate debugging.</p>
 <p><code>is_mirai_error()</code> may be used to test for mirai execution errors.</p>
 <pre><code class="language-r">m1 &lt;- mirai(stop(&quot;occurred with a custom message&quot;, call. = FALSE))
@@ -264,7 +215,10 @@ is_mirai_error(m2$data)
 is_error_value(m2$data)
 #&gt; [1] TRUE
 </code></pre>
-<p>A full stack trace of evaluation within the mirai is recorded and accessible at <code>$stack.trace</code> on the error object.</p>
+<ul>
+<li>A full stack trace of evaluation within the mirai is recorded and accessible at <code>$stack.trace</code> on the error object</li>
+<li>The original condition classes are also preserved at <code>$condition.class</code></li>
+</ul>
 <pre><code class="language-r">f &lt;- function(x) if (x &gt; 0) stop(&quot;positive&quot;)
 
 m3 &lt;- mirai({f(-1); f(1)}, f = f)
@@ -277,9 +231,13 @@ m3$data$stack.trace
 #&gt; 
 #&gt; [[2]]
 #&gt; f(1)
+m3$data$condition.class
+#&gt; [1] &quot;simpleError&quot; &quot;error&quot;       &quot;condition&quot;
 </code></pre>
-<p>Elements of the original error condition are also accessible via <code>$</code> on the error object.
-For example, additional metadata recorded by <code>rlang::abort()</code> is preserved:</p>
+<ul>
+<li>The elements of the original error condition are also accessible via <code>$</code> on the error object</li>
+<li>Additional metadata recorded by <code>rlang::abort()</code> is preserved</li>
+</ul>
 <pre><code class="language-r">f &lt;- function(x) if (x &gt; 0) stop(&quot;positive&quot;)
 
 m4 &lt;- mirai(rlang::abort(&quot;aborted&quot;, meta_uid = &quot;UID001&quot;))
@@ -309,6 +267,21 @@ is_error_value(m5$data)
 #&gt; [1] TRUE
 </code></pre>
 <p><code>is_error_value()</code> tests for all mirai execution errors, user interrupts and timeouts.</p>
+<h3 id="sec:3-random-number-generation">3. Random Number Generation</h3>
+<p>mirai employs L’Ecuyer-CMRG streams for random number generation in the same way as base R’s own parallel package. This is a widely-adopted, statistically-sound method, suitable for parallel computation.</p>
+<p>Streams essentially cut into the RNG’s period (a very long sequence of pseudo-random numbers) at intervals that are far apart from each other that they do not in practice overlap. This ensures that statistical results obtained from parallel computations remain correct and valid. The method of generating streams is recursive.</p>
+<p><strong>By default, when the <code>seed</code> argument to <code>daemons()</code> is <code>NULL</code></strong>: mirai initiates a new stream for each daemon launched, in the same manner as base R.</p>
+<ul>
+<li>Guarantees that the results are statistically-sound, although does not guarantee numerical reproducibility between parallel runs</li>
+<li>Using different numbers of daemons would cause mirai tasks to be sent to different daemons</li>
+<li>With dispatcher, mirai tasks are sent dynamically to the next available daemon, and this is not guaranteed to be the same on each run</li>
+</ul>
+<p><strong>Supply an explicit integer <code>seed</code> to <code>daemons()</code> for reproducible RNG</strong>: instead of initiating a new stream for each daemon, now a stream is initiated for each <code>mirai()</code> call.</p>
+<ul>
+<li>Guarantees the same deterministic, reproducible results across runs</li>
+<li>This is regardless of the number of daemons used</li>
+<li>This is slightly computationally wasteful, although with a negligible impact on performance</li>
+</ul>
 <h3 id="sec:4-local-daemons">4. Local Daemons</h3>
 <p>Daemons, or persistent background processes, may be set to receive <code>mirai()</code> requests.</p>
 <blockquote>
@@ -319,43 +292,47 @@ To instead only load the <code>base</code> package (which cuts out more than hal
 <h4 id="sec:with-dispatcher-default">With Dispatcher (default)</h4>
 <p>Call <code>daemons()</code> specifying the number of daemons to launch.</p>
 <pre><code class="language-r">daemons(6)
-#&gt; [1] 6
 </code></pre>
 <p>The default <code>dispatcher = TRUE</code> creates a <code>dispatcher()</code> background process that connects to individual daemon processes on the local machine.
 This ensures that tasks are dispatched efficiently on a first-in first-out (FIFO) basis to daemons for processing.
 Tasks are queued at dispatcher and sent to a daemon as soon as it can accept the task for immediate execution.
 Dispatcher employs an event-driven approach that is efficient both in terms of consuming no resources while waiting, whilst also being fully synchronized with events.</p>
-<p>To view the current status, <code>status()</code> provides:</p>
-<ol>
-<li>The number of active connections,</li>
-<li>The URL daemons connect to, and</li>
-<li>A task summary:</li>
-</ol>
+<p>To view current statistics, <code>info()</code> provides these succinctly in a single integer vector:</p>
 <ul>
-<li><code>waiting</code> number of tasks queued for execution at dispatcher</li>
-<li><code>assigned</code> number of tasks sent to a daemon for execution</li>
-<li><code>complete</code> number of tasks for which the result has been received (either completed or cancelled)</li>
+<li><code>connections</code> number of currently active daemon connections</li>
+<li><code>cumulative</code> total number of daemons to have ever connected</li>
+<li><code>awaiting</code> number of mirai tasks queued at dispatcher</li>
+<li><code>executing</code> number of mirai tasks currently being evaluated on a daemon</li>
+<li><code>completed</code> number of mirai tasks for which have been either completed or cancelled</li>
 </ul>
+<pre><code class="language-r">info()
+#&gt; connections  cumulative    awaiting   executing   completed 
+#&gt;           6           6           0           0           0
+</code></pre>
+<p>The <code>status()</code> function provides a slightly more verbose output:</p>
+<ol>
+<li><code>connections</code>: the number of active connections.</li>
+<li><code>daemons</code>: the URL daemons connect to.</li>
+<li><code>mirai</code>: a task summary of <code>awaiting</code>, <code>assigned</code> and <code>completed</code>.</li>
+</ol>
 <pre><code class="language-r">status()
 #&gt; $connections
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;ipc:///tmp/439b4a866d2400f60d7cd154&quot;
+#&gt; [1] &quot;abstract://3b815670e7f3ccf61901f3f2&quot;
 #&gt; 
 #&gt; $mirai
 #&gt;  awaiting executing completed 
 #&gt;         0         0         0
 </code></pre>
 <pre><code class="language-r">daemons(0)
-#&gt; [1] 0
 </code></pre>
 <p>Set the number of daemons to zero to reset.
 This reverts to the default of creating a new background process for each ‘mirai’ request.</p>
 <h4 id="sec:without-dispatcher">Without Dispatcher</h4>
 <p>Alternatively, specifying <code>dispatcher = FALSE</code>, the background daemons connect directly to the host process.</p>
 <pre><code class="language-r">daemons(6, dispatcher = FALSE)
-#&gt; [1] 6
 </code></pre>
 <p>This means that tasks are sent immediately in a round-robin fashion, which ensures that they are evenly-distributed amongst daemons.
 This does not however guarantee optimal scheduling, as the duration of tasks cannot be known <em>a priori</em>.
@@ -368,9 +345,9 @@ It is suited to working with similar-length tasks, or where concurrent tasks typ
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;ipc:///tmp/643c70f2e3e1a8239530a95c&quot;
+#&gt; [1] &quot;abstract://da8cb9f4b9a34d11357b3bac&quot;
 </code></pre>
-<h4 id="sec:everywhere">Everywhere</h4>
+<h4 id="sec:everywhere">everywhere()</h4>
 <p><code>everywhere()</code> may be used to evaluate an expression on all connected daemons and persist the resultant state, regardless of a daemon’s ‘cleanup’ setting.</p>
 <pre><code class="language-r">everywhere(library(DBI))
 </code></pre>
@@ -399,20 +376,7 @@ An example use case is <code>box::use()</code> to import a module or package:</p
 )
 
 daemons(0)
-#&gt; [1] 0
 </code></pre>
-<h4 id="sec:with-method">With Method</h4>
-<p><code>daemons()</code> has a <code>with()</code> method, which evaluates an expression with daemons created for the duration of the expression and automatically torn down upon completion.</p>
-<p>It was originally designed for running a Shiny app with the desired number of daemons, as in the example below:</p>
-<pre><code class="language-r">with(daemons(4), shiny::runApp(app))
-</code></pre>
-<blockquote>
-<p>Note: it is assumed the app is already created.
-Wrapping a call to <code>shiny::shinyApp()</code> would not work as <code>runApp()</code> is implicitly called when the app is printed, however printing occurs only after <code>with()</code> has returned, hence the app would run outside of the scope of the <code>with()</code> statement.</p>
-</blockquote>
-<p>In the case of a Shiny app, all mirai calls will be executed before the app returns as the app itself is blocking.
-In the case of other expressions, be sure to call the results (or collect the values) of all mirai within the expression to ensure that they all complete before the daemons are torn down.</p>
-<p>If specifying a <a href="#compute-profiles">compute profile</a> for the <code>daemons()</code> call, all calls with <code>.compute = NULL</code> within the <code>with()</code> clause will default to this compute profile.</p>
 <h3 id="sec:5-remote-daemons">5. Remote Daemons</h3>
 <p>The daemons interface may also be used to send tasks for computation to remote daemon processes on the network.</p>
 <p>Call <code>daemons()</code> specifying ‘url’ as a character string such as: ‘tcp://10.75.32.70:5555’ at which daemon processes should connect.
@@ -425,7 +389,6 @@ For example, port 5555 on the IPv6 address <code>::ffff:a6f:50d</code> would be 
 <p>Below, calling <code>host_url()</code> without a port value uses the default of ‘0’.
 This is a wildcard value that will automatically assigns a free ephemeral port:</p>
 <pre><code class="language-r">daemons(url = host_url())
-#&gt; [1] 0
 </code></pre>
 <p>The actual assigned port may be queried at any time via <code>status()</code>:</p>
 <pre><code class="language-r">status()
@@ -433,7 +396,7 @@ This is a wildcard value that will automatically assigns a free ephemeral port:<
 #&gt; [1] 0
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;tcp://10.37.61.241:51753&quot;
+#&gt; [1] &quot;tcp://192.168.1.71:46741&quot;
 #&gt; 
 #&gt; $mirai
 #&gt;  awaiting executing completed 
@@ -442,11 +405,12 @@ This is a wildcard value that will automatically assigns a free ephemeral port:<
 <p>The number of daemons connected at any time may be dynamically scaled up or down, according to requirements.</p>
 <p>To reset all connections and revert to default behaviour:</p>
 <pre><code class="language-r">daemons(0)
-#&gt; [1] 0
 </code></pre>
 <p>Closing the connection causes all connected daemons to exit automatically. If using dispatcher, it will cause dispatcher to exit, and in turn all connected daemons when their respective connections with the dispatcher are terminated.</p>
 <h3 id="sec:6-launching-remote-daemons">6. Launching Remote Daemons</h3>
-<p>The launcher analogy is appropriate, as these are ways of executing a daemon on the machine of your choice, very much like launching a satellite. Once deployed, the daemon connects back to your host process through it’s own communications (TCP or TLS over TCP).</p>
+<blockquote>
+<p>The launcher analogy is appropriate, as these are ways of deploying a daemon on the machine of your choice, very much like launching a satellite. Once deployed, the daemon connects back to your host process through its own communications (TCP or TLS over TCP).</p>
+</blockquote>
 <p>The local launcher simply runs an <code>Rscript</code> instance via a local shell. The remote launcher uses a method to run this <code>Rscript</code> command on a remote machine.</p>
 <p>To launch remote daemons, supply a remote launch configuration to the ‘remote’ argument of <code>daemons()</code>, or <code>launch_remote()</code> at any time thereafter.</p>
 <p>There are currently 3 options for generating remote launch configurations:</p>
@@ -456,7 +420,7 @@ This is a wildcard value that will automatically assigns a free ephemeral port:<
 <li><code>remote_config()</code> for a generic, flexible method that caters for other custom launchers.</li>
 </ol>
 <p>The return value of all of these functions is a simple list. This means that they may be pre-constructed, saved and re-used whenever the same configuration is required.</p>
-<h4 id="sec:i-ssh-direct-connection">i. SSH Direct Connection</h4>
+<h4 id="sec:ssh-direct-connection">SSH Direct Connection</h4>
 <p>This method is appropriate for internal networks and in trusted, properly-configured environments where it is safe for your machine to accept incoming connections on certain ports.
 In the examples below, the remote daemons connect back directly to port 5555 on the local machine.</p>
 <p>In these cases, using TLS is often desirable to provide additional security to the connections.</p>
@@ -474,7 +438,7 @@ In the examples below, the remote daemons connect back directly to port 5555 on 
   remote = ssh_config(c(&quot;ssh://10.75.32.90:222&quot;, &quot;ssh://10.75.32.91:222&quot;))
 )
 </code></pre>
-<h4 id="sec:ii-ssh-tunnelling">ii. SSH Tunnelling</h4>
+<h4 id="sec:ssh-tunnelling">SSH Tunnelling</h4>
 <p>Use SSH tunnelling to launch daemons on any machine you are able to access via SSH, whether on the local network or the cloud.
 SSH key-based authentication must already be in place, but no other configuration is required.</p>
 <p>This provides a convenient way to launch remote daemons without them needing to directly access the host.
@@ -497,7 +461,7 @@ The host listens to <code>127.0.0.1:5555</code> on its side, and the daemons eac
   remote = ssh_config(&quot;ssh://10.75.32.90&quot;, tunnel = TRUE)
 )
 </code></pre>
-<h4 id="sec:iii-hpc-cluster-resource-managers">iii. HPC Cluster Resource Managers</h4>
+<h4 id="sec:hpc-cluster-resource-managers">HPC Cluster Resource Managers</h4>
 <p><code>cluster_config()</code> may be used to deploy daemons using a cluster resource manager / scheduler.</p>
 <ol>
 <li>The first argument is <code>command</code>. This should be:</li>
@@ -550,7 +514,7 @@ This may be substituted for the full path to a specific R executable, such as th
   remote = cluster_config(options = &quot;#SBATCH --array=1-100&quot;)
 )
 </code></pre>
-<h4 id="sec:iv-generic-remote-configuration">iv. Generic Remote Configuration</h4>
+<h4 id="sec:generic-remote-configuration">Generic Remote Configuration</h4>
 <p><code>remote_config()</code> provides a generic, flexible framework for running any shell command that may be used to deploy daemons.</p>
 <p>Conceptually, this function takes an <code>args</code> argument, which must contain “.”. The correctly-configured call to <code>daemon()</code> is substituted in for this “.”, so that <code>command</code> is run with this as one of its arguments.</p>
 <p>This can provide an alternative for cluster resource managers in certain cases, although <code>cluster_config()</code> provides an easier and more complete interface. Using Slurm as an example, the following uses <code>sbatch</code> to launch a daemon on the cluster, with some additional Slurm options passed via command line arguments to <code>sbatch</code>:</p>
@@ -565,64 +529,60 @@ This may be substituted for the full path to a specific R executable, such as th
   )
 )
 </code></pre>
-<h4 id="sec:v-manual-deployment">v. Manual Deployment</h4>
+<h4 id="sec:manual-deployment">Manual Deployment</h4>
 <p>As an alternative to automated launches, calling <code>launch_remote()</code> without specifying ‘remote’ may be used to return the shell commands for deploying daemons manually.</p>
 <p>The printed return values may then be copy / pasted directly to a remote machine e.g. via a terminal session.</p>
 <pre><code class="language-r">daemons(url = host_url())
-#&gt; [1] 0
 launch_remote()
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://10.37.61.241:51757&quot;)'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.1.71:34529&quot;)'
 daemons(0)
-#&gt; [1] 0
 </code></pre>
 <h3 id="sec:7-tls-secure-connections">7. TLS Secure Connections</h3>
 <p>TLS provides a robust solution for securing communications from the local machine to remote daemons.</p>
 <h4 id="sec:automatic-zero-configuration-default">Automatic Zero-configuration Default</h4>
 <p>Simply specify a secure URL using the scheme <code>tls+tcp://</code> when setting daemons, or use <code>host_url(tls = TRUE)</code>, for example:</p>
 <pre><code class="language-r">daemons(url = host_url(tls = TRUE))
-#&gt; [1] 0
 </code></pre>
 <p>Single-use keys and certificates are automatically generated and configured, without requiring any further intervention.
 The private key is always retained on the host machine and never transmitted.</p>
 <p>The generated self-signed certificate is available via <code>launch_remote()</code>, where it is included as part of the shell command for manually launching a daemon on a remote machine.</p>
 <pre><code class="language-r">launch_remote(1)
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://10.37.61.241:51761&quot;,tls=c(&quot;-----BEGIN CERTIFICATE-----
-#&gt; MIIFPzCCAyegAwIBAgIBATANBgkqhkiG9w0BAQsFADA3MRUwEwYDVQQDDAwxMC4z
-#&gt; Ny42MS4yNDExETAPBgNVBAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDAeFw0wMTAx
-#&gt; MDEwMDAwMDBaFw0zMDEyMzEyMzU5NTlaMDcxFTATBgNVBAMMDDEwLjM3LjYxLjI0
+#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://192.168.1.71:39835&quot;,tlscert=c(&quot;-----BEGIN CERTIFICATE-----
+#&gt; MIIFPzCCAyegAwIBAgIBATANBgkqhkiG9w0BAQsFADA3MRUwEwYDVQQDDAwxOTIu
+#&gt; MTY4LjEuNzExETAPBgNVBAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDAeFw0wMTAx
+#&gt; MDEwMDAwMDBaFw0zMDEyMzEyMzU5NTlaMDcxFTATBgNVBAMMDDE5Mi4xNjguMS43
 #&gt; MTERMA8GA1UECgwITmFub25leHQxCzAJBgNVBAYTAkpQMIICIjANBgkqhkiG9w0B
-#&gt; AQEFAAOCAg8AMIICCgKCAgEA82d9JnxGaYPdqqBdkCkMAlMTx+bXtlqNDyfRDLUR
-#&gt; EfzRhMqa5r9vfZvA5aI1hCwSoaUf0T3xiMrmIcKjJTzwxmi6WmvXbLBdk1gyIJsB
-#&gt; sKizdOAnixLDEANkMsiO5+c5Wy/J/eJJbq3DptYBgRtsbJN9AYYhkNddncQHhx7u
-#&gt; flDlpyvLZZx+K/znuPyQkjHHg9HUtISNqmWlE4BKLstFrzS+L5aO4+iw17d/EOLe
-#&gt; ujY2xP3NZYOiPMTAtupQQPPdSFS4cr2utvfCUyrbAtej0a8wYMgb6DDIodqpzdpF
-#&gt; hh4G8Qgg/oKE294AQ8eHZjmF79bBqS2RQT/hP3AGPceRd6ndvMXyDet16okwFBvC
-#&gt; pRFPEIKn9/YEx5eMCt+N6QkXw+J48qxi0OFVH/NfwG7hVClfBC3ijPepAfknD4Z+
-#&gt; Fn+Ta4BpuMttGDYWumHkaY0u8qyDIdITwBlQM4+KVvt2QfnpOZvNx41YBRPOj4z2
-#&gt; A3VG+RHc04ZAk1KHq6xB24nfM/frSHvd48XvDICdDYrrkt7Zkukd+NE/fYyBB6+o
-#&gt; 4MKoor93cWrF3s+4chSlcDZZuejTFztiO98UfiG/j8rntrLUpSF35MSQ1dbenOlG
-#&gt; 8Q1XGZ2zU4p6UZBc3+et/tUvinfGGKa019d5HAKQ1DzZJM7ZUGvGNy0/KXnWGjhK
-#&gt; mPsCAwEAAaNWMFQwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQUKFrasGd6
-#&gt; TE+OISMiFEucFnqKAjMwHwYDVR0jBBgwFoAUKFrasGd6TE+OISMiFEucFnqKAjMw
-#&gt; DQYJKoZIhvcNAQELBQADggIBAMVcHXu3TDBEWW85foRuTVr1YG2PD3U8XUmd4B3Z
-#&gt; a6kr8d+P5XtF5hv4b2z/BcwWzFgrfdKMsU+7cw/dBN/WD22Ze3slDGB4z5Xbb5c7
-#&gt; cfVG2W97FoCLuBiPdw3j9/McOd+kXTI4cEpRH4ZQWRCSTb8nfnQuV1WKS3bT3CEa
-#&gt; XgD9IR0I4PUzBq2eqTJ7NLzH/GtreYCcPmbsgFZ3g20lAWULWyhRJyE2zRYz4e9c
-#&gt; +zvsYSlQYF6d/rC44ii2bpMfm/nAn4/rU6ZzxwF9Xi9nOzGMVLXowdpZ3vDEWgVj
-#&gt; V74U/kXkvwve0fSXylTU+JiRTOfa0hiUcvG7nIyhH0JyV5QU68gYFSVMJZt7VQn1
-#&gt; ya5E1SyPV+BwJ4HBnWPU0mS2RBlBQQ7uRypkKXsC3MPl0roGk6s3k/TO7SgT/U5U
-#&gt; UO7gbEim8jT9zj/oB6+W60VP+cldzIWyGoigV/4a8GQ4Njt8uwsCRKvKwiFMcyKH
-#&gt; aX1IRrF/kqhC8YnEIBaupIPoqX6j9tJeuD45YARmcaGiH9zQM2PalTNLhCnf8Plg
-#&gt; 7o+dyKyrn8bIvPboEI/PRT9Zl+U9o3qWP0izKyr6D54Wl5moqgfxYaWINZXsmZty
-#&gt; jCu5SBsFdfSE62PyioSGHt6On2Uck1xGJiNRZlO35VdVvwxqNqpJilzFRosx4KFb
-#&gt; PMyT
+#&gt; AQEFAAOCAg8AMIICCgKCAgEA2xO5GR1prwyOCicDrhaEywpO2jUkgCGyXHiScKok
+#&gt; C3hDJzsxG6+6ZK8uUvOOzTxSgF/ozKDcYkiNEfmtCNX6e0baBMReILzVTcpUhn3N
+#&gt; Yw9B71xYN597HUAuGHtcAGv1fH6po/KIdcc6tYKuDLUSmG2JPsBE8tdB1MHNMrT5
+#&gt; 9x1N2+53gXOJv/Ark+8+4Pvdb719gphtCicnSf5FrX4a4fpGCZOcWdk/71iqBhBn
+#&gt; wk9ghHPWgSlLkusp/ebQtFYrXZ/H0AK822lLg0fsYqia8aOIu/rVnN2E/qoRBLmB
+#&gt; bOI7FFul5kQz9n0l/KZ8AJ/4e30YXnVMRs2h2DKULVMuJA+UeK0m64njk/9ZUvY6
+#&gt; /K7KWxwaTSgcEhx8+I0SogZJ1fSaaD0eAaISpSyWBwF7FDRaH3xhTvOB1RTfcO/h
+#&gt; YMdmIvjQDlzhlynBsUbfCouo0uuzCC4hF6O/GewWl0zz+8n2/PoHqa1yOLGGhDDS
+#&gt; 3Po3b3A7fORtasvbIiSYqrG5/EyVDPktmz56uwmLQ4cl6zie9Uzz3UMUmybMcVYA
+#&gt; FbFRVCJgMR/988+k6FlzKmV5Vzn4OFbAYZPGmahAosld0He6T7KWhIZyu+YAcLrt
+#&gt; ecSF0faOr/gr2xApR46SEKoWCk19qFxqwMsxeGEwmTk+ECpAahdVeDKYgf5xh0EH
+#&gt; 0ukCAwEAAaNWMFQwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQUVw/YtFDp
+#&gt; nzjzTU312QD4tFFRgM0wHwYDVR0jBBgwFoAUVw/YtFDpnzjzTU312QD4tFFRgM0w
+#&gt; DQYJKoZIhvcNAQELBQADggIBAKKi2C5+cKTptnAfTzJnmSnhwMuZeQL7RuqJ1rgj
+#&gt; kY9PZLyXF9ofAVv5Ujb0tgyTqfzvCQg6MB4W+LwMHwVydnqpAhayg2brhOMWIYbG
+#&gt; 40KBmHcOclEmlawVwf2uqjS19wlfWkvqId6wZeu+Kr0s+mCfUowf7N/+gPw2e6Nf
+#&gt; 9cFLFZijMiBH3rxovcTk8DNaH4TG2ECBxzAHcoJFH6bglnw0tSJLijnEiKvOsM1g
+#&gt; HDdosjpufMbLe2cx17wDP3GORkhwunR87bBNl0cmt2QAlL7b2neV/TKWmOFGuzFR
+#&gt; +Gjb0CRP+s20k7s1vUtfGjlQI0sk+6D7yFi4CVbCY+tQVxB+BZjxsszpkpohh1OB
+#&gt; f7Ugj3hNEpojqcjae84BkioZ0rW4Y1dmpHBNoInbHUTSET9ZB6FpfknGvV0XMZiT
+#&gt; OjsuKT1oKfFJzefw37PDOvfqVUl2dbO9u/5PBq0VYldtSi2bkkzMaLxlCxItVqdF
+#&gt; ajFVhN9RGQZJJdSEWVopJtX4lDAm4nno5IFYQ+0XYhqPMRtZPwoHAcBuDSz/E3Da
+#&gt; XXvM8aH9n3N31lymaUE0lX6cDrLQfB/DmmYSYhjVHKjSKG2DFEILB6D1Qj8TBa34
+#&gt; PeC4023DOtcyMO/BX4sGOsQ3cw/he4vDq8lmcqh8O/OEoTfzRe6zDgVQ/xc+M2C5
+#&gt; Zs/P
 #&gt; -----END CERTIFICATE-----
 #&gt; &quot;,&quot;&quot;))'
 </code></pre>
 <pre><code class="language-r">daemons(0)
-#&gt; [1] 0
 </code></pre>
 <h4 id="sec:ca-signed-certificates">CA Signed Certificates</h4>
 <p>As an alternative to the zero-configuration default, a certificate may also be generated via a Certificate Signing Request (CSR) to a Certificate Authority (CA).
@@ -650,13 +610,13 @@ The CA may be a public CA or internal to an organisation.</p>
 <li>Alternatively, the certificate may be copied to a new text file, with the private key appended, in which case the path/filename of this file may be provided to the ‘tls’ argument.</li>
 </ul>
 <ol start="4">
-<li>When launching daemons, the certificate chain to the CA should be supplied to the ‘tls’ argument of <code>daemon()</code> or <code>launch_remote()</code>.</li>
+<li>The certificate chain to the CA should be supplied to the ‘tlscert’ argument of <code>daemons()</code>.</li>
 </ol>
 <ul>
 <li>The certificate chain should comprise multiple certificates, each between <code>-----BEGIN CERTIFICATE-----</code> and <code>-----END CERTIFICATE-----</code> markers. The first one should be the newly-generated TLS certificate, the same supplied to <code>daemons()</code>, and the final one should be a CA root certificate.</li>
 <li>These are the only certificates required if the certificate was signed directly by a CA. If not, then the intermediate certificates should be included in a certificate chain that starts with the TLS certificate and ends with the certificate of the CA.</li>
-<li>If these are concatenated together as a single character string <code>certchain</code>, then the character vector comprising this and an empty character string <code>c(certchain, &quot;&quot;)</code> may be supplied to the relevant ‘tls’ argument.</li>
-<li>Alternatively, if these are written to a file (and the file replicated on the remote machines), then the ‘tls’ argument may also be specified as a path/filename (assuming these are the same on each machine).</li>
+<li>If these are concatenated together as a single character string <code>certchain</code>, then the character vector comprising this and an empty character string <code>c(certchain, &quot;&quot;)</code> may be supplied to ‘tlscert’.</li>
+<li>Alternatively, if these are written to a file (and the file replicated on the remote machines), then the ‘tlscert’ argument may also be specified as a path/filename (assuming these are the same on each machine).</li>
 </ul>
 <h3 id="sec:8-compute-profiles">8. Compute Profiles</h3>
 <p><code>daemons()</code> has a <code>.compute</code> argument to specify separate sets of daemons (<em>compute profiles</em>) that operate totally independently. This is useful for managing tasks with heterogeneous compute requirements:</p>
@@ -668,6 +628,55 @@ The CA may be a public CA or internal to an organisation.</p>
 The daemons settings are saved under the named profile.</p>
 <p>To create a ‘mirai’ task using a specific compute profile, specify the <code>.compute</code> argument to <code>mirai()</code>, which uses the ‘default’ compute profile if this is <code>NULL</code>.</p>
 <p>Similarly, functions such as <code>status()</code>, <code>launch_local()</code> or <code>launch_remote()</code> should be specified with the desired <code>.compute</code> argument.</p>
+<h4 id="sec:with-daemons-and-local-daemons"><code>with_daemons()</code> and <code>local_daemons()</code></h4>
+<p>Supplying a character compute profile to <code>with_daemons()</code> or <code>local_daemons()</code> automatically sets the default compute profile for all package functions within the relevant scope.</p>
+<pre><code class="language-r">daemons(1, .compute = &quot;cpu&quot;)
+daemons(1, .compute = &quot;gpu&quot;)
+
+with_daemons(&quot;cpu&quot;, {
+  s1 &lt;- status()
+  m1 &lt;- mirai(Sys.getpid())
+})
+
+with_daemons(&quot;gpu&quot;, {
+  s2 &lt;- status()
+  m2 &lt;- mirai(Sys.getpid())
+  m3 &lt;- mirai(Sys.getpid(), .compute = &quot;cpu&quot;)
+  local_daemons(&quot;cpu&quot;)
+  m4 &lt;- mirai(Sys.getpid())
+})
+
+s1$daemons
+#&gt; [1] &quot;abstract://90879a789bd6e4a4a2b38593&quot;
+m1[]
+#&gt; [1] 20773
+
+s2$daemons
+#&gt; [1] &quot;abstract://e9c3dda8680efccf496c48ce&quot;
+m2[] # different to m1
+#&gt; [1] 20859
+
+m3[] # same as m1
+#&gt; [1] 20773
+m4[] # same as m1
+#&gt; [1] 20773
+
+with_daemons(&quot;cpu&quot;, daemons(0))
+with_daemons(&quot;gpu&quot;, daemons(0))
+</code></pre>
+<h4 id="sec:with-method">With Method</h4>
+<p><code>daemons()</code> also has a <code>with()</code> method, which evaluates an expression with daemons created for the duration of the expression and automatically reset upon completion. All package functions within the <code>with()</code> scope default to using the compute profile of the daemons created.</p>
+<p>It was originally designed for running a Shiny app with the desired number of daemons, as in the example below:</p>
+<pre><code class="language-r">with(daemons(4), shiny::runApp(app))
+# Or:
+with(daemons(4, .compute = &quot;shiny&quot;), shiny::runApp(app))
+</code></pre>
+<blockquote>
+<p>Note: it is assumed the app is already created.
+Wrapping a call to <code>shiny::shinyApp()</code> would not work as <code>runApp()</code> is implicitly called when the app is printed, however printing occurs only after <code>with()</code> has returned, hence the app would run outside of the scope of the <code>with()</code> statement.</p>
+</blockquote>
+<p>In the case of a Shiny app, all mirai calls will be executed before the app returns as the app itself is blocking.
+In the case of other expressions, be sure to call or collect the values of all mirai within the expression to ensure that they all complete before the daemons are reset.</p>
 </div>
 </body>
 </html>

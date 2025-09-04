@@ -29,9 +29,8 @@ On the other hand, if your code previously used the `globals` argument to supply
 Note that this would only work in the case of a named list and not the other forms that `globals` can take.
 
 Regardless of using a `mirai()` or `future_promise()`, we recommend that you pass globals explicitly in production code.
-This is as globals detection is never 100% perfect, and there is always some element of guesswork.
-Edge cases can lead to unpredictable failures or silently incorrect results.
-Explicit passing of variables allows for transparent and reliable behaviour, that remains completely robust over time.
+This is as globals detection is never 100% perfect, and there is always some element of guesswork, with edge cases leading to unpredictable results.
+Explicit passing of variables allows for transparent and reliable behaviour, remaining robust over time.
 
 **Capture globals using `environment()`:**
 
@@ -72,7 +71,6 @@ The following example was raised as being potentially counter-intuitive, given t
 ``` r
 library(mirai)
 daemons(4)
-#> [1] 4
 
 vec <- 1:3
 vec2 <- 4:6
@@ -80,10 +78,10 @@ vec2 <- 4:6
 # Returns different values: good
 mirai_map(list(vec, vec2), \(x) rnorm(x))[]
 #> [[1]]
-#> [1] -0.03203249  0.06758411 -1.15134665
+#> [1]  0.001644678 -1.187782046 -0.297140635
 #> 
 #> [[2]]
-#> [1] -1.52548151  0.47057627  0.09368248
+#> [1] -0.7211057 -0.8825230 -0.9686437
 
 # Set the seed in the function
 mirai_map(list(vec, vec2), \(x) {
@@ -105,7 +103,6 @@ mirai_map(list(vec, vec2), \(x) rnorm(x))[]
 #> [1] -1.8150926  0.3304096 -1.1421557
 
 daemons(0)
-#> [1] 0
 ```
 
 The reason the change in random seed persists in all circumstances is due to this being a special case, arising from the use of L'Ecuyer CMRG streams to provide parallel-safe random numbers.
@@ -115,8 +112,7 @@ The random seed is not reset after each mirai call to ensure that however many r
 
 Hence normally, the random seed should be set once on the host process when daemons are created, rather than in each daemon.
 
-If it is required to set the seed in each daemon, this should be done using an independent method and set each time random draws are required.
-Another option would be to set the random seed within a local execution scope to prevent the global random seed on each daemon from being affected.
+For numerical reproducibility, set the `seed` argument to `daemons()` (see the Random Number Generation section of the reference vignette for further details).
 
 ### 3. Accessing package functions during development
 

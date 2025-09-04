@@ -18,181 +18,134 @@ coverage](https://codecov.io/gh/r-lib/mirai/graph/badge.svg)](https://app.codeco
 ### ミライ
 
 <br /> みらい 未来 <br /><br /> Minimalist Async Evaluation Framework
-for R <br /><br /> → Designed for simplicity, a ‘mirai’ evaluates an R
-expression asynchronously in a parallel process, locally or distributed
-over the network.
+for R <br /><br />
 
-→ Modern networking and concurrency, built on
-[nanonext](https://github.com/r-lib/nanonext/) and
-[NNG](https://nng.nanomsg.org/), ensures reliable scheduling over fast
-inter-process communications or TCP/IP secured by TLS.
+→ Run R code in parallel without blocking your session
 
-→ Launch remote resources via SSH or cluster managers for distributed
-computing.
+→ Distribute workloads across local or remote machines
 
-→ Scales efficiently to millions of tasks over thousands of connections,
-requiring no storage on the file system due to its inherently queued
-architecture.
+→ Execute tasks on different compute resources as required
 
-→ Innovative features include event-driven promises, asynchronous
-parallel map, and seamless serialization of otherwise non-exportable
-reference objects. <br /><br />
+→ Perform actions reactively as soon as tasks complete
+
+<br />
+
+### Installation
+
+``` r
+install.packages("mirai")
+```
 
 ### Quick Start
 
-mirai is Japanese for ‘future’ and is an implementation of *futures* in
-R.
+`mirai()` evaluates an R expression asynchronously in a parallel
+process.
 
-→ `mirai()`:
-
-Sends an expression to be evaluated asynchronously in a separate R
-process and returns a mirai object immediately. Creation of a mirai is
-never blocking.
-
-The result of a mirai `m` will be available at `m$data` once evaluation
-is complete and its return value is received. `m[]` may be used to wait
-for and collect the value.
+`daemons()` sets up persistent background processes for parallel
+computations.
 
 ``` r
 library(mirai)
+daemons(5)
 
-m <- mirai(
-  {
-    # slow operation
-    Sys.sleep(2)
-    sample(1:100, 1)
-  }
-)
+m <- mirai({
+  Sys.sleep(1)
+  100 + 42
+})
+
+mp <- mirai_map(1:9, \(x) {
+  Sys.sleep(1)
+  x^2
+})
 
 m
 #> < mirai [] >
-m$data
-#> 'unresolved' logi NA
-
-# do other work
-
 m[]
-#> [1] 86
-m$data
-#> [1] 86
+#> [1] 142
+
+mp
+#> < mirai map [4/9] >
+mp[.flat]
+#> [1]  1  4  9 16 25 36 49 64 81
+
+daemons(0)
 ```
 
-→ `daemons()`:
+### Design Philosophy
 
-Sets persistent background processes (*daemons*) where mirai are
-evaluated.
+⚙️ **Modern Foundation**
 
-To launch 6 local daemons:
+- Architected on current communication technologies (IPC, TCP, secure
+  TLS)
+- Professional queueing and scheduling built on
+  [nanonext](https://github.com/r-lib/nanonext/) and
+  [NNG](https://github.com/nanomsg/nng/)
+- Engineered for custom serialization of cross-language data formats
+  (e.g. torch, Arrow)
 
-``` r
-daemons(6)
-#> [1] 6
-```
+⚡️ **Extreme Performance**
 
-To launch daemons over the network for distributed computing, this is
-supported via:
+- Scales to millions of tasks across thousands of connections
+- Delivers 1,000x greater efficiency and responsiveness over
+  alternatives
+- Zero-latency, event-driven promises optimized for real-time
+  applications
 
-- SSH
-- HPC cluster resource managers (for Slurm, SGE, Torque, PBS, LSF)
+🚀 **Production First**
 
-See the [reference
-vignette](https://mirai.r-lib.org/articles/mirai.html) for further
-details.
+- Clear evaluation model with clean environment separation and explicit
+  object passing
+- Transparent and robust operation from minimal complexity and no hidden
+  state
+- Enhanced observability through OpenTelemetry integration
 
-→ `mirai_map()`:
+🌐 **Deploy Everywhere**
 
-Maps a function over a list or vector, with each element processed as a
-mirai. For a dataframe or matrix, it automatically performs multiple map
-over the rows.
+- Deploy across local, remote (SSH), and HPC environments (Slurm, SGE,
+  PBS, LSF)
+- Compute profiles manage independent daemon pools and resource types
+- Distribute workload to optimal resources using multiple compute
+  profiles
 
-A ‘mirai_map’ object is returned immediately, and is always
-non-blocking.
+### Powers the R Ecosystem
 
-Its value may be retrieved using its `[]` method, returning a list. The
-`[]` method also provides options for flatmap, early stopping and
-progress indicators.
-
-``` r
-df <- data.frame(
-  fruit = c("apples", "oranges", "pears"),
-  price = c(3L, 2L, 5L)
-)
-
-m <- df |>
-  mirai_map(\(...) sprintf("%s: $%d", ...))
-m
-#> < mirai map [0/3] >
-m[.flat]
-#> [1] "apples: $3"  "oranges: $2" "pears: $5"
-```
-
-### Design Concepts
-
-mirai is designed from the ground up to provide a production-grade
-experience.
-
-→ Fast
-
-- 1,000x more responsive vs. common alternatives
-  [<sup>\[1\]</sup>](https://github.com/r-lib/mirai/pull/142#issuecomment-2457589563)
-- Built for low-latency applications e.g. real time inference & Shiny
-  apps
-
-→ Reliable
-
-- No reliance on global options or variables for consistent behaviour
-- Explicit evaluation for transparent and predictable results
-
-→ Scalable
-
-- Launch millions of tasks over thousands of connections
-- Proven track record for heavy-duty workloads in the life sciences
-  industry
-
-### Powering the Ecosystem
-
-mirai features the following core integrations, with usage examples in
-the linked vignettes:
+mirai serves as a foundation for asynchronous and parallel computing in
+the R ecosystem:
 
 [<img alt="R parallel" src="https://www.r-project.org/logo/Rlogo.png" width="40" height="31" />](https://mirai.r-lib.org/articles/v04-parallel.html)
-  Provides the first official alternative communications backend for R,
-implementing the ‘MIRAI’ parallel cluster type, a feature request by
-R-Core at R Project Sprint 2023.
+  The first official alternative communications backend for R, the
+‘MIRAI’ parallel cluster, a feature request by R-Core.
 
 [<img alt="purrr" src="https://purrr.tidyverse.org/logo.png" width="40" height="46" />](https://purrr.tidyverse.org)
-  Powers parallel map for the purrr functional programming toolkit, a
-core tidyverse package.
-
-[<img alt="promises" src="https://solutions.posit.co/images/brand/posit-icon-fullcolor.svg" width="40" height="36" />](https://mirai.r-lib.org/articles/v02-promises.html)
-  Implements next generation, event-driven promises. ‘mirai’ and
-‘mirai_map’ objects are readily convertible to ‘promises’, and may be
-used directly with the promise pipe.
+  Powers parallel map for purrr, a core tidyverse package.
 
 [<img alt="Shiny" src="https://github.com/rstudio/shiny/raw/main/man/figures/logo.png" width="40" height="46" />](https://mirai.r-lib.org/articles/v02-promises.html)
-  The primary async backend for Shiny, supporting ExtendedTask and the
-next level of responsiveness and scalability for Shiny apps.
+  Primary async backend for Shiny with full ExtendedTask support.
 
-[<img alt="Plumber" src="https://rstudio.github.io/cheatsheets/html/images/logo-plumber.png" width="40" height="46" />](https://mirai.r-lib.org/articles/v02-promises.html)
-  The built-in async evaluator behind the `@async` tag in plumber2; also
-provides an async backend for Plumber.
+[<img alt="plumber2" src="https://github.com/posit-dev/plumber2/raw/main/man/figures/logo.svg" width="40" height="46" />](https://mirai.r-lib.org/articles/v02-promises.html)
+  Built-in async evaluator enabling the `@async` tag in plumber2.
+
+[<img alt="tidymodels" src="https://www.tidymodels.org/images/tidymodels.png" width="40" height="46" />](https://tune.tidymodels.org/)
+  Core parallel processing infrastructure provider for tidymodels.
 
 [<img alt="torch" src="https://torch.mlverse.org/css/images/hex/torch.png" width="40" height="46" />](https://mirai.r-lib.org/articles/v03-serialization.html)
-  Allows Torch tensors and complex objects such as models and optimizers
-to be used seamlessly across parallel processes.
+  Seamless use of torch tensors, models and optimizers across parallel
+processes.
 
 [<img alt="Arrow" src="https://arrow.apache.org/img/arrow-logo_hex_black-txt_white-bg.png" width="40" height="46" />](https://mirai.r-lib.org/articles/v03-serialization.html)
-  Allows queries using the Apache Arrow format to be handled seamlessly
-over ADBC database connections hosted in background processes.
+  Query databases over ADBC connections natively in the Arrow data
+format.
+
+[<img alt="Polars" src="https://github.com/pola-rs/polars-static/raw/master/logos/polars_logo_blue.svg" width="40" height="46" />](https://mirai.r-lib.org/articles/v03-serialization.html)
+  R Polars leverages mirai’s serialization registration mechanism for
+transparent use of Polars objects.
 
 [<img alt="targets" src="https://github.com/ropensci/targets/raw/main/man/figures/logo.png" width="40" height="46" />](https://docs.ropensci.org/targets/)
-  Targets, a make-like pipeline tool, uses crew as its default
-high-performance computing backend. Crew is a distributed worker
-launcher extending mirai to different computing platforms, from
-traditional clusters to cloud services.
+  Targets uses crew as its default high-performance computing backend.
+Crew is a distributed worker launcher extending mirai to different
+computing platforms.
 
-### Thanks
-
-We would like to thank in particular:
+### Acknowledgements
 
 [Will Landau](https://github.com/wlandau/) for being instrumental in
 shaping development of the package, from initiating the original request
@@ -205,42 +158,23 @@ promises.
 
 [Luke Tierney](https://github.com/ltierney/) of R Core, for discussion
 on L’Ecuyer-CMRG streams to ensure statistical independence in parallel
-processing, and making it possible for mirai to be the first
+processing, and reviewing mirai’s implementation as the first
 ‘alternative communications backend for R’.
 
 [Travers Ching](https://github.com/traversc) for a novel idea in
 extending the original custom serialization support in the package.
 
-[Henrik Bengtsson](https://github.com/HenrikBengtsson/) for valuable
-insights leading to the interface accepting broader usage patterns.
+[Hadley Wickham](https://github.com/hadley), [Henrik
+Bengtsson](https://github.com/HenrikBengtsson/), [Daniel
+Falbel](https://github.com/dfalbel/), and [Kirill
+Müller](https://github.com/krlmlr/) for many deep insights and
+discussions.
 
-[Daniel Falbel](https://github.com/dfalbel/) for discussion around an
-efficient solution to serialization and transmission of torch tensors.
+### Links
 
-[Kirill Müller](https://github.com/krlmlr/) for discussion on using
-parallel processes to host Arrow database connections.
-
-### Installation
-
-Install the latest release from CRAN:
-
-``` r
-install.packages("mirai")
-```
-
-The current development version is available from R-universe:
-
-``` r
-install.packages("mirai", repos = "https://r-lib.r-universe.dev")
-```
-
-### Links & References
-
-◈ mirai R package: <https://mirai.r-lib.org/> <br /> ◈ nanonext R
-package: <https://nanonext.r-lib.org/>
-
-mirai is listed in CRAN High Performance Computing Task View: <br />
-<https://cran.r-project.org/view=HighPerformanceComputing>
+[mirai](https://mirai.r-lib.org/) •
+[nanonext](https://nanonext.r-lib.org/) • [CRAN HPC Task
+View](https://cran.r-project.org/view=HighPerformanceComputing)
 
 –
 

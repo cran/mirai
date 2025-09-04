@@ -109,7 +109,7 @@
 #' mirai_map(mat, function(x = 10, y = 0, z = 0) x + y + z)[.flat]
 #'
 #' # named matrix multiple map: arguments passed to function by name
-#' mat <- matrix(1:4, nrow = 2L, dimnames = list(c("a", "b"), c("y", "z")))
+#' (mat <- matrix(1:4, nrow = 2L, dimnames = list(c("a", "b"), c("y", "z"))))
 #' mirai_map(mat, function(x = 10, y = 0, z = 0) x + y + z)[.flat]
 #'
 #' # dataframe multiple map: using a function taking '...' arguments
@@ -153,69 +153,64 @@
 #'
 #' @export
 #'
-mirai_map <- function(
-  .x,
-  .f,
-  ...,
-  .args = list(),
-  .promise = NULL,
-  .compute = NULL
-) {
-  require_daemons(call = environment(), .compute = .compute)
+mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = NULL) {
+  require_daemons(.compute = .compute, call = environment())
   is.function(.f) || stop(sprintf(._[["function_required"]], typeof(.f)))
+  if (is.null(.compute)) .compute <- .[["cp"]]
+
+  if (otel_tracing) {
+    spn <- otel::start_local_active_span(
+      "mirai::mirai_map",
+      links = list(compute_profile = ..[[.compute]][["otel_span"]])
+    )
+  }
 
   dx <- dim(.x)
   vec <- if (is.null(dx)) {
     `names<-`(
-      lapply(
-        .x,
-        function(x)
-          mirai(
-            .expr = do.call(.f, c(list(.x), .args), quote = TRUE),
-            ...,
-            .args = list(.f = .f, .x = x, .args = .args, .mirai_within_map = TRUE),
-            .compute = .compute
-          )
+      lapply(.x, function(x)
+        mirai(
+          .expr = do.call(.f, c(list(.x), .args), quote = TRUE),
+          ...,
+          .args = list(.f = .f, .x = x, .args = .args, .mirai_within_map = TRUE),
+          .compute = .compute
+        )
       ),
       names(.x)
     )
+  } else if (is.data.frame(.x)) {
+    rn <- attr(.x, "row.names", exact = TRUE)
+    `names<-`(
+      lapply(seq_len(dx[1L]), function(i)
+        mirai(
+          .expr = do.call(.f, c(.x, .args), quote = TRUE),
+          ...,
+          .args = list(.f = .f, .x = lapply(.x, `[[`, i), .args = .args, .mirai_within_map = TRUE),
+          .compute = .compute
+        )
+      ),
+      if (is.character(rn)) rn
+    )
   } else {
-    if (is.matrix(.x)) {
-      `names<-`(
-        lapply(
-          seq_len(dx[1L]),
-          function(i)
-            mirai(
-              .expr = do.call(.f, c(as.vector(.x, mode = "list"), .args), quote = TRUE),
-              ...,
-              .args = list(.f = .f, .x = .x[i, ], .args = .args, .mirai_within_map = TRUE),
-              .compute = .compute
-            )
-        ),
-        dimnames(.x)[[1L]]
-      )
-    } else {
-      rn <- attr(.x, "row.names", exact = TRUE)
-      `names<-`(
-        lapply(
-          seq_len(dx[1L]),
-          function(i)
-            mirai(
-              .expr = do.call(.f, c(.x, .args), quote = TRUE),
-              ...,
-              .args = list(.f = .f, .x = lapply(.x, `[[`, i), .args = .args, .mirai_within_map = TRUE),
-              .compute = .compute
-            )
-        ),
-        if (is.character(rn)) rn
-      )
-    }
+    `names<-`(
+      lapply(seq_len(dx[1L]), function(i)
+        mirai(
+          .expr = do.call(.f, c(as.list(.x), .args), quote = TRUE),
+          ...,
+          .args = list(.f = .f, .x = .x[i, ], .args = .args, .mirai_within_map = TRUE),
+          .compute = .compute
+        )
+      ),
+      if (is.matrix(.x)) dimnames(.x)[[1L]]
+    )
   }
 
   if (length(.promise))
-    if (is.list(.promise))
-      lapply(vec, promises::then, .promise[[1L]], .promise[2L][[1L]]) else
+    if (is.list(.promise)) {
+      lapply(vec, promises::then, .promise[[1L]], .promise[2L][[1L]])
+    } else {
       lapply(vec, promises::then, .promise)
+    }
 
   `class<-`(vec, "mirai_map")
 }
@@ -248,9 +243,11 @@ print.mirai_map <- function(x, ...) {
 #'
 .flat <- compiler::compile(
   quote(
-    if (i == 0L) xi <- TRUE else if (i == 1L) typ <<- typeof(xi) else if (
-      i <= xlen
-    ) {
+    if (i == 0L) {
+      xi <- TRUE
+    } else if (i == 1L) {
+      typ <<- typeof(xi)
+    } else {
       is_error_value(xi) && {
         stop_mirai(x)
         stop(sprintf("In index %d:\n%s", i, attr(xi, "message")), call. = FALSE)
@@ -258,11 +255,7 @@ print.mirai_map <- function(x, ...) {
       typeof(xi) != typ && {
         stop_mirai(x)
         stop(
-          sprintf(
-            "Cannot flatten outputs of differing type: %s / %s",
-            typ,
-            typeof(xi)
-          ),
+          sprintf("Cannot flatten outputs of differing type: %s / %s", typ, typeof(xi)),
           call. = FALSE
         )
       }
@@ -275,14 +268,7 @@ print.mirai_map <- function(x, ...) {
 #'
 .progress <- compiler::compile(
   quote(
-    if (i == 0L)
-      cat(sprintf("\r[ 0 / %d .... ]", xlen), file = stderr()) else if (
-      i < xlen
-    )
-      cat(sprintf("\r[ %d / %d .... ]", i, xlen), file = stderr()) else if (
-      i == xlen
-    )
-      cat(sprintf("\r[ %d / %d done ]\n", i, xlen), file = stderr())
+    cat(sprintf("\r[ %d / %d %s ]", i, xlen, if (i < xlen) "...." else "done"), file = stderr())
   )
 )
 
@@ -291,7 +277,7 @@ print.mirai_map <- function(x, ...) {
 #'
 .stop <- compiler::compile(
   quote(
-    if (is_error_value(xi)) {
+    is_error_value(xi) && {
       stop_mirai(x)
       stop(sprintf("In index %d:\n%s", i, attr(xi, "message")), call. = FALSE)
     }
@@ -327,9 +313,11 @@ mmap <- function(x, dots) {
 
 flat_cli <- compiler::compile(
   quote(
-    if (i == 0L) xi <- TRUE else if (i == 1L) typ <<- typeof(xi) else if (
-      i <= xlen
-    ) {
+    if (i == 0L) {
+      xi <- TRUE
+    } else if (i == 1L) {
+      typ <<- typeof(xi)
+    } else {
       is_error_value(xi) && {
         stop_mirai(x)
         iname <- names(x)[i]
@@ -362,13 +350,17 @@ flat_cli <- compiler::compile(
 
 progress_cli <- compiler::compile(
   quote(
-    if (i == 0L)
-      cli::cli_progress_bar(
-        type = NULL,
-        total = xlen,
-        auto_terminate = TRUE,
-        .envir = .
-      ) else if (i <= xlen) cli::cli_progress_update(.envir = .)
+    if (i == 0L) {
+      options <- .[["progress"]]
+      if (is.list(options)) {
+        do.call(cli::cli_progress_bar, c(list(total = xlen, auto_terminate = TRUE, .envir = .), options))
+      } else {
+        cli::cli_progress_bar(name = options, type = NULL, total = xlen, auto_terminate = TRUE, .envir = .)
+      }
+      `[[<-`(., "progress", NULL)
+    } else {
+      cli::cli_progress_update(.envir = .)
+    }
   )
 )
 

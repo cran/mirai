@@ -1,3 +1,43 @@
+# mirai 2.5.0
+
+#### Behavioural Changes
+
+* Behavioural changes for `daemons()`:
+  + Returns invisibly logical `TRUE` when creating daemons and `FALSE` when resetting, for simplicity and consistency (#384).
+  + Creating new daemons resets any existing daemons for the compute profile rather than error.
+    This means that an explicit `daemons(0)` is no longer required before applying new settings (thanks @eliocamp, #383).
+  + Calling without supplying any arguments now errors rather than return the value of `status()`.
+
+#### New Features
+
+* Complete observability of mirai requests by emitting OpenTelemetry traces when tracing is enabled by the otelsdk package (#394).
+* Adds `info()` as an alternative to `status()` for retrieving more succinct information statistics, more convenient for programmatic use (thanks @wlandau, #410).
+* Adds `with_daemons()` and `local_daemons()` helper functions for using a particular compute profile.
+  These work with daemons that are already set up unlike the existing `with.miraiDaemons()` method, which creates a new scope and tears it down when finished (#360).
+* A mirai now has an attribute `id`, which is a monotonically increasing integer identifier unique to each session.
+
+#### Updates
+
+* `stop_mirai()` is more efficient and responsive, especially for 'mirai_map' objects (#417).
+* `miraiError` enhancements:
+  + The original condition classes are preserved as `$condition.class` (thanks @sebffischer, #400).
+  + The print method includes the customary additional line break (thanks @sebffischer, #399).
+* Fixes `daemons(n)` failing to launch local daemons if mirai was installed in a custom user library set by an explicit `.libPaths()` call in '.Rprofile' (thanks @erydit and @dpastoor, #390).
+* Improved behaviour for `serial_config()` custom serialization.
+  If the serialization hook function errors or otherwise fails to return a raw vector, this will error out rather than be silently ignored (thanks @dipterix, #378).
+* `as.promise()` method for mirai made robust for high-throughput scenarios (#377).
+* `mirai_map()` now supports Arrow Tables and Polars DataFrames (#366).
+* `require_daemons()` arguments are swapped so that `.compute` comes before `call` for ease of use.
+  Previous usage will work for the time being, although is deprecated and will be defunct in a future version.
+* Enhancements to `everywhere()`:
+  + Consecutive `everywhere()` calls are permissible again when using dispatcher (behaviour update in v2.4.1) (#354).
+  + No longer has any effect on the RNG stream when using a reproducible `seed` value at `daemons()` (#356).
+* A `mirai()` evaluated on an ephemeral daemon returns invisibly, consistent with other cases (#351).
+* `daemon()` gains a `tlscert` argument for custom TLS certificates.
+  The change in argument name lets this be passed when making a `daemons()` call (#344).
+* The `tls` argument at `daemon()`, `launch_local()` and `launch_remote()` is deprecated.
+* Requires nanonext >= 1.7.0.
+
 # mirai 2.4.1
 
 #### New Features

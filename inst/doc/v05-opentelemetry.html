@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="generator" content="litedown 0.7">
+<title>OpenTelemetry</title>
+<style type="text/css">
+body {
+  font-family: sans-serif;
+  max-width: 800px;
+  margin: auto;
+  padding: 1em;
+  line-height: 1.5;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+body, .abstract, code, .footnotes, footer, #refs, .caption { font-size: .9em; }
+li li { font-size: .95em; }
+ul:has(li > input[type="checkbox"]) { list-style: none; padding-left: 1em; }
+*, :before, :after { box-sizing: border-box; }
+a { color: steelblue; }
+pre, img { max-width: 100%; }
+pre { white-space: pre-wrap; word-break: break-word; }
+pre code { display: block; padding: 1em; overflow-x: auto; }
+code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
+:not(pre, th) > code, code[class], div > .caption { background: #f8f8f8; }
+pre > code:is(:not([class]), .language-plain, .language-none, .plain), .box, .figure, .table { background: inherit; border: 1px solid #eee; }
+pre > code {
+  &.message { border-color: #9eeaf9; }
+  &.warning { background: #fff3cd; border-color: #fff3cd; }
+  &.error { background: #f8d7da; border-color: #f8d7da; }
+}
+.fenced-chunk { border-left: 1px solid #666; }
+.code-fence {
+  opacity: .4;
+  border: 1px dashed #666;
+  border-left: 2px solid;
+  &:hover { opacity: inherit; }
+}
+.box, .figure, .table, table { margin: 1em auto; }
+div > .caption { padding: 1px 1em; }
+.figure { p:has(img, svg), pre:has(svg) { text-align: center; } }
+.flex-col { display: flex; justify-content: space-between; }
+table {
+  &:only-child:not(.table > *) { margin: auto; }
+  th, td { padding: 5px; font-variant-numeric: tabular-nums; }
+  thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
+  thead th { border-bottom: 1px solid #ddd; }
+  &:not(.datatable-table) {
+    border-top: 1px solid #666;
+    border-bottom: 1px solid #666;
+  }
+}
+blockquote {
+  color: #666;
+  margin: 0;
+  padding: 1px 1em;
+  border-left: .5em solid #eee;
+}
+hr, .footnotes::before { border: 1px dashed #ddd; }
+.frontmatter { text-align: center; }
+#TOC {
+  a { text-decoration: none; }
+  ul { list-style: none; padding-left: 1em; }
+  & > ul { padding: 0; }
+  ul ul { border-left: 1px solid lightsteelblue; }
+}
+.body h2 { border-bottom: 1px solid #666; }
+.body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
+.main-number::after { content: "."; }
+span[class^="ref-number-"] { font-weight: bold; }
+.ref-number-fig::after, .ref-number-tab::after { content: ":"; }
+.cross-ref-chp::before { content: "Chapter "; }
+.cross-ref-sec::before { content: "Section "; }
+.cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
+.cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
+.abstract, #refs {
+  &::before { display: block; margin: 1em auto; font-weight: bold; }
+}
+.abstract::before { content: "Abstract"; text-align: center; }
+#refs::before { content: "Bibliography"; font-size: 1.5em; }
+.ref-paren-open::before { content: "("; }
+.ref-paren-close::after { content: ")"; }
+.ref-semicolon::after { content: "; "; }
+.ref-and::after { content: " and "; }
+.ref-et-al::after { content: " et al."; font-style: italic; }
+.footnote-ref a {
+  &::before { content: "["; }
+  &::after { content: "]"; }
+}
+section.footnotes {
+  margin-top: 2em;
+  &::before { content: ""; display: block; max-width: 20em; }
+}
+.fade {
+  background: repeating-linear-gradient(135deg, white, white 30px, #ddd 32px, #ddd 32px);
+  opacity: 0.6;
+}
+
+@media print {
+  body { max-width: 100%; }
+  tr, img { break-inside: avoid; }
+}
+@media only screen and (min-width: 992px) {
+  body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
+}
+</style>
+</head>
+<body>
+<div class="frontmatter">
+<div class="title"><h1>OpenTelemetry</h1></div>
+</div>
+<div class="body">
+<h3 id="sec:1-introduction">1. Introduction</h3>
+<p>mirai provides comprehensive OpenTelemetry (otel) tracing support for observing asynchronous operations and distributed computation.</p>
+<p>When the <code>otel</code> and <code>otelsdk</code> packages are installed and tracing is enabled, mirai automatically creates spans to track the lifecycle of daemon management, async operations, and task execution.</p>
+<p>This enables detailed monitoring of:</p>
+<ul>
+<li>Task submission and completion times</li>
+<li>Daemon lifecycle and performance</li>
+<li>Error tracking and debugging</li>
+<li>Distributed tracing across network boundaries</li>
+</ul>
+<h3 id="sec:2-automatic-tracing-setup">2. Automatic Tracing Setup</h3>
+<p>Tracing is automatically enabled when:</p>
+<ol>
+<li>The <code>otel</code> and <code>otelsdk</code> packages are installed and available</li>
+<li>OpenTelemetry tracing is configured and enabled (see <a href="https://otelsdk.r-lib.org/reference/collecting.html">https://otelsdk.r-lib.org/reference/collecting.html</a>)</li>
+</ol>
+<p>No additional configuration is required - mirai will automatically detect the presence of OpenTelemetry and begin creating spans.</p>
+<h3 id="sec:3-span-types-and-hierarchy">3. Span Types and Hierarchy</h3>
+<p>mirai creates several types of spans to represent different operations:</p>
+<h4 id="sec:3-1-core-span-types">3.1 Core Span Types</h4>
+<p><strong><code>mirai::daemons</code></strong> - Root span for daemon management</p>
+<ul>
+<li><strong>Kind</strong>: <code>internal</code></li>
+<li><strong>Attributes</strong>: <code>url</code>, <code>n</code> (number of daemons), <code>dispatcher</code> (true/false), <code>compute_profile</code></li>
+<li><strong>Lifecycle</strong>: Created when <code>daemons()</code> is called, ended when daemons are reset</li>
+</ul>
+<p><strong><code>mirai::daemon</code></strong> - Individual daemon process span</p>
+<ul>
+<li><strong>Kind</strong>: <code>internal</code></li>
+<li><strong>Lifecycle</strong>: Tracks the lifetime of a single daemon process</li>
+</ul>
+<p><strong><code>mirai::mirai_map</code></strong> - Parallel map operation span</p>
+<ul>
+<li><strong>Kind</strong>: <code>internal</code></li>
+<li><strong>Lifecycle</strong>: Encompasses the entire map operation across multiple mirai tasks</li>
+</ul>
+<p><strong><code>mirai::mirai</code></strong> - Client-side async task span</p>
+<ul>
+<li><strong>Kind</strong>: <code>client</code></li>
+<li><strong>Attributes</strong>: <code>mirai.id</code> (unique task identifier)</li>
+<li><strong>Lifecycle</strong>: Created when <code>mirai()</code> is called, ended as soon as it returns</li>
+</ul>
+<p><strong><code>mirai::daemon-&gt;eval</code></strong> - Server-side task evaluation span</p>
+<ul>
+<li><strong>Kind</strong>: <code>server</code></li>
+<li><strong>Lifecycle</strong>: Tracks for the duration of actual mirai evaluation on the daemon</li>
+</ul>
+<h4 id="sec:3-2-span-relationships-and-context-propagation">3.2 Span Relationships and Context Propagation</h4>
+<p>The spans form a distributed structure that traces the complete lifecycle of async operations:</p>
+<pre><code>mirai::daemons (compute profile - top level)
+
+mirai::daemon (daemon process 1 - top level)
+mirai::daemon (daemon process 2 - top level) 
+mirai::daemon (daemon process N - top level)
+
+mirai::mirai_map (top level)
+├── mirai::mirai (task 1) ──link→ mirai::daemons
+├── mirai::mirai (task 2) ──link→ mirai::daemons  
+└── mirai::mirai (task N) ──link→ mirai::daemons
+    └── mirai::daemon-&gt;eval ──link→ mirai::daemon
+    
+mirai::mirai (top level) ──link→ mirai::daemons
+└── mirai::daemon-&gt;eval ──link→ mirai::daemon
+</code></pre>
+<p><strong>Context Propagation</strong>: The context is automatically packaged with each <code>mirai()</code> call and extracted on the daemon side, enabling proper parent-child relationships across process boundaries.</p>
+<p><strong>Span Links</strong>: Tasks are linked to their compute profile’s <code>mirai::daemons</code> span on the client side, and to each <code>mirai::daemon</code> span on the server side, showing exactly where each evaluation happened.</p>
+<h3 id="sec:4-status-and-error-tracking">4. Status and Error Tracking</h3>
+<p><code>mirai::daemon-&gt;eval</code> spans automatically track the success or failure of operations:</p>
+<p><strong>Status Values</strong>:</p>
+<ul>
+<li><code>'ok'</code> or <code>'unset'</code> - Operation completed successfully</li>
+<li><code>'error'</code>, with description <code>'miraiError'</code> - Operation failed with an error</li>
+<li><code>'error'</code>, with description <code>'miraiInterrupt'</code> - Operation was interrupted</li>
+</ul>
+<h3 id="sec:5-monitoring-and-observability">5. Monitoring and Observability</h3>
+<p>The OpenTelemetry spans provide rich observability into mirai operations:</p>
+<p><strong>Performance Monitoring</strong>:</p>
+<ul>
+<li>Track task execution times from submission to completion</li>
+<li>Monitor daemon utilization and load balancing</li>
+<li>Identify bottlenecks in distributed computation</li>
+</ul>
+<p><strong>Error Analysis</strong>:</p>
+<ul>
+<li>Correlate errors with specific tasks and daemons</li>
+<li>Track error rates across different types of operations</li>
+<li>Debug issues in distributed environments</li>
+</ul>
+<p><strong>Distributed Tracing</strong>:</p>
+<ul>
+<li>Follow task execution across network boundaries</li>
+<li>Understand the complete lifecycle of async operations</li>
+<li>Correlate client-side requests with server-side execution</li>
+</ul>
+<h3 id="sec:6-integration-with-observability-platforms">6. Integration with Observability Platforms</h3>
+<p>mirai’s OpenTelemetry implementation works seamlessly with any OpenTelemetry-compatible observability platform, including:</p>
+<ul>
+<li>Grafana</li>
+<li>Pydantic Logfire</li>
+<li>Jaeger</li>
+<li>Any of those listed at <a href="https://otelsdk.r-lib.org/reference/collecting.html">https://otelsdk.r-lib.org/reference/collecting.html</a>.</li>
+</ul>
+<p>The tracer name used by mirai is <code>&quot;org.r-lib.mirai&quot;</code>, making it easy to filter and identify mirai-related traces in your observability platform.</p>
+</div>
+</body>
+</html>
