@@ -34,12 +34,11 @@
 #'   such objects. These objects will remain local to the evaluation environment
 #'   as opposed to those supplied in `...` above - see 'evaluation' section
 #'   below.
-#' @param .timeout \[default NULL\] for no timeout, or an integer value in
-#'   milliseconds. A mirai will resolve to an 'errorValue' 5 (timed out) if
-#'   evaluation exceeds this limit.
-#' @param .compute \[default NULL\] character value for the compute profile
-#'   to use (each has its own independent set of daemons), or NULL to use the
-#'   'default' profile.
+#' @param .timeout integer value in milliseconds, or NULL for no timeout. A
+#'   mirai will resolve to an 'errorValue' 5 (timed out) if evaluation exceeds
+#'   this limit.
+#' @param .compute character value for the compute profile to use (each has its
+#'   own independent set of daemons), or NULL to use the 'default' profile.
 #'
 #' @return A 'mirai' object.
 #'
@@ -167,9 +166,10 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
     ._globals_. = globals,
     ._otel_. = if (otel_tracing && length(envir)) {
       spn <- otel::start_local_active_span(
-        "mirai::mirai",
+        "mirai",
         links = list(compute_profile = envir[["otel_span"]]),
-        options = list(kind = "client")
+        options = list(kind = "client"),
+        tracer = otel_tracer
       )
       otel::pack_http_context()
     }
@@ -196,6 +196,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
     id = envir[["dispatcher"]]
   )
   if (otel_tracing) spn$set_attribute("mirai.id", attr(req, "id"))
+  envir[["sync"]] && evaluate_sync(envir)
   invisible(req)
 }
 
@@ -219,6 +220,10 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
 #' involve random numbers.
 #'
 #' @inheritParams mirai
+#' @param .min (only applicable when using dispatcher) integer minimum number of
+#'   daemons on which to evaluate the expression. A synchronization point is
+#'   created, which can be useful for remote daemons, as these may take some
+#'   time to connect.
 #'
 #' @return A 'mirai_map' (list of 'mirai' objects).
 #'
@@ -253,7 +258,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
 #'
 #' @export
 #'
-everywhere <- function(.expr, ..., .args = list(), .compute = NULL) {
+everywhere <- function(.expr, ..., .args = list(), .min = 1L, .compute = NULL) {
   require_daemons(.compute = .compute, call = environment())
   if (is.null(.compute)) .compute <- .[["cp"]]
   envir <- ..[[.compute]]
@@ -273,7 +278,7 @@ everywhere <- function(.expr, ..., .args = list(), .compute = NULL) {
   xlen <- if (is.null(envir[["dispatcher"]])) {
     max(stat(envir[["sock"]], "pipes"), envir[["n"]])
   } else {
-    max(info(.compute)[[1L]])
+    max(.min, info(.compute)[[1L]])
   }
   seed <- envir[["seed"]]
   on.exit({
@@ -321,6 +326,8 @@ everywhere <- function(.expr, ..., .args = list(), .compute = NULL) {
 #'
 #' @inheritSection mirai Errors
 #'
+#' @seealso [race_mirai()]
+#'
 #' @examplesIf interactive()
 #' # using call_mirai()
 #' df1 <- data.frame(a = 1, b = 2)
@@ -345,6 +352,48 @@ everywhere <- function(.expr, ..., .args = list(), .compute = NULL) {
 #' @export
 #'
 call_mirai <- call_aio_
+
+#' mirai (Race)
+#'
+#' Accepts a list of 'mirai' objects, such as those returned by [mirai_map()].
+#' Waits for the next 'mirai' to resolve if at least one is still in progress,
+#' blocking but user-interruptible. If none of the objects supplied are
+#' unresolved, the function returns immediately.
+#'
+#' All of the 'mirai' objects supplied must belong to the same compute profile -
+#' the currently-active one i.e. 'default' unless within a [with_daemons()] or
+#' [local_daemons()] scope.
+#'
+#' @inheritParams call_mirai
+#'
+#' @return The passed object (invisibly).
+#'
+#' @seealso [call_mirai()]
+#'
+#' @examplesIf interactive()
+#' daemons(2)
+#' m1 <- mirai(Sys.sleep(0.2))
+#' m2 <- mirai(Sys.sleep(0.1))
+#' start <- Sys.time()
+#' race_mirai(list(m1, m2))
+#' Sys.time() - start
+#' race_mirai(list(m1, m2))
+#' Sys.time() - start
+#' daemons(0)
+#'
+#' @export
+#'
+race_mirai <- function(x) {
+  envir <- compute_env(NULL)
+  is.null(envir) && stop(._[["daemons_unset"]])
+  cv <- envir[["cv"]]
+  missing(cv) && return(invisible(x))
+  cv_reset(cv)
+  n <- .unresolved(x)
+  n || return(invisible(x))
+  while (wait_(cv) && .unresolved(x) == n) {}
+  invisible(x)
+}
 
 #' mirai (Collect Value)
 #'
@@ -445,9 +494,6 @@ stop_mirai <- stop_request
 #' Unlike [call_mirai()], this function does not wait for completion.
 #'
 #' Suitable for use in control flow statements such as `while` or `if`.
-#'
-#' Note: querying resolution may cause a previously unresolved 'mirai' to
-#' resolve.
 #'
 #' @param x a 'mirai' object or list of 'mirai' objects, or a 'mirai' value
 #'   stored at `$data`.
@@ -613,11 +659,23 @@ ephemeral_daemon <- function(data, timeout) {
     data,
     send_mode = 1L,
     recv_mode = 1L,
-    timeout = timeout,
-    cv = substitute()
+    timeout = timeout
   )
   `attr<-`(.subset2(req, "aio"), "sock", sock)
   invisible(req)
+}
+
+evaluate_sync <- function(envir) {
+  ge <- as.list.environment(globalenv(), all.names = TRUE)
+  rm(list = names(globalenv()), envir = globalenv())
+  if (!is.null(envir[["ge"]])) list2env(envir[["ge"]], envir = globalenv())
+  on.exit({
+    do_cleanup()
+    `[[<-`(envir, "ge", as.list.environment(globalenv(), all.names = TRUE))
+    rm(list = names(globalenv()), envir = globalenv())
+    list2env(ge, envir = globalenv())
+  })
+  daemon(url = envir[["url"]], dispatcher = FALSE, output = TRUE, maxtasks = 1L)
 }
 
 deparse_safe <- function(x) {
@@ -632,14 +690,14 @@ mk_mirai_error <- function(cnd, sc) {
   cnd[["call"]] <- `attributes<-`(.subset2(cnd, "call"), NULL)
   call <- deparse_safe(.subset2(cnd, "call"))
   msg <- if (
-    is.null(call) || call == "eval(._mirai_.[[\"._expr_.\"]], envir = ._mirai_., enclos = .GlobalEnv)"
+    is.null(call) || call == "eval(._mirai_.[[\"._expr_.\"]], envir = ._mirai_., enclos = globalenv())"
   ) {
     sprintf("Error: %s", .subset2(cnd, "message"))
   } else {
     sprintf("Error in %s: %s", call, .subset2(cnd, "message"))
   }
   idx <- max(which(as.logical(lapply(
-    sc, `==`, "eval(._mirai_.[[\"._expr_.\"]], envir = ._mirai_., enclos = .GlobalEnv)"
+    sc, `==`, "eval(._mirai_.[[\"._expr_.\"]], envir = ._mirai_., enclos = globalenv())"
   ))))
   sc <- sc[(length(sc) - 1L):(idx + 1L)]
   if (sc[[1L]][[1L]] == ".handleSimpleError") sc <- sc[-1L]

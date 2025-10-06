@@ -13,15 +13,13 @@ nextget(x, .compute = "default")
 nextcode(xc)
 }
 \arguments{
-\item{.compute}{[default NULL] character value for the compute profile
-to use (each has its own independent set of daemons), or NULL to use the
-'default' profile.}
+\item{.compute}{character value for the compute profile to use (each has its
+own independent set of daemons), or NULL to use the 'default' profile.}
 
 \item{x}{character value of item to retrieve. One of \code{"n"} (number of
-dispatcher daemons), \code{"pid"} (dispatcher process ID), \code{"dispatcher"} (the
-URL to connect to dispatcher from the host) \code{"url"} (the URL to connect to
-dispatcher from daemons) or \code{"tls"} (the stored client TLS configuration
-for use by daemons).}
+dispatcher daemons), \code{"dispatcher"} (the URL dispatcher uses to connect to
+host) \code{"url"} (the URL to connect to dispatcher from daemons) or \code{"tls"}
+(the stored client TLS configuration for use by daemons).}
 
 \item{xc}{integer return value of \code{\link[=daemon]{daemon()}}.}
 }
@@ -58,7 +56,6 @@ daemons(1L)
 nextstream()
 nextstream()
 
-nextget("pid")
 nextget("url")
 
 daemons(0)

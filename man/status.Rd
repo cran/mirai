@@ -7,8 +7,8 @@
 status(.compute = NULL)
 }
 \arguments{
-\item{.compute}{[default NULL] character value for the compute profile to
-query, or NULL to query the 'default' profile.
+\item{.compute}{character value for the compute profile to query, or NULL to
+query the 'default' profile.
 
 \strong{or} a 'miraiCluster' to obtain its status.}
 }
@@ -29,15 +29,6 @@ been received (either completed or cancelled).
 Retrieve status information for the specified compute profile, comprising
 current connections and daemons status.
 }
-\section{Events}{
-
-
-If dispatcher is used combined with daemon IDs, an additional element
-\strong{events} will report the positive integer ID when the daemon connects and
-the negative value when it disconnects. Only the events since the previous
-status query are returned.
-}
-
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 status()

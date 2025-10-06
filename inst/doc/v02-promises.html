@@ -118,13 +118,14 @@ section.footnotes {
 <div class="body">
 <h3 id="sec:1-event-driven-promises">1. Event-driven promises</h3>
 <p><code>mirai</code> supplies its own <code>as.promise()</code> method, allowing it to be readily converted to a promise from the <a href="https://rstudio.github.io/promises/"><code>promises</code></a> package. The <a href="https://rstudio.github.io/promises/">articles</a> for the promises package provide a full guide for the use of promises, including with Shiny.</p>
-<p>A mirai may be piped directly using the promise pipe <code>%...&gt;%</code>, which implicitly calls <code>as.promise()</code> on it. Similarly, all promise-aware functions such as <code>promises::then()</code> or <code>shiny::ExtendedTask$new()</code> accept a mirai directly.</p>
+<p>A mirai may be piped directly using the promise pipe <code>%...&gt;%</code>, which implicitly calls <code>as.promise()</code> on it. Similarly, all promise-aware functions such as <code>promises::then()</code> or <code>shiny::ExtendedTask</code> accept a mirai directly.</p>
 <p>Alternatively, a mirai may be explicitly converted to a promise by <code>as.promise()</code>, which then allows using the methods <code>$then()</code>, <code>$finally()</code> etc. directly from the promise object.</p>
 <p>Whilst normal usage of a mirai involves collecting its value, a promise instead registers an action to be taken as soon as a mirai resolves. This will happen automatically if the R session is idle at the top prompt, or if within a loop or function where <code>later::run_now()</code> is being called periodically to service promise actions (e.g. in Shiny).</p>
 <p>For a mirai promise, the mirai’s value is passed to the <code>onFulfilled</code> argument of <code>promises::then()</code> if no error has occurred, and the mirai’s <code>errorValue</code> is passed to the <code>onRejected</code> argument if an error has occured.</p>
-<p>Promises converted from mirai are next-generation, event-driven promises.</p>
+<p>Promises converted from mirai are modern, event-driven promises:</p>
 <ul>
-<li>Promise actions are triggered as soon as each mirai resolves, without time-polling for completion as a <code>future_promise()</code> does.</li>
+<li>Promise actions are triggered as soon as each mirai resolves, without time-polling for completion e.g. every 100 milliseconds.</li>
+<li>At the point of resolution, the data has already been received in the background, so there is no need to initiate a transfer to fetch the data at this point.</li>
 <li>Allows for much higher responsiveness (zero latency) and massive scalability (thousands or even millions of concurrent promises).</li>
 </ul>
 <p>The following example outputs “hello” to the console after one second when the ‘mirai’ resolves.</p>
@@ -583,7 +584,7 @@ m &lt;- mirai({
               )
             )
           },
-          msg = req[[&quot;HEADERS&quot;]][[&quot;msg&quot;]]
+          msg = req$HEADERS$msg
         ) %...&gt;% (function(x) {
           res$status &lt;- x$status
           res$body &lt;- x$body
@@ -605,28 +606,28 @@ res &lt;- lapply(
 )
 collect_aio(res)
 #&gt; [[1]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:34\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[15061]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:06\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[65457]}&quot;
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:34\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[15063]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:06\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[65452]}&quot;
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:34\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[15079]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:06\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[65455]}&quot;
 #&gt; 
 #&gt; [[4]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:34\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[15073]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:06\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[65450]}&quot;
 #&gt; 
 #&gt; [[5]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:35\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[15073]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:07\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[65452]}&quot;
 #&gt; 
 #&gt; [[6]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:35\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[15079]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:07\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[65455]}&quot;
 #&gt; 
 #&gt; [[7]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:35\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[15061]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:07\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[65450]}&quot;
 #&gt; 
 #&gt; [[8]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:35\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[15063]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:07\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[65457]}&quot;
 
 daemons(0)
 </code></pre>
@@ -656,7 +657,7 @@ m &lt;- mirai({
               status = 200L,
               body = list(
                 time = format(Sys.time()),
-                msg = jsonlite::fromJSON(data)[[&quot;msg&quot;]],
+                msg = jsonlite::parse_json(data)$msg,
                 pid = Sys.getpid()
               )
             )
@@ -683,28 +684,28 @@ res &lt;- lapply(
 )
 collect_aio(res)
 #&gt; [[1]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:39\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[15136]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:10\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[65722]}&quot;
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:39\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[15138]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:10\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[65727]}&quot;
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:39\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[15154]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:10\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[65724]}&quot;
 #&gt; 
 #&gt; [[4]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:39\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[15148]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:10\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[65720]}&quot;
 #&gt; 
 #&gt; [[5]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:40\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[15136]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:11\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[65720]}&quot;
 #&gt; 
 #&gt; [[6]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:40\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[15148]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:11\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[65727]}&quot;
 #&gt; 
 #&gt; [[7]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:40\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[15138]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:11\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[65722]}&quot;
 #&gt; 
 #&gt; [[8]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-08-06 11:43:40\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[15154]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2025-10-05 19:32:11\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[65724]}&quot;
 
 daemons(0)
 </code></pre>

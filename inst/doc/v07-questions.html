@@ -127,11 +127,11 @@ You should simply use a <code>mirai()</code> directly in place of a <code>future
 <p>One important difference is that a <code>future_promise()</code> by default tries to infer all the global variables that are required by the expression.
 If your code depended on this convenience feature then you will need to instead pass these in via the <code>...</code> of <code>mirai()</code>.
 A mirai requires that the expression be self-contained, with any variables or helper functions explicitly supplied to it.</p>
-<p>On the other hand, if your code previously used the <code>globals</code> argument to supply these variables, then you can often pass that directly to the <code>.args</code> of <code>mirai()</code>.
-Note that this would only work in the case of a named list and not the other forms that <code>globals</code> can take.</p>
-<p>Regardless of using a <code>mirai()</code> or <code>future_promise()</code>, we recommend that you pass globals explicitly in production code.
-This is as globals detection is never 100% perfect, and there is always some element of guesswork, with edge cases leading to unpredictable results.
-Explicit passing of variables allows for transparent and reliable behaviour, remaining robust over time.</p>
+<p>On the other hand, if your code previously used the <code>globals</code> argument to supply these variables, then you can pass this directly to the <code>.args</code> of <code>mirai()</code> if it is a named list.</p>
+<p>Regardless of using <code>mirai()</code> or <code>future_promise()</code>, we recommend that you always pass globals explicitly.
+This matches what actually happens in multi-process parallelism, and is hence better-suited to programmatic use.
+Automatic globals detection is an imperfect abstraction that can lead to unpredictable edge cases, or simply slower operation through sending more than required to daemons.
+Explicit passing of variables allows for reliable and transparent behaviour that remains robust over time.</p>
 <p><strong>Capture globals using <code>environment()</code>:</strong></p>
 <p><code>mirai()</code> allows passing an environment to <code>...</code> or to <code>.args</code>.
 This is especially useful for Shiny ExtendedTask, where it is invoked with a set of arguments.
@@ -204,14 +204,16 @@ The random seed is not reset after each mirai call to ensure that however many r
 <h3 id="sec:4-why-does-it-take-time-for-mirai-to-execute-when-it-s-meant-to-return-immediately">4. Why does it take time for <code>mirai()</code> to execute when it’s meant to return immediately?</h3>
 <p>A <code>mirai()</code> call is meant to return almost instantaneously. The same when invoked by a Shiny <code>ExtendedTask</code>. The only reason it would take time is if you are passing through large objects, which then need to be serialized to be sent to the parallel process.</p>
 <p>Care should be taken when you pass a function or environment to <code>mirai()</code> in the <code>...</code> or <code>.args</code> arguments. This is as a function includes its closure (enclosing environment), and an environment its parent environments. This means you could be passing more than you bargained for.</p>
-<p>Generally, <code>obj_size()</code> from the lobstr package is a great function for checking the actual size of an object (capturing many cases more accurately than the base R <code>object.size</code>).</p>
+<p>Generally, <code>lobstr::obj_size()</code> from the lobstr package is a great function for checking the actual size of an object (capturing many cases more accurately than the base R <code>object.size</code>).</p>
 <p>As mitigation for accidentally passing large objects:</p>
 <ul>
-<li>For functions, use <code>crate()</code> from the carrier package. This is what we use in purrr, and it makes sure only what’s necessary is ‘crated’ with the function.</li>
-<li>For environments, consider using <code>parent.env(e) &lt;- emptyenv()</code>. This is not required for R6 classes as they are already isolated by default. Regardless of any parent environment, an environment / R6 class could still contain a lot of items that are not needed for the parallel process, in which case consider passing individual members rather than the entire object.</li>
+<li>For functions, use <code>carrier::crate()</code> from the carrier package. This is what we use in purrr, and it makes sure only what’s necessary is ‘crated’ with the function. To crate an existing function, use an anonymous function (making sure to also supply anything required by <code>fn</code> as part of the <code>...</code>):</li>
 </ul>
-<p>mirai does not rely on options or environment variables at all, so there are no object size limits to set.</p>
-<p>This follows mirai’s philosophy of being an enabler to widen the possibility frontier for R code, but it does place a responsibility on the user to ensure that the code is sensible and does what is desired.</p>
+<pre><code class="language-r">func &lt;- carrier::crate(\(x) fn(x), fn = fn)
+</code></pre>
+<ul>
+<li>For environments, consider using <code>parent.env(e) &lt;- emptyenv()</code>. This is not required for R6 classes as they are already isolated by default. Regardless of any parent environment, an environment / R6 class could still contain many items that are not needed by the parallel process, in which case consider passing individual members (<code>env$x</code>, <code>env$y</code>) rather than the entire object (<code>env</code>) where possible.</li>
+</ul>
 </div>
 </body>
 </html>

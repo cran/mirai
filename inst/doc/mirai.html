@@ -121,14 +121,16 @@ section.footnotes {
 <p>mirai (Japanese for ‘future’) implements the concept of <em>futures</em> in R.</p>
 <p>Futures are an abstraction that represent the result of code evaluation that will be available at some point in the future. The actual code evaluation is sent to and performed in a separate R process (<em>daemon</em>), and the result is sent back to the main (<em>host</em>) process when it completes.</p>
 <h4 id="sec:mirai">mirai</h4>
-<p>The package has one main function: <code>mirai()</code> to create a mirai object.</p>
-<p>This function returns almost immediately, and is never blocking. This is the essence of async: whilst the mirai evaluation is ongoing on the daemon, the host R process is free to continue with other things.</p>
-<p>mirai adopts a clear and explicit model for evaluation: as the mirai expression is sent to another process, it must be self-contained.
-This requires that:</p>
+<p>The package has one main function: <code>mirai()</code> to create a mirai object from an expression.</p>
+<p>This function returns immediately, and is never blocking. This is the essence of async: whilst the mirai expression is evaluated on a daemon, the host process is free to move on.</p>
+<p>As the expression is evaluated in another process, it must be self-contained:</p>
 <ul>
-<li>Package functions be namespaced using <code>::</code>, or <code>library()</code> calls be made within the expression.</li>
+<li>Package functions must be namespaced using <code>::</code>, or <code>library()</code> calls be made within the expression.</li>
 <li>Other functions/data/objects required by the expression should be passed explicitly via <code>...</code> or <code>.args</code>.</li>
 </ul>
+<blockquote>
+<p>This is a 100% reliable evaluation model that corresponds to the underlying reality - any attempt to abstract away from it is inherently imperfect, and we do not compromise on this point.</p>
+</blockquote>
 <p>The following mimics an expensive calculation that eventually returns a random value.</p>
 <pre><code class="language-r">library(mirai)
 
@@ -151,9 +153,9 @@ unresolved(m)
 # Do work whilst unresolved
 
 m[]
-#&gt; [1] 4.476153 5.546561 5.275747 4.493184 5.143411
+#&gt; [1] 4.337259 2.585658 4.784084 3.409787 3.983382
 m$data
-#&gt; [1] 4.476153 5.546561 5.275747 4.493184 5.143411
+#&gt; [1] 4.337259 2.585658 4.784084 3.409787 3.983382
 </code></pre>
 <p>A mirai is either <em>unresolved</em> if the result has yet to be received, or <em>resolved</em> if it has. <code>unresolved()</code> is a helper function to check the state of a mirai.</p>
 <p>The result of a mirai <code>m</code> is available at <code>m$data</code> once it has resolved.
@@ -161,15 +163,20 @@ Normally this will be the return value of the evaluated expression.
 If the expression errored, crashed, or timed out then this will be an ‘errorValue’ instead.
 See the section <a href="#error-handling">Error Handling</a> below.</p>
 <p>Rather than repeatedly checking <code>unresolved(m)</code>, it is more efficient to wait for and collect its value by using <code>m[]</code>.</p>
+<p>You may also wait efficiently for mirai (or lists of mirai) to resolve using:</p>
+<ul>
+<li><code>call_mirai()</code> returns when all the mirai passed to it have resolved.</li>
+<li><code>race_mirai()</code> returns when the first mirai passed to it has resolved.</li>
+</ul>
 <h4 id="sec:mirai-advanced">mirai (advanced)</h4>
 <p>For easy programmatic use of <code>mirai()</code>, ‘.expr’ accepts a pre-constructed language object, and also a list of named arguments passed via ‘.args’.
-So, the following would be equivalent to the above:</p>
+So, the following would be equivalent to the above example:</p>
 <pre><code class="language-r">expr &lt;- quote({Sys.sleep(time); rnorm(5L, mean)})
 args &lt;- list(time = 2L, mean = 4)
 
 m1 &lt;- mirai(.expr = expr, .args = args)
 m1[]
-#&gt; [1] 2.005464 3.797099 2.288692 4.184737 4.566824
+#&gt; [1] 5.184685 3.728154 4.757521 3.215431 1.165492
 </code></pre>
 <p>The example below uses <code>mirai()</code> to perform a long-running write operation asynchronously from a separate process.
 Here <code>environment()</code>, which is the calling environment, is passed directly to ‘.args’.
@@ -280,7 +287,7 @@ is_error_value(m5$data)
 <ul>
 <li>Guarantees the same deterministic, reproducible results across runs</li>
 <li>This is regardless of the number of daemons used</li>
-<li>This is slightly computationally wasteful, although with a negligible impact on performance</li>
+<li>This does require additional computation, although with a negligible impact on performance</li>
 </ul>
 <h3 id="sec:4-local-daemons">4. Local Daemons</h3>
 <p>Daemons, or persistent background processes, may be set to receive <code>mirai()</code> requests.</p>
@@ -289,10 +296,12 @@ is_error_value(m5$data)
 They also load the default packages.
 To instead only load the <code>base</code> package (which cuts out more than half of R’s startup time), the environment variable <code>R_SCRIPT_DEFAULT_PACKAGES=NULL</code> may be set prior to launching daemons.</p>
 </blockquote>
-<h4 id="sec:with-dispatcher-default">With Dispatcher (default)</h4>
 <p>Call <code>daemons()</code> specifying the number of daemons to launch.</p>
 <pre><code class="language-r">daemons(6)
 </code></pre>
+<p>Setting <code>n</code> to one less than the number of available cores is a good rule of thumb for optimal performance.
+You should determine what the ‘available’ cores are, as you may be setting aside cores for other purposes and want this to be less than the total number of cores in the system.</p>
+<h4 id="sec:with-dispatcher-default">With Dispatcher (default)</h4>
 <p>The default <code>dispatcher = TRUE</code> creates a <code>dispatcher()</code> background process that connects to individual daemon processes on the local machine.
 This ensures that tasks are dispatched efficiently on a first-in first-out (FIFO) basis to daemons for processing.
 Tasks are queued at dispatcher and sent to a daemon as soon as it can accept the task for immediate execution.
@@ -320,7 +329,7 @@ Dispatcher employs an event-driven approach that is efficient both in terms of c
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://3b815670e7f3ccf61901f3f2&quot;
+#&gt; [1] &quot;abstract://35e31d13eb5a325f25bc0cb6&quot;
 #&gt; 
 #&gt; $mirai
 #&gt;  awaiting executing completed 
@@ -345,7 +354,7 @@ It is suited to working with similar-length tasks, or where concurrent tasks typ
 #&gt; [1] 6
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;abstract://da8cb9f4b9a34d11357b3bac&quot;
+#&gt; [1] &quot;abstract://f67df9d8a22f0a5681435ca3&quot;
 </code></pre>
 <h4 id="sec:everywhere">everywhere()</h4>
 <p><code>everywhere()</code> may be used to evaluate an expression on all connected daemons and persist the resultant state, regardless of a daemon’s ‘cleanup’ setting.</p>
@@ -365,13 +374,13 @@ Subsequent mirai calls may then make use of ‘con’.</p>
 </code></pre>
 <blockquote>
 <p>Sometimes it may be necessary to evaluate an expression in the global environment of each daemon.
-As mirai evaluation does not occur in the global environment itself, but one inheriting from it, an explicit call to <code>evalq(envir = .GlobalEnv)</code> achieves this.
+As mirai evaluation does not occur in the global environment itself, but one inheriting from it, an explicit call to <code>evalq(envir = globalenv())</code> achieves this.
 An example use case is <code>box::use()</code> to import a module or package:</p>
 </blockquote>
 <pre><code class="language-r">everywhere(
   evalq(
     box::use(dplyr[select], mirai[...]),
-    envir = .GlobalEnv
+    envir = globalenv()
   )
 )
 
@@ -396,7 +405,7 @@ This is a wildcard value that will automatically assigns a free ephemeral port:<
 #&gt; [1] 0
 #&gt; 
 #&gt; $daemons
-#&gt; [1] &quot;tcp://192.168.1.71:46741&quot;
+#&gt; [1] &quot;tcp://192.168.1.71:33271&quot;
 #&gt; 
 #&gt; $mirai
 #&gt;  awaiting executing completed 
@@ -535,7 +544,7 @@ This may be substituted for the full path to a specific R executable, such as th
 <pre><code class="language-r">daemons(url = host_url())
 launch_remote()
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.1.71:34529&quot;)'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.1.71:32913&quot;)'
 daemons(0)
 </code></pre>
 <h3 id="sec:7-tls-secure-connections">7. TLS Secure Connections</h3>
@@ -549,36 +558,36 @@ The private key is always retained on the host machine and never transmitted.</p
 <p>The generated self-signed certificate is available via <code>launch_remote()</code>, where it is included as part of the shell command for manually launching a daemon on a remote machine.</p>
 <pre><code class="language-r">launch_remote(1)
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://192.168.1.71:39835&quot;,tlscert=c(&quot;-----BEGIN CERTIFICATE-----
+#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://192.168.1.71:35195&quot;,tlscert=c(&quot;-----BEGIN CERTIFICATE-----
 #&gt; MIIFPzCCAyegAwIBAgIBATANBgkqhkiG9w0BAQsFADA3MRUwEwYDVQQDDAwxOTIu
 #&gt; MTY4LjEuNzExETAPBgNVBAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDAeFw0wMTAx
 #&gt; MDEwMDAwMDBaFw0zMDEyMzEyMzU5NTlaMDcxFTATBgNVBAMMDDE5Mi4xNjguMS43
 #&gt; MTERMA8GA1UECgwITmFub25leHQxCzAJBgNVBAYTAkpQMIICIjANBgkqhkiG9w0B
-#&gt; AQEFAAOCAg8AMIICCgKCAgEA2xO5GR1prwyOCicDrhaEywpO2jUkgCGyXHiScKok
-#&gt; C3hDJzsxG6+6ZK8uUvOOzTxSgF/ozKDcYkiNEfmtCNX6e0baBMReILzVTcpUhn3N
-#&gt; Yw9B71xYN597HUAuGHtcAGv1fH6po/KIdcc6tYKuDLUSmG2JPsBE8tdB1MHNMrT5
-#&gt; 9x1N2+53gXOJv/Ark+8+4Pvdb719gphtCicnSf5FrX4a4fpGCZOcWdk/71iqBhBn
-#&gt; wk9ghHPWgSlLkusp/ebQtFYrXZ/H0AK822lLg0fsYqia8aOIu/rVnN2E/qoRBLmB
-#&gt; bOI7FFul5kQz9n0l/KZ8AJ/4e30YXnVMRs2h2DKULVMuJA+UeK0m64njk/9ZUvY6
-#&gt; /K7KWxwaTSgcEhx8+I0SogZJ1fSaaD0eAaISpSyWBwF7FDRaH3xhTvOB1RTfcO/h
-#&gt; YMdmIvjQDlzhlynBsUbfCouo0uuzCC4hF6O/GewWl0zz+8n2/PoHqa1yOLGGhDDS
-#&gt; 3Po3b3A7fORtasvbIiSYqrG5/EyVDPktmz56uwmLQ4cl6zie9Uzz3UMUmybMcVYA
-#&gt; FbFRVCJgMR/988+k6FlzKmV5Vzn4OFbAYZPGmahAosld0He6T7KWhIZyu+YAcLrt
-#&gt; ecSF0faOr/gr2xApR46SEKoWCk19qFxqwMsxeGEwmTk+ECpAahdVeDKYgf5xh0EH
-#&gt; 0ukCAwEAAaNWMFQwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQUVw/YtFDp
-#&gt; nzjzTU312QD4tFFRgM0wHwYDVR0jBBgwFoAUVw/YtFDpnzjzTU312QD4tFFRgM0w
-#&gt; DQYJKoZIhvcNAQELBQADggIBAKKi2C5+cKTptnAfTzJnmSnhwMuZeQL7RuqJ1rgj
-#&gt; kY9PZLyXF9ofAVv5Ujb0tgyTqfzvCQg6MB4W+LwMHwVydnqpAhayg2brhOMWIYbG
-#&gt; 40KBmHcOclEmlawVwf2uqjS19wlfWkvqId6wZeu+Kr0s+mCfUowf7N/+gPw2e6Nf
-#&gt; 9cFLFZijMiBH3rxovcTk8DNaH4TG2ECBxzAHcoJFH6bglnw0tSJLijnEiKvOsM1g
-#&gt; HDdosjpufMbLe2cx17wDP3GORkhwunR87bBNl0cmt2QAlL7b2neV/TKWmOFGuzFR
-#&gt; +Gjb0CRP+s20k7s1vUtfGjlQI0sk+6D7yFi4CVbCY+tQVxB+BZjxsszpkpohh1OB
-#&gt; f7Ugj3hNEpojqcjae84BkioZ0rW4Y1dmpHBNoInbHUTSET9ZB6FpfknGvV0XMZiT
-#&gt; OjsuKT1oKfFJzefw37PDOvfqVUl2dbO9u/5PBq0VYldtSi2bkkzMaLxlCxItVqdF
-#&gt; ajFVhN9RGQZJJdSEWVopJtX4lDAm4nno5IFYQ+0XYhqPMRtZPwoHAcBuDSz/E3Da
-#&gt; XXvM8aH9n3N31lymaUE0lX6cDrLQfB/DmmYSYhjVHKjSKG2DFEILB6D1Qj8TBa34
-#&gt; PeC4023DOtcyMO/BX4sGOsQ3cw/he4vDq8lmcqh8O/OEoTfzRe6zDgVQ/xc+M2C5
-#&gt; Zs/P
+#&gt; AQEFAAOCAg8AMIICCgKCAgEA57RHHeW3t3PaAhcV/OPHB6qisQbsrz509SS4pRkB
+#&gt; XMlFAaTisdC9XTjg4GVSpTr1E+tO0N4ecf4P9r0ErfxsrnTh/7lIHgyW1I/3NYra
+#&gt; DPKlrGtAZyNTxoBFKtuN6YOLltXMC5UNPAUnmEh6FZ464Qypr0Yi4e1bov7/P01F
+#&gt; ibZLMPnxO+GZxJLcfXHit6lnDSTzGDIN9odhTTlIuSOM/vjy6f05Dbhg3+ImMbAL
+#&gt; gC8XmpUTsjO+RQvGkZwwaRV+kImUmSfTibwXv82eI5KE0vt+SpSJ+RptC7Raelt7
+#&gt; lP9+72Rg+bk2wfStbgWqtHn8n+5s33RUZVV8rH3wCdFUqnGbzV0RRoFW4iHKVhrg
+#&gt; bL6JinV6NZRy9i+eP78oD7QMJJeEzrIfMPPvoqpCo5vJufIHkuRYhhq86TaVc9hy
+#&gt; pRfRLmpdKOHctXS4DmSBMea8u4ou+EhCU1NqKMM7DOlCc79NaKKkE+E7Oshco1tf
+#&gt; ALjsebDAphjZEtk5XfbDYeEunno0Nn39PK64WTVo005v6CNs2joWL772PycJ2nJA
+#&gt; lrZg7S7nVkTaYKYHVOsui32LxCqrwqUirhg2/iik5TCjGO9gcfJJEVWwHZElZVbM
+#&gt; n/s5XRYLzhU8tb+FZT20UfURQ2TviAPk7bwUl13Fb1Td9+ft50KxOCPdmUPdRUw6
+#&gt; u2sCAwEAAaNWMFQwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQUXW/eNoRp
+#&gt; aiGLZnEvMFtDXrdbTNkwHwYDVR0jBBgwFoAUXW/eNoRpaiGLZnEvMFtDXrdbTNkw
+#&gt; DQYJKoZIhvcNAQELBQADggIBAH+7tu2zOf0uHnwX9STGg5O5ElHk5xtUTIpQrMBf
+#&gt; GRvAkCq5XSxzWkfpu30P0rO1+mlDJ/F3Jnww0oRePssbCJqYdaH/lAjs6nwpjSav
+#&gt; cGW558THAH+jrYWMhdF9CkwypHGmN3MOkgQJBECSYQIvGXYX8+t5h8GVrBE6KPol
+#&gt; 1uof3HAYpRws2F6f9pghFsL+LFixJd+LNe1a9dwXcwz5ooKBXu+M90xY2BBVmK3j
+#&gt; eWYUGucshPhP1F7AjhuVTfW5nHd1bkkH0CSGyMpjasiwDPjQeG+NzeBZsMuPQjV1
+#&gt; 50vR5YiLLRZrk0yO30+Se54iaVJ+7PJfZVxdrmWpf9Lq+P27nXsSueeSVQCUej4Z
+#&gt; M5nhdLCug6mF7vcMUnNiS6iyvOh83XSsKBBC1qFX8zkSp37brDt0PDud9JWvOjYo
+#&gt; SxZ2okH2RmyfT66MxE8uiB1pNpCbw8DsRy2klW8vAqGiOXf9dz6vOaINR77yXMqQ
+#&gt; 64s5649BgPtHe+FC4oi49KTeYrEvLJyU5hjismj5iMQz6GPUOB8OKySGDf+73KzA
+#&gt; pWxlzLGPLJQJuXtk2od6Y7GIJjnRy2397riA0IU7hqCLjc3JIxnY6z9ACaLGbv02
+#&gt; GqcsyWTrvsJh4tBS+e7jM5fHX3w9R5RtcdHPTvz7F2bdrr83MQeld9RQ7Cwzv73n
+#&gt; Us0K
 #&gt; -----END CERTIFICATE-----
 #&gt; &quot;,&quot;&quot;))'
 </code></pre>
@@ -647,19 +656,19 @@ with_daemons(&quot;gpu&quot;, {
 })
 
 s1$daemons
-#&gt; [1] &quot;abstract://90879a789bd6e4a4a2b38593&quot;
+#&gt; [1] &quot;abstract://2e74c4d66f68a08bb316d38c&quot;
 m1[]
-#&gt; [1] 20773
+#&gt; [1] 64123
 
 s2$daemons
-#&gt; [1] &quot;abstract://e9c3dda8680efccf496c48ce&quot;
+#&gt; [1] &quot;abstract://d6f72911a8e7626734a9ea87&quot;
 m2[] # different to m1
-#&gt; [1] 20859
+#&gt; [1] 64209
 
 m3[] # same as m1
-#&gt; [1] 20773
+#&gt; [1] 64123
 m4[] # same as m1
-#&gt; [1] 20773
+#&gt; [1] 64123
 
 with_daemons(&quot;cpu&quot;, daemons(0))
 with_daemons(&quot;gpu&quot;, daemons(0))
@@ -677,6 +686,35 @@ Wrapping a call to <code>shiny::shinyApp()</code> would not work as <code>runApp
 </blockquote>
 <p>In the case of a Shiny app, all mirai calls will be executed before the app returns as the app itself is blocking.
 In the case of other expressions, be sure to call or collect the values of all mirai within the expression to ensure that they all complete before the daemons are reset.</p>
+<h3 id="sec:9-synchronous-mode">9. Synchronous Mode</h3>
+<p><code>daemons(sync = TRUE)</code> turns on synchronous mode for the default compute profile. This causes mirai to be evaluated immediately after creation, and before they return, with no asynchronous operation. This can be useful for testing and debugging purposes. In particular, it allows you to drop into an interactive browser session from a <code>browser()</code> statement inside your mirai expression.</p>
+<p>To restrict synchronous behaviour to a specific compute profile, additionally specify <code>.compute</code>. A value of <code>seed</code> may be supplied for reproducible parallel RNG, but all other arguments have no effect when specifying <code>sync = TRUE</code>.</p>
+<p>Example usage:</p>
+<pre><code class="language-r"># run everything in sync:
+daemons(sync = TRUE)
+mp &lt;- mirai_map(1:2, \(x) Sys.getpid())
+daemons(0)
+mp[]
+#&gt; [[1]]
+#&gt; [1] 62512
+#&gt; 
+#&gt; [[2]]
+#&gt; [1] 62512
+
+
+# Use sync with the 'sync' compute profile:
+daemons(sync = TRUE, .compute = &quot;sync&quot;)
+with_daemons(&quot;sync&quot;, {
+  mp &lt;- mirai_map(1:2, \(x) Sys.getpid())
+})
+daemons(0, .compute = &quot;sync&quot;)
+mp[]
+#&gt; [[1]]
+#&gt; [1] 62512
+#&gt; 
+#&gt; [[2]]
+#&gt; [1] 62512
+</code></pre>
 </div>
 </body>
 </html>
