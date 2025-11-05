@@ -12,7 +12,8 @@ status](https://r-lib.r-universe.dev/badges/mirai)](https://r-lib.r-universe.dev
 [![R-CMD-check](https://github.com/r-lib/mirai/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/r-lib/mirai/actions/workflows/R-CMD-check.yaml)
 [![Codecov test
 coverage](https://codecov.io/gh/r-lib/mirai/graph/badge.svg)](https://app.codecov.io/gh/r-lib/mirai)
-[![DOI](https://zenodo.org/badge/459341940.svg)](https://zenodo.org/badge/latestdoi/459341940)
+[![Ask
+DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/r-lib/mirai)
 <!-- badges: end -->
 
 ### ミライ
@@ -20,11 +21,11 @@ coverage](https://codecov.io/gh/r-lib/mirai/graph/badge.svg)](https://app.codeco
 <br /> みらい 未来 <br /><br /> Minimalist Async Evaluation Framework
 for R <br /><br />
 
-→ Run R code in parallel without blocking your session
+→ Run R code in parallel while keeping your session free
 
-→ Distribute workloads across local or remote machines
+→ Scale seamlessly from your laptop to cloud servers or HPC clusters
 
-→ Perform actions reactively as soon as tasks complete
+→ Automate actions as soon as tasks complete
 
 <br />
 
@@ -71,38 +72,39 @@ daemons(0)
 
 ### Design Philosophy
 
+→ **Dynamic Architecture**
+
+- Inverted topology, where daemons connect to host, enables true dynamic
+  scaling
+- Optimal load balancing through efficient FIFO dispatcher scheduling
+- Event-driven promises complete with zero latency (and no polling
+  overhead)
+
 → **Modern Foundation**
 
-- Architected on current communication technologies (IPC, TCP, secure
-  TLS)
-- Professional queueing and scheduling built on
-  [nanonext](https://nanonext.r-lib.org/) and
-  [NNG](https://nng.nanomsg.org/)
-- Engineered for custom serialization of cross-language data formats
-  (e.g. torch, Arrow)
-
-→ **Extreme Performance**
-
-- Scales to millions of tasks across thousands of processes
-- 1,000x greater efficiency and responsiveness than previously possible
-- Zero-latency, event-driven promises brings modern async to R
+- Built on [NNG](https://nng.nanomsg.org/) via
+  [nanonext](https://nanonext.r-lib.org/), scales reliably to millions
+  of tasks / thousands of processes
+- High performance, with round-trip times measured in microseconds, not
+  milliseconds
+- Native support for IPC, TCP, and zero-config TLS with automatic
+  certificate generation
 
 → **Production First**
 
-- 100% reliable abstraction of the multi-process, message-passing
-  paradigm
-- Consistent and transparent evaluation, from minimal complexity and no
-  hidden state
-- Observability at scale through OpenTelemetry integration
+- Clear evaluation model with explicit dependencies prevents surprises
+  from hidden state
+- Serialization support for cross-language data formats (torch tensors,
+  Arrow tables)
+- OpenTelemetry integration for observability across distributed
+  processes
 
 → **Deploy Everywhere**
 
-- Deploy across local, remote (SSH), and HPC environments (Slurm, SGE,
-  PBS, LSF)
-- Combine and extend local processing power with network or cloud
-  compute
-- Direct tasks to the most suitable resources, using modular compute
-  profiles
+- Local, network / cloud (via SSH, SSH tunnelling) or HPC (via Slurm,
+  SGE, PBS, LSF)
+- Modular compute profiles direct tasks to the most suitable resources
+- Combine local, remote, and HPC resources in a single compute profile
 
 ### Powers the R Ecosystem
 

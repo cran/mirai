@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.7">
+<meta name="generator" content="litedown 0.8">
 <title>For Package Authors</title>
 <style type="text/css">
 body {
@@ -107,6 +107,9 @@ section.footnotes {
   body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
 }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.14.14/css/prism-xcode.min.css">
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
 </head>
 <body>
 <div class="frontmatter">
@@ -117,7 +120,7 @@ section.footnotes {
 <p>mirai offers the following functions primarily for package authors using mirai:</p>
 <ol>
 <li><code>require_daemons()</code> will error and prompt the user to set daemons (with a clickable function link if the cli package is available) if daemons are not already set.</li>
-<li><code>daemons_set()</code>, to detect if daemons have already been set and prompt the user to set daemons if not.</li>
+<li><code>daemons_set()</code>, to detect if daemons have already been set.</li>
 <li><code>on_daemon()</code>, to detect if code is already running on a daemon, i.e. within a <code>mirai()</code> call.</li>
 <li><code>register_serial()</code> to register custom serialization functions, which are automatically available by default for all subsequent <code>daemons()</code> calls.</li>
 <li><code>nextget()</code>, for querying values for a compute profile, such as ‘url’, described in the function’s documentation. Note: only the specifically-documented values are supported interfaces.</li>
@@ -134,7 +137,18 @@ You do not need to anticipate whether an end-user will run the code on their own
 <ul>
 <li>Consider pointing to the documentation for <code>mirai::daemons()</code>, or re-exporting <code>daemons()</code> in your package as a convenience.</li>
 <li>Never include a call to <code>daemons()</code> when using <code>mirai_map()</code>.
-This is important to ensure that there is no accidental recursive creation of daemons on the same machine, for example if your function is used within another package’s function that also uses mirai.</li>
+This is important to ensure that there is no accidental recursive creation of daemons on the same machine, for example if your function is used within another package’s function that also uses mirai.
+<ul>
+<li>The exception to this rule is that package authors may decide to provide a fallback to synchronous behaviour to ensure that a map always runs even if the user has not set daemons.
+In this case, it is permissible to set synchronous daemons for the duration of the map, if daemons have not been set, and provided that they are reset after the map.
+For this purpose, you may use code such as:
+<pre><code class="language-r">with(if (!daemons_set()) daemons(sync = TRUE), {
+  mirai_map(...)
+})
+</code></pre>
+</li>
+</ul>
+</li>
 <li>Exceptionally, a <code>daemons(n = 1, dispatcher = FALSE, .compute = ...)</code> call may be used to set up a single dedicated daemon, but only if used with a unique value for <code>.compute</code>.
 A representative example of this usage pattern is <code>logger::appender_async()</code>, where the logger package’s ‘namespace’ concept maps directly to mirai’s ‘compute profile’.</li>
 </ul>
@@ -146,7 +160,8 @@ A representative example of this usage pattern is <code>logger::appender_async()
 </ul>
 <ol start="3">
 <li>
-<p><code>info()</code> may be used programmatically, but only index into the vector using the name rather than position e.g. <code>info()[[&quot;cumulative&quot;]]</code> rather than <code>info()[[2]]</code>. This is in case other values are added at a later date.</p>
+<p><code>info()</code> may be used programmatically, but only index into the vector using the name of the element rather than its position e.g. <code>info()[[&quot;cumulative&quot;]]</code> rather than <code>info()[[2]]</code>.
+This is in case other values are added at a later date.</p>
 </li>
 <li>
 <p>The functions <code>unresolved()</code>, <code>is_error_value()</code>, <code>is_mirai_error()</code>, and <code>is_mirai_interrupt()</code> should be used to test for the relevant state of a mirai or its value.</p>

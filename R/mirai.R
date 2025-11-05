@@ -155,8 +155,15 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
     }
     all(nzchar(gn)) || stop(._[["named_dots"]])
   }
+  ctx_spn <- otel_active_span(
+    "mirai",
+    cond = length(envir),
+    links = list(envir[["otel_span"]]),
+    options = list(kind = "client"),
+    return_ctx = TRUE,
+    scope = environment()
+  )
   if (length(envir[["seed"]])) globals[[".Random.seed"]] <- next_stream(envir)
-
   data <- list(
     ._expr_. = if (
       is.symbol(expr) &&
@@ -164,15 +171,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
       is.language(.expr)
     ) .expr else expr,
     ._globals_. = globals,
-    ._otel_. = if (otel_tracing && length(envir)) {
-      spn <- otel::start_local_active_span(
-        "mirai",
-        links = list(compute_profile = envir[["otel_span"]]),
-        options = list(kind = "client"),
-        tracer = otel_tracer
-      )
-      otel::pack_http_context()
-    }
+    ._otel_. = ctx_spn[[1L]]
   )
 
   if (length(.args)) {
@@ -195,7 +194,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
     cv = envir[["cv"]],
     id = envir[["dispatcher"]]
   )
-  if (otel_tracing) spn$set_attribute("mirai.id", attr(req, "id"))
+  otel_set_span_id(ctx_spn[[2L]], attr(req, "id"))
   envir[["sync"]] && evaluate_sync(envir)
   invisible(req)
 }
@@ -229,8 +228,8 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
 #'
 #' @inheritSection mirai Evaluation
 #'
-#' @examplesIf interactive()
-#' daemons(1)
+#' @examples
+#' daemons(sync = TRUE)
 #'
 #' # export common data by a super-assignment expression:
 #' everywhere(y <<- 3)
@@ -250,7 +249,7 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
 #' daemons(0)
 #'
 #' # loading a package on all daemons
-#' daemons(1, dispatcher = FALSE)
+#' daemons(sync = TRUE)
 #' everywhere(library(parallel))
 #' m <- mirai("package:parallel" %in% search())
 #' m[]
@@ -451,7 +450,7 @@ collect_mirai <- function(x, options = NULL) {
     `[[<-`(., "progress", options[[".progress"]])
     options <- names(options)
   }
-  dots <- mget(options, envir = .)
+  dots <- mget(options, envir = .opts)
   mmap(x, dots)
 }
 
@@ -675,7 +674,7 @@ evaluate_sync <- function(envir) {
     rm(list = names(globalenv()), envir = globalenv())
     list2env(ge, envir = globalenv())
   })
-  daemon(url = envir[["url"]], dispatcher = FALSE, output = TRUE, maxtasks = 1L)
+  daemon(url = envir[["url"]], autoexit = FALSE, dispatcher = FALSE, output = TRUE, maxtasks = 1L)
 }
 
 deparse_safe <- function(x) {
@@ -686,19 +685,16 @@ deparse_safe <- function(x) {
 mk_interrupt_error <- function() .miraiInterrupt
 
 mk_mirai_error <- function(cnd, sc) {
+  eval_call <- "eval(._mirai_.[[\"._expr_.\"]], envir = ._mirai_., enclos = globalenv())"
   cnd[["condition.class"]] <- class(cnd)
   cnd[["call"]] <- `attributes<-`(.subset2(cnd, "call"), NULL)
   call <- deparse_safe(.subset2(cnd, "call"))
-  msg <- if (
-    is.null(call) || call == "eval(._mirai_.[[\"._expr_.\"]], envir = ._mirai_., enclos = globalenv())"
-  ) {
+  msg <- if (is.null(call) || call == eval_call) {
     sprintf("Error: %s", .subset2(cnd, "message"))
   } else {
     sprintf("Error in %s: %s", call, .subset2(cnd, "message"))
   }
-  idx <- max(which(as.logical(lapply(
-    sc, `==`, "eval(._mirai_.[[\"._expr_.\"]], envir = ._mirai_., enclos = globalenv())"
-  ))))
+  idx <- max(which(as.logical(lapply(sc, `==`, eval_call))))
   sc <- sc[(length(sc) - 1L):(idx + 1L)]
   if (sc[[1L]][[1L]] == ".handleSimpleError") sc <- sc[-1L]
   cnd[["stack.trace"]] <- lapply(sc, `attributes<-`, NULL)

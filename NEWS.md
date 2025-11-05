@@ -1,3 +1,16 @@
+# mirai 2.5.2
+
+#### Updates
+
+* The default daemons `autoexit = TRUE` behaviour has been updated for OpenTelemetry compatibility (#500).
+  + Introduces a 200ms grace period for processes to exit normally before a forceful termination.
+  + The behavioural changes announced in mirai 2.4.0 are now enforced for all daemon types - eliminating a bug that previously caused this to only be applied to ephemeral daemons.
+* OpenTelemetry span names and attributes have been upgraded to be more informative and better follow semantic conventions (#481).
+* `require_daemons()` updates:
+  + Function now returns invisibly as intended.
+  + Using with `.compute` as the first argument (which produced a warning) no longer works.
+* Requires nanonext >= 1.7.2.
+
 # mirai 2.5.1
 
 #### New Features

@@ -31,7 +31,7 @@ dispatcher <- function(host, url = NULL, n = 0L, ...) {
   cv <- cv()
   sock <- socket("rep")
   on.exit(reap(sock))
-  pipe_notify(sock, cv, remove = TRUE, flag = flag_value())
+  pipe_notify(sock, cv, remove = TRUE, flag = tools::SIGTERM)
 
   psock <- socket("poly")
   on.exit(reap(psock), add = TRUE, after = TRUE)
@@ -81,11 +81,7 @@ dispatcher <- function(host, url = NULL, n = 0L, ...) {
     }
   } else {
     listen(psock, url = url, tls = tls, fail = 2L)
-    listener <- attr(psock, "listener")[[1L]]
-    url <- opt(listener, "url")
-    if (parse_url(url)[["port"]] == "0") {
-      url <- sub_real_port(opt(listener, "tcp-bound-port"), url)
-    }
+    url <- sub_real_port(psock, url)
   }
   send(sock, url, mode = 2L, block = TRUE)
 
@@ -123,13 +119,7 @@ dispatcher <- function(host, url = NULL, n = 0L, ...) {
           if (id == 0L) {
             awaiting <- length(inq)
             executing <- sum(as.logical(unlist(lapply(outq, .subset2, "msgid"), use.names = FALSE)))
-            found <- c(
-              length(outq),
-              connections,
-              awaiting,
-              executing,
-              count - awaiting - executing
-            )
+            found <- c(length(outq), connections, awaiting, executing, count - awaiting - executing)
           } else {
             found <- FALSE
             for (item in outq) {

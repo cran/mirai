@@ -20,7 +20,7 @@
 #' This function is an S3 method for the generic `as.promise()` for class
 #' 'mirai'.
 #'
-#' Requires the \CRANpkg{promises} package.
+#' Requires the \pkg{promises} package.
 #'
 #' Allows a 'mirai' to be used with the promise pipe `%...>%`, which schedules a
 #' function to run upon resolution of the 'mirai'.
@@ -50,9 +50,7 @@ as.promise.mirai <- function(x) {
       function(resolve, reject) {
         if (unresolved(x)) .keep(x, environment()) else resolve(.subset2(x, "value"))
       }
-    )$then(
-      onFulfilled = handle_fulfilled
-    )
+    )$then(onFulfilled = handle_fulfilled)
     `[[<-`(x, "promise", promise)
   }
 
@@ -72,7 +70,7 @@ handle_fulfilled <- function(value, .visible) {
 #' This function is an S3 method for the generic `as.promise()` for class
 #' 'mirai_map'.
 #'
-#' Requires the \CRANpkg{promises} package.
+#' Requires the \pkg{promises} package.
 #'
 #' Allows a 'mirai_map' to be used with the promise pipe `%...>%`, which
 #' schedules a function to run upon resolution of the entire 'mirai_map'.

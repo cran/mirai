@@ -1,15 +1,12 @@
 #' mirai: Minimalist Async Evaluation Framework for R
 #'
-#' Designed for simplicity, a 'mirai' evaluates an R expression asynchronously
-#' in a parallel process, locally or distributed over the network. Modern
-#' networking and concurrency, built on 'nanonext' and 'NNG', ensures reliable
-#' scheduling over fast inter-process communications or TCP/IP secured by TLS.
-#' Launch remote resources via SSH or cluster managers for distributed
-#' computing. Scales efficiently to millions of tasks over thousands of
-#' connections, requiring no storage on the file system due to its inherently
-#' queued architecture. Innovative features include event-driven promises,
-#' asynchronous parallel map, and seamless serialization of otherwise
-#' non-exportable reference objects.
+#' Designed for simplicity, a 'mirai' evaluates an R expression asynchronously,
+#' locally or distributed over the network. Built on 'nanonext' and 'NNG' for
+#' modern networking and concurrency, scales efficiently to millions of tasks
+#' over thousands of persistent parallel processes. Provides optimal scheduling
+#' over fast 'IPC', TCP, and TLS connections, integrating with SSH or cluster
+#' managers. Implements event-driven promises for reactive programming, and
+#' supports custom serialization for cross-language data types.
 #'
 #' @section Notes:
 #'
@@ -45,10 +42,8 @@
 # tested implicitly
 
 .onLoad <- function(libname, pkgname) {
-  otel_tracing <<- requireNamespace("otel", quietly = TRUE) && {
-    otel_tracer <<- otel::get_tracer(name = otel_tracer_name)
-    .subset2(otel_tracer, "is_enabled")()
-  }
+  otel_cache_tracer()
+  cli_enabled <<- requireNamespace("cli", quietly = TRUE)
   switch(
     Sys.info()[["sysname"]],
     Linux = {
@@ -68,13 +63,18 @@
 
 # nocov end
 
-. <- `[[<-`(new.env(), "cp", "default")
-.. <- new.env()
+cli_enabled <- FALSE
 .command <- NULL
 .urlscheme <- NULL
+
+. <- `[[<-`(new.env(), "cp", "default")
+.. <- new.env()
+.opts <- list2env(list(.flat = .flat, .progress = .progress, .stop = .stop))
 .limit_long <- 10000L
 .limit_long_secs <- 10L
 .limit_short <- 5000L
+.sleep_daemons <- 200L
+.sleep_signal <- 10L
 
 ._ <- list2env(
   list(
@@ -97,7 +97,3 @@
   ),
   hash = TRUE
 )
-
-otel_tracing <- FALSE
-otel_tracer <- NULL
-otel_tracer_name <- "org.r-lib.mirai"

@@ -59,18 +59,19 @@
 #' @section Persistence:
 #'
 #' The `autoexit` argument governs persistence settings for the daemon. The
-#' default TRUE ensures that it will exit as soon as its socket connection
-#' with the host process drops.
+#' default `TRUE` ensures that it exits as soon as its socket connection with
+#' the host process drops. A 200ms grace period allows the daemon process to
+#' exit normally, after which it will be forcefully terminated.
 #'
-#' Supplying `NA` will allow a daemon to exit cleanly once its socket connection
-#' with the host process drops, as soon as it has finished any task that is
-#' currently in progress. This may be useful if the daemon is performing some
-#' side effect such as writing files to disk, and the result is not required in
-#' the host process.
+#' Supplying `NA` ensures that a daemon always exits cleanly after its socket
+#' connection with the host drops. This means that it can temporarily outlive
+#' this connection, but only to complete any task that is currently in progress.
+#' This can be useful if the daemon is performing a side effect such as writing
+#' files to disk, with the result not being required back in the host process.
 #'
-#' Setting to FALSE allows the daemon to persist indefinitely even when there is
-#' no longer a socket connection. This allows a host session to end and a new
-#' session to connect at the URL where the daemon is dialled in. Daemons must be
+#' Setting to `FALSE` allows the daemon to persist indefinitely even when there
+#' is no longer a socket connection. This allows a host session to end and a new
+#' session to connect at the URL where the daemon is dialed in. Daemons must be
 #' terminated with `daemons(NULL)` in this case instead of `daemons(0)`. This
 #' sends explicit exit signals to all connected daemons.
 #'
@@ -90,6 +91,10 @@ daemon <- function(
   tlscert = NULL,
   rs = NULL
 ) {
+  dmnspn <- otel_active_span(
+    sprintf("daemon connect %s", url),
+    attributes = otel_daemon_attrs(url)
+  )
   cv <- cv()
   sock <- socket(if (dispatcher) "poly" else "rep")
   on.exit({
@@ -97,7 +102,7 @@ daemon <- function(
     `[[<-`(., "sock", NULL)
   })
   `[[<-`(., "sock", sock)
-  pipe_notify(sock, cv, remove = TRUE, flag = flag_value_auto(autoexit))
+  pipe_notify(sock, cv, remove = TRUE, flag = flag_value(autoexit))
   if (length(tlscert)) tlscert <- tls_config(client = tlscert)
   dial_sync_socket(sock, url, autostart = asyncdial || NA, tls = tlscert)
 
@@ -110,7 +115,6 @@ daemon <- function(
   task <- 1L
   timeout <- if (idletime > walltime) walltime else if (is.finite(idletime)) idletime
   maxtime <- if (is.finite(walltime)) mclock() + walltime else FALSE
-  if (otel_tracing) dmnspn <- otel_daemon_span(url)
 
   if (dispatcher) {
     aio <- recv_aio(sock, mode = 1L, cv = cv)
@@ -166,12 +170,16 @@ daemon <- function(
     }
   }
 
-  if (otel_tracing) otel_daemon_span(url, end_span = dmnspn)
   if (!output) {
     sink(type = "message")
     sink()
     close.connection(devnull)
   }
+  otel_active_span(
+    sprintf("daemon disconnect %s", url),
+    attributes = otel_daemon_attrs(url),
+    links = list(dmnspn)
+  )
   invisible(xc)
 }
 
@@ -190,7 +198,7 @@ daemon <- function(
   cv <- cv()
   sock <- socket("rep")
   on.exit(reap(sock))
-  pipe_notify(sock, cv, remove = TRUE, flag = flag_value())
+  pipe_notify(sock, cv, remove = TRUE, flag = tools::SIGTERM)
   dial(sock, url = url, autostart = NA, fail = 2L)
   `[[<-`(., "sock", sock)
   .mark()
@@ -201,12 +209,12 @@ daemon <- function(
 # internals --------------------------------------------------------------------
 
 handle_mirai_error <- function(cnd) {
-  if (otel_tracing) otel::get_active_span()$set_status("error", "miraiError")
+  otel_set_span_error(dynGet("spn", ifnotfound = NULL), "miraiError")
   invokeRestart("mirai_error", cnd, sys.calls())
 }
 
 handle_mirai_interrupt <- function(cnd) {
-  if (otel_tracing) otel::get_active_span()$set_status("error", "miraiInterrupt")
+  otel_set_span_error(dynGet("spn", ifnotfound = NULL), "miraiInterrupt")
   invokeRestart("mirai_interrupt")
 }
 
@@ -219,15 +227,13 @@ eval_mirai <- function(._mirai_., sock = NULL) {
           on.exit(stop_aio(cancel))
         }
         list2env(._mirai_.[["._globals_."]], envir = globalenv())
-        if (otel_tracing && length(._mirai_.[["._otel_."]])) {
-          prtctx <- otel::extract_http_context(._mirai_.[["._otel_."]])
-          spn <- otel::start_local_active_span(
-            "daemon->eval",
-            links = list(daemon = dynGet("dmnspn")),
-            options = list(kind = "server", parent = prtctx),
-            tracer = otel_tracer
-          )
-        }
+        spn <- otel_active_span(
+          "daemon eval",
+          cond = length(._mirai_.[["._otel_."]]),
+          links = list(dynGet("dmnspn")),
+          options = list(kind = "server", parent = otel::extract_http_context(._mirai_.[["._otel_."]])),
+          scope = environment()
+        )
         eval(._mirai_.[["._expr_."]], envir = ._mirai_., enclos = globalenv())
       },
       error = handle_mirai_error,
@@ -235,15 +241,6 @@ eval_mirai <- function(._mirai_., sock = NULL) {
     ),
     mirai_error = mk_mirai_error,
     mirai_interrupt = mk_interrupt_error
-  )
-}
-
-otel_daemon_span <- function(url, end_span = NULL) {
-  otel::start_local_active_span(
-    if (length(end_span)) "daemon->end" else "daemon",
-    attributes = otel::as_attributes(list(url = url)),
-    links = if (length(end_span)) list(daemon = end_span),
-    tracer = otel_tracer
   )
 }
 
@@ -265,9 +262,7 @@ do_cleanup <- function() {
 
 snapshot <- function() `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", names(globalenv()))
 
-flag_value_auto <- function(autoexit) {
-  (isFALSE(autoexit) || isNamespace(topenv(parent.frame(), NULL))) && return(autoexit) ||
-    is.na(autoexit) || isNamespaceLoaded("covr") || return(tools::SIGTERM)
+flag_value <- function(autoexit) {
+  is.na(autoexit) && return(TRUE)
+  autoexit && return(tools::SIGTERM)
 }
-
-flag_value <- function() isNamespaceLoaded("covr") || return(tools::SIGTERM)

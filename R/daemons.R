@@ -265,9 +265,10 @@ daemons <- function(
       }
       create_profile(envir, .compute, 1L, dots, sync)
       if (length(remote)) {
-        on.exit(daemons(0L, .compute = .compute))
-        launch_remote(n = n, remote = remote, .compute = .compute)
-        on.exit()
+        withCallingHandlers(
+          launch_remote(n = n, remote = remote, .compute = .compute),
+          error = function(cnd) daemons(0, .compute = .compute)
+        )
       }
       url
     }
@@ -282,8 +283,13 @@ daemons <- function(
 
       if (signal) send_signal(envir)
       reap(envir[["sock"]])
-      if (otel_tracing) otel_daemons_span(envir, .compute, reset = TRUE)
+      otel_active_span(
+        sprintf("daemons reset %s", envir[["url"]]),
+        attributes = otel_daemons_attrs(envir),
+        links = if (length(envir[["otel_span"]])) list(envir[["otel_span"]])
+      )
       ..[[.compute]] <- NULL -> envir
+      msleep(.sleep_daemons)
       return(invisible(FALSE))
     }
     res <- if (is.null(envir)) {
@@ -317,7 +323,10 @@ daemons <- function(
     )
   })
 
-  if (otel_tracing) `[[<-`(envir, "otel_span", otel_daemons_span(envir, .compute))
+  `[[<-`(envir, "otel_span", otel_active_span(
+    sprintf("daemons set %s", envir[["url"]]),
+    attributes = otel_daemons_attrs(envir)
+  ))
 
   invisible(`class<-`(TRUE, c("miraiDaemons", .compute)))
 }
@@ -428,9 +437,9 @@ status <- function(.compute = NULL) {
 #'
 #' @seealso [status()] for more verbose status information.
 #'
-#' @examplesIf interactive()
+#' @examples
 #' info()
-#' daemons(1)
+#' daemons(sync = TRUE)
 #' info()
 #' daemons(0)
 #'
@@ -457,9 +466,9 @@ info <- function(.compute = NULL) {
 #'
 #' @return Logical `TRUE` or `FALSE`.
 #'
-#' @examplesIf interactive()
+#' @examples
 #' daemons_set()
-#' daemons(1)
+#' daemons(sync = TRUE)
 #' daemons_set()
 #' daemons(0)
 #'
@@ -469,40 +478,27 @@ daemons_set <- function(.compute = NULL) !is.null(compute_env(.compute))
 
 #' Require Daemons
 #'
-#' Returns TRUE only if daemons are set, otherwise produces an informative
-#' error for the user to set daemons, with a clickable function link if the
-#' \CRANpkg{cli} package is available.
+#' Returns `TRUE` invisibly only if daemons are set, otherwise produces an
+#' informative error for the user to set daemons, with a clickable function link
+#' if the \pkg{cli} package is available.
 #'
 #' @inheritParams mirai
-#' @param call (only used if the \CRANpkg{cli} package is installed) the
+#' @param call (only used if the \pkg{cli} package is installed) the
 #'   execution environment of a currently running function, e.g.
 #'   `environment()`. The function will be mentioned in error messages as the
 #'   source of the error.
 #'
-#' @return Logical `TRUE`, or else errors.
+#' @return Invisibly, logical `TRUE`, or else errors.
 #'
-#' @note
-#' Previously the arguments were reversed with `call` coming before `.compute`.
-#' Specifying an environment to the first argument works for the time being,
-#' although is deprecated and will be defunct in a future version.
-#'
-#' @examplesIf interactive()
-#' daemons(1)
-#' require_daemons()
+#' @examples
+#' daemons(sync = TRUE)
+#' (require_daemons())
 #' daemons(0)
 #'
 #' @export
 #'
 require_daemons <- function(.compute = NULL, call = environment()) {
-  ensure_cli_initialized()
-  is.environment(.compute) && {
-    warning("supplying `call` as the first argument of `require_daemons()` is deprecated")
-    temp <- .compute
-    .compute <- if (is.character(call)) call
-    call <- temp
-    TRUE
-  }
-  daemons_set(.compute = .compute) || .[["require_daemons"]](.compute, call)
+  invisible(daemons_set(.compute = .compute) || stop_d(.compute, call))
 }
 
 #' With Daemons
@@ -566,8 +562,7 @@ local_daemons <- function(.compute, frame = parent.frame()) {
   require_daemons(.compute = .compute, call = frame)
   prev_profile <- .[["cp"]]
   `[[<-`(., "cp", .compute)
-  expr <- as.call(list(function() `[[<-`(., "cp", prev_profile)))
-  do.call(on.exit, list(expr, TRUE, FALSE), envir = frame)
+  defer(`[[<-`(., "cp", prev_profile), envir = frame)
 }
 
 #' Create Serialization Configuration
@@ -629,38 +624,30 @@ register_serial <- function(class, sfunc, ufunc) {
 
 # internals --------------------------------------------------------------------
 
-compute_env <- function(x) ..[[if (is.null(x)) .[["cp"]] else x]]
-
-otel_daemons_span <- function(envir, .compute, reset = FALSE) {
-  otel::start_local_active_span(
-    if (reset) "daemons->reset" else "daemons",
-    attributes = otel::as_attributes(list(
-      url = envir[["url"]],
-      n = envir[["n"]],
-      dispatcher = if (is.null(envir[["dispatcher"]])) "false" else "true",
-      compute_profile = .compute
-    )),
-    links = if (reset) list(daemons = envir[["otel_span"]]),
-    tracer = otel_tracer
-  )
+# Simplified version of withr standalone `defer()`
+defer <- function(expr, envir) {
+  thunk <- as.call(list(function() expr))
+  do.call(on.exit, list(thunk, add = TRUE, after = FALSE), envir = envir)
 }
 
-configure_tls <- function(url, tls, pass, envir, config = TRUE) {
+compute_env <- function(x) ..[[if (is.null(x)) .[["cp"]] else x]]
+
+configure_tls <- function(url, tls, pass, envir) {
   purl <- parse_url(url)
   sch <- purl[["scheme"]]
-  if ((startsWith(sch, "wss") || startsWith(sch, "tls")) && is.null(tls)) {
+  if ((startsWith(sch, "tls") || startsWith(sch, "wss")) && is.null(tls)) {
     cert <- write_cert(cn = purl[["hostname"]])
     `[[<-`(envir, "tls", cert[["client"]])
     tls <- cert[["server"]]
   }
-  cfg <- if (length(tls)) tls_config(server = tls, pass = pass)
-  list(tls, cfg)
+  list(tls, if (length(tls)) tls_config(server = tls, pass = pass))
 }
 
 create_profile <- function(envir, .compute, n, dots, sync) {
   `[[<-`(envir, "n", n)
   `[[<-`(envir, "dots", dots)
   `[[<-`(envir, "sync", sync)
+  `[[<-`(envir, "compute", .compute)
   `[[<-`(.., .compute, envir)
 }
 
@@ -682,9 +669,7 @@ req_socket <- function(url, tls = NULL) {
 parse_dots <- function(envir, ...) {
   ...length() || return("")
   dots <- list(...)
-  if (any(names(dots) == "tlscert")) {
-    `[[<-`(envir, "tls", dots[["tlscert"]])
-  }
+  if (any(names(dots) == "tlscert")) `[[<-`(envir, "tls", dots[["tlscert"]])
   dots <- dots[as.logical(lapply(dots, function(x) is.logical(x) || is.numeric(x)))]
   length(dots) || return("")
   sprintf(",%s", paste(names(dots), dots, sep = "=", collapse = ","))
@@ -765,11 +750,11 @@ launch_dispatcher <- function(url, dots, envir, serial, tls = NULL, pass = NULL)
       launch_daemon(launch_args)
     }
   }
-  req <- recv_aio(sock, mode = 2L, cv = cv)
+  raio <- recv_aio(sock, mode = 2L, cv = cv)
   while(!until(cv, .limit_long))
     message(sprintf(._[["sync_dispatcher"]], sync <- sync + .limit_long_secs))
 
-  `[[<-`(envir, "url", collect_aio(req))
+  `[[<-`(envir, "url", collect_aio(raio))
 }
 
 launch_daemons <- function(seq, dots, envir) {
@@ -790,15 +775,21 @@ launch_daemons <- function(seq, dots, envir) {
   pipe_notify(sock, NULL, add = TRUE)
 }
 
-sub_real_port <- function(port, url) sub("(?<=:)0(?![^/])", port, url, perl = TRUE)
+sub_real_port <- function(sock, url) {
+  if (parse_url(url)[["port"]] == "0") {
+    url <- sub(
+      "(?<=:)0(?![^/])",
+      opt(attr(sock, "listener")[[1L]], "tcp-bound-port"),
+      url,
+      perl = TRUE
+    )
+  }
+  url
+}
 
 create_sock <- function(envir, url, tls) {
   sock <- req_socket(url, tls = tls)
-  listener <- attr(sock, "listener")[[1L]]
-  url <- opt(listener, "url")
-  if (parse_url(url)[["port"]] == "0") {
-    url <- sub_real_port(opt(listener, "tcp-bound-port"), url)
-  }
+  url <- sub_real_port(sock, url)
   `[[<-`(envir, "cv", cv())
   `[[<-`(envir, "sock", sock)
   `[[<-`(envir, "url", url)
@@ -812,7 +803,7 @@ send_signal <- function(envir) {
   }
   for (i in seq_len(signals)) {
     send(envir[["sock"]], ._scm_., mode = 2L)
-    msleep(10L)
+    msleep(.sleep_signal)
   }
 }
 
@@ -822,36 +813,16 @@ dispatcher_status <- function(envir) {
   list(
     connections = status[1L],
     daemons = envir[["url"]],
-    mirai = c(
-      awaiting = status[3L],
-      executing = status[4L],
-      completed = status[5L]
-    )
-  )
-}
-
-stop_d_cli <- function(.compute, call) {
-  cli::cli_abort(
-    if (is.character(.compute)) c(
-      sprintf("No daemons set for the '%s' compute profile.", .compute),
-      sprintf("Use e.g. {.run mirai::daemons(6, .compute = \"%s\")} to set 6 local daemons.", .compute)
-    ) else c(
-      "No daemons set.",
-      "Use e.g. {.run mirai::daemons(6)} to set 6 local daemons."
-    ),
-    call = call
+    mirai = c(awaiting = status[3L], executing = status[4L], completed = status[5L])
   )
 }
 
 stop_d <- function(.compute, call) {
-  stop(
-    if (is.character(.compute)) {
-      sprintf("No daemons set for the '%1$s' compute profile.\nUse e.g. mirai::daemons(6, .compute = \"%1$s\") to set 6 local daemons.", .compute)
-    } else {
-      "No daemons set.\nUse e.g. mirai::daemons(6) to set 6 local daemons."
-    },
-    call. = FALSE
-  )
+  profile <- is.character(.compute)
+  msg <- if (profile) sprintf("No daemons set for the '%s' compute profile.", .compute) else "No daemons set."
+  try <- if (profile) sprintf("mirai::daemons(6, .compute = \"%s\")", .compute) else "mirai::daemons(6)"
+  cli_enabled || stop(sprintf("%s\nUse e.g. %s to set 6 local daemons.", msg, try), call. = FALSE)
+  cli::cli_abort(c(msg, sprintf("Use e.g. {.run %s} to set 6 local daemons.", try)), call = call)
 }
 
 ._scm_. <- as.raw(c(0x42, 0x0a, 0x03, 0x00, 0x00, 0x00, 0x02, 0x03, 0x04, 0x00, 0x00, 0x05, 0x03, 0x00, 0x05, 0x00, 0x00, 0x00, 0x55, 0x54, 0x46, 0x2d, 0x38, 0xfc, 0x00, 0x00, 0x00))
