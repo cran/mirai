@@ -204,7 +204,7 @@ launch_remote <- function(n = 1L, remote = remote_config(), ..., .compute = NULL
 #'   quote = TRUE
 #' )
 #'
-#' # can be used to start local dameons with special configurations
+#' # can be used to start local daemons with special configurations
 #' remote_config(
 #'   command = "Rscript",
 #'   rscript = "--default-packages=NULL --vanilla"
@@ -213,7 +213,11 @@ launch_remote <- function(n = 1L, remote = remote_config(), ..., .compute = NULL
 #' @export
 #'
 remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript", quote = FALSE) {
-  if (is.list(args)) lapply(args, find_dot) else find_dot(args)
+  if (is.list(args)) {
+    lapply(args, find_dot)
+  } else {
+    find_dot(args)
+  }
   list(command = command, args = args, rscript = rscript, quote = quote, tunnel = FALSE)
 }
 
@@ -296,7 +300,13 @@ remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript"
 #'
 #' @export
 #'
-ssh_config <- function(remotes, tunnel = FALSE, timeout = 10, command = "ssh", rscript = "Rscript") {
+ssh_config <- function(
+  remotes,
+  tunnel = FALSE,
+  timeout = 10,
+  command = "ssh",
+  rscript = "Rscript"
+) {
   premotes <- lapply(remotes, parse_url)
   hostnames <- lapply(premotes, .subset2, "hostname")
   ports <- lapply(premotes, .subset2, "port")
@@ -315,7 +325,7 @@ ssh_config <- function(remotes, tunnel = FALSE, timeout = 10, command = "ssh", r
 #' @param command filename of executable e.g. "sbatch" for Slurm. Replace with
 #'   "qsub" for SGE / Torque / PBS, or "bsub" for LSF. See examples below.
 #' @param options options as would be supplied inside a script file passed to
-#'   `command`, e.g. "#SBATCH --mem=10G", each separated by a new line. See
+#'   `command`, e.g. "#SBATCH --mem=16G", each separated by a new line. See
 #'   examples below.
 #'   \cr Other shell commands e.g. to change working directory may also be
 #'   included.
@@ -335,7 +345,7 @@ ssh_config <- function(remotes, tunnel = FALSE, timeout = 10, command = "ssh", r
 #' cluster_config(
 #'   command = "sbatch",
 #'   options = "#SBATCH --job-name=mirai
-#'              #SBATCH --mem=10G
+#'              #SBATCH --mem=16G
 #'              #SBATCH --output=job.out
 #'              module load R/4.5.0",
 #'   rscript = file.path(R.home("bin"), "Rscript")
@@ -345,7 +355,7 @@ ssh_config <- function(remotes, tunnel = FALSE, timeout = 10, command = "ssh", r
 #' cluster_config(
 #'   command = "qsub",
 #'   options = "#$ -N mirai
-#'              #$ -l mem_free=10G
+#'              #$ -l mem_free=16G
 #'              #$ -o job.out
 #'              module load R/4.5.0",
 #'   rscript = file.path(R.home("bin"), "Rscript")
@@ -355,7 +365,7 @@ ssh_config <- function(remotes, tunnel = FALSE, timeout = 10, command = "ssh", r
 #' cluster_config(
 #'   command = "qsub",
 #'   options = "#PBS -N mirai
-#'              #PBS -l mem=10gb
+#'              #PBS -l mem=16gb
 #'              #PBS -o job.out
 #'              module load R/4.5.0",
 #'   rscript = file.path(R.home("bin"), "Rscript")
@@ -365,7 +375,7 @@ ssh_config <- function(remotes, tunnel = FALSE, timeout = 10, command = "ssh", r
 #' cluster_config(
 #'   command = "bsub",
 #'   options = "#BSUB -J mirai
-#'              #BSUB -M 10000
+#'              #BSUB -M 16000
 #'              #BSUB -o job.out
 #'              module load R/4.5.0",
 #'   rscript = file.path(R.home("bin"), "Rscript")
@@ -382,11 +392,7 @@ ssh_config <- function(remotes, tunnel = FALSE, timeout = 10, command = "ssh", r
 cluster_config <- function(command = "sbatch", options = "", rscript = "Rscript") {
   command <- command[[1L]]
   options <- gsub("^[ \t]+|(?<=\n)[ \t]+", "", options, perl = TRUE)
-  args <- c(
-    sprintf("%s<<'EOF'\n#!/bin/sh\n%s\n", command, options),
-    ".",
-    "\nEOF"
-  )
+  args <- c(sprintf("%s<<'EOF'\n#!/bin/sh\n%s\n", command, options), ".", "\nEOF")
   list(command = "/bin/sh", args = args, rscript = rscript, quote = NULL)
 }
 
@@ -462,7 +468,9 @@ local_url <- function(tcp = FALSE, port = 0) {
 #' @export
 #'
 print.miraiLaunchCmd <- function(x, ...) {
-  for (i in seq_along(x)) cat(sprintf("[%d]\n%s\n\n", i, x[i]), file = stdout())
+  for (i in seq_along(x)) {
+    cat(sprintf("[%d]\n%s\n\n", i, x[i]), file = stdout())
+  }
   invisible(x)
 }
 

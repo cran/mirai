@@ -146,30 +146,28 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
 
   expr <- substitute(.expr)
   globals <- list(...)
-  length(globals) && {
-    gn <- names(globals)
-    if (is.null(gn)) {
-      is.environment(globals[[1L]]) || stop(._[["named_dots"]])
-      globals <- as.list.environment(globals[[1L]], all.names = TRUE)
-      globals[[".Random.seed"]] <- NULL
+  length(globals) &&
+    {
+      gn <- names(globals)
+      if (is.null(gn)) {
+        is.environment(globals[[1L]]) || stop(._[["named_dots"]])
+        globals <- as.list.environment(globals[[1L]], all.names = TRUE)
+        globals[[".Random.seed"]] <- NULL
+      }
+      all(nzchar(gn)) || stop(._[["named_dots"]])
     }
-    all(nzchar(gn)) || stop(._[["named_dots"]])
+  ctx_spn <- otel_mirai_span(envir)
+  if (length(envir[["seed"]])) {
+    globals[[".Random.seed"]] <- next_stream(envir)
   }
-  ctx_spn <- otel_active_span(
-    "mirai",
-    cond = length(envir),
-    links = list(envir[["otel_span"]]),
-    options = list(kind = "client"),
-    return_ctx = TRUE,
-    scope = environment()
-  )
-  if (length(envir[["seed"]])) globals[[".Random.seed"]] <- next_stream(envir)
   data <- list(
     ._expr_. = if (
-      is.symbol(expr) &&
-      exists(as.character(expr), envir = parent.frame()) &&
-      is.language(.expr)
-    ) .expr else expr,
+      is.symbol(expr) && exists(as.character(expr), envir = parent.frame()) && is.language(.expr)
+    ) {
+      .expr
+    } else {
+      expr
+    },
     ._globals_. = globals,
     ._otel_. = ctx_spn[[1L]]
   )
@@ -259,7 +257,9 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
 #'
 everywhere <- function(.expr, ..., .args = list(), .min = 1L, .compute = NULL) {
   require_daemons(.compute = .compute, call = environment())
-  if (is.null(.compute)) .compute <- .[["cp"]]
+  if (is.null(.compute)) {
+    .compute <- .[["cp"]]
+  }
   envir <- ..[[.compute]]
 
   expr <- substitute(.expr)
@@ -267,10 +267,12 @@ everywhere <- function(.expr, ..., .args = list(), .min = 1L, .compute = NULL) {
     .snapshot,
     as.expression(
       if (
-        is.symbol(expr) &&
-        exists(as.character(expr), envir = parent.frame()) &&
-        is.language(.expr)
-      ) .expr else expr
+        is.symbol(expr) && exists(as.character(expr), envir = parent.frame()) && is.language(.expr)
+      ) {
+        .expr
+      } else {
+        expr
+      }
     )
   )
 
@@ -280,18 +282,13 @@ everywhere <- function(.expr, ..., .args = list(), .min = 1L, .compute = NULL) {
     max(.min, info(.compute)[[1L]])
   }
   seed <- envir[["seed"]]
-  on.exit({
-    .mark(FALSE)
-    `[[<-`(envir, "seed", seed)
-  })
+  on.exit(`[[<-`(envir, "seed", seed))
   `[[<-`(envir, "seed", NULL)
-  .mark()
-  vec <- lapply(seq_len(xlen), function(i)
+  vec <- marked(lapply(seq_len(xlen), function(i) {
     mirai(.expr, ..., .args = .args, .compute = .compute)
-  )
-  .mark(FALSE)
+  }))
   m <- mirai({})
-  `[[<-`(envir, "everywhere",  c(vec, list(m)))
+  `[[<-`(envir, "everywhere", c(vec, list(m)))
   invisible(`class<-`(vec, "mirai_map"))
 }
 
@@ -420,7 +417,7 @@ race_mirai <- function(x) {
 #' the cli progress bar - if a character value as the name, and if a list as
 #' named parameters to `cli::cli_progress_bar`. Examples:
 #' `c(.stop = TRUE, .progress = "bar name")` or
-#' `c(.stop = TRUE, .progress = list(name = "bar", type = "tasks"))`
+#' `list(.stop = TRUE, .progress = list(name = "bar", type = "tasks"))`
 #'
 #' @inheritSection call_mirai Alternatively
 #' @inheritSection mirai Errors
@@ -653,13 +650,7 @@ ephemeral_daemon <- function(data, timeout) {
     stderr = FALSE,
     wait = FALSE
   )
-  req <- request(
-    .context(sock),
-    data,
-    send_mode = 1L,
-    recv_mode = 1L,
-    timeout = timeout
-  )
+  req <- request(.context(sock), data, send_mode = 1L, recv_mode = 1L, timeout = timeout)
   `attr<-`(.subset2(req, "aio"), "sock", sock)
   invisible(req)
 }
@@ -667,7 +658,9 @@ ephemeral_daemon <- function(data, timeout) {
 evaluate_sync <- function(envir) {
   ge <- as.list.environment(globalenv(), all.names = TRUE)
   rm(list = names(globalenv()), envir = globalenv())
-  if (!is.null(envir[["ge"]])) list2env(envir[["ge"]], envir = globalenv())
+  if (!is.null(envir[["ge"]])) {
+    list2env(envir[["ge"]], envir = globalenv())
+  }
   on.exit({
     do_cleanup()
     `[[<-`(envir, "ge", as.list.environment(globalenv(), all.names = TRUE))
@@ -696,7 +689,9 @@ mk_mirai_error <- function(cnd, sc) {
   }
   idx <- max(which(as.logical(lapply(sc, `==`, eval_call))))
   sc <- sc[(length(sc) - 1L):(idx + 1L)]
-  if (sc[[1L]][[1L]] == ".handleSimpleError") sc <- sc[-1L]
+  if (sc[[1L]][[1L]] == ".handleSimpleError") {
+    sc <- sc[-1L]
+  }
   cnd[["stack.trace"]] <- lapply(sc, `attributes<-`, NULL)
   `class<-`(`attributes<-`(msg, cnd), c("miraiError", "errorValue", "try-error"))
 }

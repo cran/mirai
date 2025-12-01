@@ -1,86 +1,106 @@
 otel_tracer_name <- "org.r-lib.mirai"
-otel_is_tracing <- FALSE
-otel_tracer <- NULL
 
-# generic otel helpers ---------------------------------------------------------
+# otel helpers -----------------------------------------------------------------
 
-# nocov start
-# tested implicitly on package load
+otel_cache_tracer <- NULL
+otel_mirai_span <- NULL
+otel_eval_span <- NULL
+otel_map_span <- NULL
+otel_span <- NULL
+otel_set_span_id <- NULL
+otel_set_span_error <- NULL
 
-otel_cache_tracer <- function() {
-  requireNamespace("otel", quietly = TRUE) || return()
-  otel_tracer <<- otel::get_tracer(otel_tracer_name)
-  otel_is_tracing <<- tracer_enabled(otel_tracer)
-}
+local({
+  otel_is_tracing <- FALSE
+  otel_tracer <- NULL
 
-# nocov end
+  otel_cache_tracer <<- function() {
+    requireNamespace("otel", quietly = TRUE) || return()
+    otel_tracer <<- otel::get_tracer(otel_tracer_name)
+    otel_is_tracing <<- tracer_enabled(otel_tracer)
+  }
+
+  otel_mirai_span <<- function(envir) {
+    otel_is_tracing && length(envir) || return()
+    spn <- otel::start_local_active_span(
+      "mirai",
+      links = list(envir[["otel_span"]]),
+      options = list(kind = "client"),
+      tracer = otel_tracer,
+      activation_scope = parent.frame()
+    )
+    list(otel::pack_http_context(), spn)
+  }
+
+  otel_eval_span <<- function(ctx) {
+    otel_is_tracing && length(ctx) || return()
+    otel::start_local_active_span(
+      "daemon eval",
+      links = list(.[["otel_span"]]),
+      options = list(kind = "server", parent = otel::extract_http_context(ctx)),
+      tracer = otel_tracer,
+      activation_scope = parent.frame()
+    )
+  }
+
+  otel_map_span <<- function(.compute) {
+    otel_is_tracing || return()
+    otel::start_local_active_span(
+      "mirai_map",
+      links = list(..[[.compute]][["otel_span"]]),
+      tracer = otel_tracer,
+      activation_scope = parent.frame()
+    )
+  }
+
+  otel_span <<- function(name, obj, links = NULL) {
+    otel_is_tracing || return()
+    if (is.environment(obj)) {
+      attributes <- otel_env_attrs(obj)
+      obj <- obj[["url"]]
+    } else {
+      attributes <- NULL
+    }
+    otel::start_local_active_span(
+      sprintf("%s %s", name, obj),
+      attributes = c(otel_url_attrs(obj), attributes),
+      links = links,
+      tracer = otel_tracer
+    )
+  }
+
+  otel_set_span_id <<- function(span, id) {
+    otel_is_tracing &&
+      is.environment(span) &&
+      return(.subset2(span, "set_attribute")("mirai.id", id))
+  }
+
+  otel_set_span_error <<- function(span, type) {
+    otel_is_tracing && is.environment(span) && return(.subset2(span, "set_status")("error", type))
+  }
+})
 
 tracer_enabled <- function(tracer) {
   .subset2(tracer, "is_enabled")()
 }
 
-otel_refresh_tracer <- function(pkgname) {
-  requireNamespace("otel", quietly = TRUE) || return()
-  tracer <- otel::get_tracer()
-  modify_binding(
-    getNamespace(pkgname),
-    list(otel_tracer = tracer, otel_is_tracing = tracer_enabled(tracer))
-  )
+with_otel_record <- function(expr) {
+  on.exit(otel_cache_tracer())
+  otelsdk::with_otel_record({
+    otel_cache_tracer()
+    expr
+  })
 }
 
-modify_binding <- function(env, lst) {
-  lapply(names(lst), unlockBinding, env)
-  list2env(lst, envir = env)
-  lapply(names(lst), lockBinding, env)
+otel_env_attrs <- function(env) {
+  list(mirai.dispatcher = !is.null(env[["dispatcher"]]), mirai.compute = env[["compute"]])
 }
 
-# mirai-specific helpers -------------------------------------------------------
-
-otel_active_span <- function(
-  name,
-  cond = TRUE,
-  attributes = list(),
-  links = NULL,
-  options = NULL,
-  return_ctx = FALSE,
-  scope = environment()
-) {
-  otel_is_tracing && cond || return()
-  spn <- otel::start_local_active_span(
-    name,
-    attributes = otel::as_attributes(attributes),
-    links = links,
-    options = options,
-    tracer = otel_tracer,
-    activation_scope = scope
-  )
-  return_ctx && return(list(otel::pack_http_context(), spn))
-  spn
-}
-
-otel_set_span_id <- function(span, id) {
-  otel_is_tracing && return(span$set_attribute("mirai.id", id))
-}
-
-otel_set_span_error <- function(span, type) {
-  otel_is_tracing && length(span) && return(span$set_status("error", type))
-}
-
-otel_daemon_attrs <- function(url) {
+otel_url_attrs <- function(url) {
   purl <- parse_url(url)
   list(
     server.address = if (nzchar(purl[["hostname"]])) purl[["hostname"]] else purl[["path"]],
     server.port = if (nzchar(purl[["port"]])) as.integer(purl[["port"]]) else integer(),
     network.transport = purl[["scheme"]]
-  )
-}
-
-otel_daemons_attrs <- function(envir) {
-  c(
-    otel_daemon_attrs(envir[["url"]]),
-    list(
-      mirai.dispatcher = !is.null(envir[["dispatcher"]]),
-      mirai.compute = envir[["compute"]]
-    )
   )
 }

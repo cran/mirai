@@ -91,20 +91,20 @@ daemon <- function(
   tlscert = NULL,
   rs = NULL
 ) {
-  dmnspn <- otel_active_span(
-    sprintf("daemon connect %s", url),
-    attributes = otel_daemon_attrs(url)
-  )
   cv <- cv()
   sock <- socket(if (dispatcher) "poly" else "rep")
   on.exit({
     reap(sock)
     `[[<-`(., "sock", NULL)
+    `[[<-`(., "otel_span", NULL)
   })
   `[[<-`(., "sock", sock)
   pipe_notify(sock, cv, remove = TRUE, flag = flag_value(autoexit))
-  if (length(tlscert)) tlscert <- tls_config(client = tlscert)
+  if (length(tlscert)) {
+    tlscert <- tls_config(client = tlscert)
+  }
   dial_sync_socket(sock, url, autostart = asyncdial || NA, tls = tlscert)
+  `[[<-`(., "otel_span", otel_span("daemon connect", url))
 
   if (!output) {
     devnull <- file(nullfile(), open = "w", blocking = FALSE)
@@ -113,7 +113,11 @@ daemon <- function(
   }
   xc <- 0L
   task <- 1L
-  timeout <- if (idletime > walltime) walltime else if (is.finite(idletime)) idletime
+  timeout <- if (idletime > walltime) {
+    walltime
+  } else if (is.finite(idletime)) {
+    idletime
+  }
   maxtime <- if (is.finite(walltime)) mclock() + walltime else FALSE
 
   if (dispatcher) {
@@ -121,51 +125,61 @@ daemon <- function(
     if (wait(cv)) {
       bundle <- collect_aio(aio)
       `[[<-`(globalenv(), ".Random.seed", if (is.numeric(rs)) as.integer(rs) else bundle[[1L]])
-      if (is.list(bundle[[2L]])) `opt<-`(sock, "serial", bundle[[2L]])
+      if (is.list(bundle[[2L]])) {
+        `opt<-`(sock, "serial", bundle[[2L]])
+      }
       snapshot()
       repeat {
         aio <- recv_aio(sock, mode = 1L, timeout = timeout, cv = cv)
         wait(cv) || break
         m <- collect_aio(aio)
-        is.integer(m) && {
-          m == 5L || next
-          xc <- 1L
-          break
-        }
-        (task >= maxtasks || maxtime && mclock() >= maxtime) && {
-          .mark()
-          send(sock, eval_mirai(m, sock), mode = 1L, block = TRUE)
-          aio <- recv_aio(sock, mode = 8L, cv = cv)
-          xc <- 2L + (task >= maxtasks)
-          wait(cv)
-          break
-        }
+        is.integer(m) &&
+          {
+            m == 5L || next
+            xc <- 1L
+            break
+          }
+        (task >= maxtasks || maxtime && mclock() >= maxtime) &&
+          {
+            marked(send(sock, eval_mirai(m, sock), mode = 1L, block = TRUE))
+            aio <- recv_aio(sock, mode = 8L, cv = cv)
+            xc <- 2L + (task >= maxtasks)
+            wait(cv)
+            break
+          }
         send(sock, eval_mirai(m, sock), mode = 1L, block = TRUE)
-        if (cleanup) do_cleanup()
+        if (cleanup) {
+          do_cleanup()
+        }
         task <- task + 1L
       }
     }
   } else {
-    if (is.numeric(rs)) `[[<-`(globalenv(), ".Random.seed", as.integer(rs))
+    if (is.numeric(rs)) {
+      `[[<-`(globalenv(), ".Random.seed", as.integer(rs))
+    }
     snapshot()
     repeat {
       ctx <- .context(sock)
       aio <- recv_aio(ctx, mode = 1L, timeout = timeout, cv = cv)
       wait(cv) || break
       m <- collect_aio(aio)
-      is.integer(m) && {
-        xc <- 1L
-        break
-      }
-      (task >= maxtasks || maxtime && mclock() >= maxtime) && {
-        .mark()
-        send(ctx, eval_mirai(m), mode = 1L, block = TRUE)
-        xc <- 2L + (task >= maxtasks)
-        wait(cv)
-        break
-      }
+      is.integer(m) &&
+        {
+          xc <- 1L
+          break
+        }
+      (task >= maxtasks || maxtime && mclock() >= maxtime) &&
+        {
+          marked(send(ctx, eval_mirai(m), mode = 1L, block = TRUE))
+          xc <- 2L + (task >= maxtasks)
+          wait(cv)
+          break
+        }
       send(ctx, eval_mirai(m), mode = 1L, block = TRUE)
-      if (cleanup) do_cleanup()
+      if (cleanup) {
+        do_cleanup()
+      }
       task <- task + 1L
     }
   }
@@ -175,11 +189,7 @@ daemon <- function(
     sink()
     close.connection(devnull)
   }
-  otel_active_span(
-    sprintf("daemon disconnect %s", url),
-    attributes = otel_daemon_attrs(url),
-    links = list(dmnspn)
-  )
+  otel_span("daemon disconnect", url, links = list(.[["otel_span"]]))
   invisible(xc)
 }
 
@@ -201,22 +211,11 @@ daemon <- function(
   pipe_notify(sock, cv, remove = TRUE, flag = tools::SIGTERM)
   dial(sock, url = url, autostart = NA, fail = 2L)
   `[[<-`(., "sock", sock)
-  .mark()
   m <- recv(sock, mode = 1L, block = TRUE)
-  send(sock, eval_mirai(m), mode = 1L, block = TRUE) || wait(cv)
+  marked(send(sock, eval_mirai(m), mode = 1L, block = TRUE)) || wait(cv)
 }
 
 # internals --------------------------------------------------------------------
-
-handle_mirai_error <- function(cnd) {
-  otel_set_span_error(dynGet("spn", ifnotfound = NULL), "miraiError")
-  invokeRestart("mirai_error", cnd, sys.calls())
-}
-
-handle_mirai_interrupt <- function(cnd) {
-  otel_set_span_error(dynGet("spn", ifnotfound = NULL), "miraiInterrupt")
-  invokeRestart("mirai_interrupt")
-}
 
 eval_mirai <- function(._mirai_., sock = NULL) {
   withRestarts(
@@ -227,17 +226,17 @@ eval_mirai <- function(._mirai_., sock = NULL) {
           on.exit(stop_aio(cancel))
         }
         list2env(._mirai_.[["._globals_."]], envir = globalenv())
-        spn <- otel_active_span(
-          "daemon eval",
-          cond = length(._mirai_.[["._otel_."]]),
-          links = list(dynGet("dmnspn")),
-          options = list(kind = "server", parent = otel::extract_http_context(._mirai_.[["._otel_."]])),
-          scope = environment()
-        )
+        sock <- otel_eval_span(._mirai_.[["._otel_."]])
         eval(._mirai_.[["._expr_."]], envir = ._mirai_., enclos = globalenv())
       },
-      error = handle_mirai_error,
-      interrupt = handle_mirai_interrupt
+      error = function(cnd) {
+        otel_set_span_error(sock, "miraiError")
+        invokeRestart("mirai_error", cnd, sys.calls())
+      },
+      interrupt = function(cnd) {
+        otel_set_span_error(sock, "miraiInterrupt")
+        invokeRestart("mirai_interrupt")
+      }
     ),
     mirai_error = mk_mirai_error,
     mirai_interrupt = mk_interrupt_error
@@ -260,9 +259,17 @@ do_cleanup <- function() {
   options(.[["op"]])
 }
 
-snapshot <- function() `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", names(globalenv()))
+snapshot <- function() {
+  `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", names(globalenv()))
+}
 
 flag_value <- function(autoexit) {
   is.na(autoexit) && return(TRUE)
   autoexit && return(tools::SIGTERM)
+}
+
+marked <- function(expr) {
+  .mark()
+  on.exit(.mark(FALSE))
+  expr
 }

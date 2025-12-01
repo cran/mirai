@@ -3,10 +3,10 @@
 #' Designed for simplicity, a 'mirai' evaluates an R expression asynchronously,
 #' locally or distributed over the network. Built on 'nanonext' and 'NNG' for
 #' modern networking and concurrency, scales efficiently to millions of tasks
-#' over thousands of persistent parallel processes. Provides optimal scheduling
-#' over fast 'IPC', TCP, and TLS connections, integrating with SSH or cluster
-#' managers. Implements event-driven promises for reactive programming, and
-#' supports custom serialization for cross-language data types.
+#' over thousands of parallel processes. Provides optimal scheduling over fast
+#' 'IPC', TCP, and TLS connections, integrating with SSH or cluster managers.
+#' Implements event-driven promises for reactive programming, and supports
+#' custom serialization for cross-language data types.
 #'
 #' @section Notes:
 #'
@@ -71,7 +71,7 @@ cli_enabled <- FALSE
 .. <- new.env()
 .opts <- list2env(list(.flat = .flat, .progress = .progress, .stop = .stop))
 .limit_long <- 10000L
-.limit_long_secs <- 10L
+.limit_long_secs <- as.integer(.limit_long * 0.001)
 .limit_short <- 5000L
 .sleep_daemons <- 200L
 .sleep_signal <- 10L

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 <meta name="generator" content="litedown 0.8">
-<title>Community FAQs</title>
+<title>mirai - Community FAQs</title>
 <style type="text/css">
 body {
   font-family: sans-serif;
@@ -107,36 +107,33 @@ section.footnotes {
   body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
 }
 </style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.14.14/css/prism-xcode.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.61/css/prism-xcode.min.css">
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
 </head>
 <body>
 <div class="frontmatter">
-<div class="title"><h1>Community FAQs</h1></div>
+<div class="title"><h1>mirai - Community FAQs</h1></div>
 </div>
 <div class="body">
-<p>This vignette is designed to provide a knowledgebase for questions posed by the community, and will be added to over time.</p>
+<p>This vignette provides answers to common questions from the community.</p>
 <h3 id="sec:1-migration-from-future-promise">1. Migration from <code>future_promise()</code></h3>
-<p>For use within Shiny, it should be straightforward translating ExtendedTask or other async code that was originally written for use with a <code>promises::future_promise()</code>.</p>
-<p>Note: <code>future_promise()</code> exists in the promises package as we had to find a workaround to make <code>future(...)</code> always async.
-<code>future(...)</code> by itself is not always async as it blocks as soon as it runs out of parallel processes on which to run tasks.</p>
-<p><code>mirai()</code> on the other hand is built as an async framework, so there’s no need for an additional function from the promises package.
-You should simply use a <code>mirai()</code> directly in place of a <code>future_promise()</code>.</p>
+<p>Translating Shiny ExtendedTask or async code from <code>promises::future_promise()</code> to mirai is straightforward.</p>
+<p><code>future_promise()</code> exists because <code>future(...)</code> alone isn’t always async - it blocks when parallel processes run out.
+<code>mirai()</code> is built as an async framework, so use it directly in place of <code>future_promise()</code>.</p>
 <p><strong>Globals:</strong></p>
-<p>One important difference is that a <code>future_promise()</code> by default tries to infer all the global variables that are required by the expression.
-If your code depended on this convenience feature then you will need to instead pass these in via the <code>...</code> of <code>mirai()</code>.
-A mirai requires that the expression be self-contained, with any variables or helper functions explicitly supplied to it.</p>
-<p>On the other hand, if your code previously used the <code>globals</code> argument to supply these variables, then you can pass this directly to the <code>.args</code> of <code>mirai()</code> if it is a named list.</p>
-<p>Regardless of using <code>mirai()</code> or <code>future_promise()</code>, we recommend that you always pass globals explicitly.
-This matches what actually happens in multi-process parallelism, and is hence better-suited to programmatic use.
-Automatic globals detection is an imperfect abstraction that can lead to unpredictable edge cases, or simply slower operation through sending more than required to daemons.
-Explicit passing of variables allows for reliable and transparent behaviour that remains robust over time.</p>
+<p><code>future_promise()</code> by default infers required global variables.
+If your code depended on this, pass variables explicitly via <code>...</code> in <code>mirai()</code>.
+A mirai requires self-contained expressions with all variables or helper functions explicitly supplied.</p>
+<p>If your code used the <code>globals</code> argument, pass it directly to <code>.args</code> in <code>mirai()</code> (if it’s a named list).</p>
+<p><strong>Always pass globals explicitly.</strong> This matches the behaviour of multi-process parallelism and is suited for programmatic use.
+Automatic globals detection creates an imperfect abstraction leading to unpredictable edge cases or slower operation from sending unnecessary data to daemons.
+Explicitly passing variables ensures reliable, transparent behaviour.</p>
 <p><strong>Capture globals using <code>environment()</code>:</strong></p>
-<p><code>mirai()</code> allows passing an environment to <code>...</code> or to <code>.args</code>.
-This is especially useful for Shiny ExtendedTask, where it is invoked with a set of arguments.
-By using <code>mirai::mirai({...}, environment())</code> you automatically capture the variables provided to the invoke method.
-See the Shiny vignette for example usage.</p>
+<p><code>mirai()</code> accepts an environment passed to <code>...</code> or <code>.args</code>.
+This is useful for Shiny ExtendedTask invoked with arguments.
+Using <code>mirai::mirai({...}, environment())</code> automatically captures variables provided to the invoke method.
+See the Shiny vignette for examples.</p>
 <p><strong>Special Case: <code>...</code>:</strong></p>
 <p>A Shiny app may have used <code>future_promise()</code> code similar to the following within the server component:</p>
 <pre><code class="language-r">func &lt;- function(x, y){
@@ -157,7 +154,7 @@ observeEvent(input$btn, task$invoke(input$n, input$delay))
 </code></pre>
 <p>Note that here <code>environment()</code> captures the <code>...</code> that’s then used within the mirai expression.</p>
 <h3 id="sec:2-setting-the-random-seed">2. Setting the random seed</h3>
-<p>The following example was raised as being potentially counter-intuitive, given that default ‘cleanup’ settings at each daemon ensures that variables in the global environment, of which <code>.Random.seed</code> is one, do not carry over to subsequent runs.</p>
+<p>This example may seem counter-intuitive: default ‘cleanup’ settings at each daemon ensure global environment variables don’t carry over to subsequent runs. This can be assumed to include <code>.Random.seed</code>.</p>
 <pre><code class="language-r">library(mirai)
 daemons(4)
 
@@ -193,51 +190,56 @@ mirai_map(list(vec, vec2), \(x) rnorm(x))[]
 
 daemons(0)
 </code></pre>
-<p>The reason the change in random seed persists in all circumstances is due to this being a special case, arising from the use of L’Ecuyer CMRG streams to provide parallel-safe random numbers.</p>
-<p>Streams can be thought of as entry points to the pseudo random number line far away from each other to ensure that random results in each daemon are independent from one another.
-The random seed is not reset after each mirai call to ensure that however many random draws are made in any mirai call, the next random draw follows on in the stream, and hence have the desired statistical properties.</p>
-<p>Hence normally, the random seed should be set once on the host process when daemons are created, rather than in each daemon.</p>
-<p>For numerical reproducibility, set the <code>seed</code> argument to <code>daemons()</code> (see the Random Number Generation section of the reference vignette for further details).</p>
+<p>Random seed changes persist because mirai uses L’Ecuyer CMRG streams for parallel-safe random numbers.</p>
+<p>Streams are entry points on the pseudo-random number line, far apart to ensure independent random results across daemons.
+The random seed isn’t reset after each mirai call - this ensures that random draws continue along the stream, maintaining desired statistical properties regardless of how many draws occur per call.</p>
+<p><strong>Set the random seed once on the host process when creating daemons, not in each daemon.</strong></p>
+<p>For numerical reproducibility, set the <code>seed</code> argument in <code>daemons()</code> (see Random Number Generation in the reference vignette).</p>
 <h3 id="sec:3-accessing-package-functions-during-development">3. Accessing package functions during development</h3>
-<p>A mirai call usually requires package-namespaced functions. However the latest version of a package in development is often loaded dynamically by <code>devtools::load_all()</code> or the underlying <code>pkgload::load_all()</code> for quick iteration.</p>
-<p>In this case, use <code>everywhere()</code> to also call <code>devtools::load_all()</code> on all (local) daemons. They will then have access to the same functions as your host session for subsequent <code>mirai()</code> calls.</p>
-<h3 id="sec:4-why-does-it-take-time-for-mirai-to-execute-when-it-s-meant-to-return-immediately">4. Why does it take time for <code>mirai()</code> to execute when it’s meant to return immediately?</h3>
-<p>A <code>mirai()</code> call is meant to return almost instantaneously. The same when invoked by a Shiny <code>ExtendedTask</code>. The only reason it would take time is if you are passing through large objects, which then need to be serialized to be sent to the parallel process.</p>
-<p>Care should be taken when you pass a function or environment to <code>mirai()</code> in the <code>...</code> or <code>.args</code> arguments. This is as a function includes its closure (enclosing environment), and an environment its parent environments. This means you could be passing more than you bargained for.</p>
-<p>Generally, <code>lobstr::obj_size()</code> from the lobstr package is a great function for checking the actual size of an object (capturing many cases more accurately than the base R <code>object.size</code>).</p>
-<p>As mitigation for accidentally passing large objects:</p>
+<p>A mirai call usually requires package-namespaced functions.
+However, development packages are often loaded dynamically by <code>devtools::load_all()</code> or <code>pkgload::load_all()</code> for quick iteration.</p>
+<p>Use <code>everywhere()</code> to call <code>devtools::load_all()</code> on all (local) daemons.
+They’ll then access the same functions as your host session for subsequent <code>mirai()</code> calls.</p>
+<h3 id="sec:4-why-does-mirai-take-time-when-it-s-meant-to-return-immediately">4. Why does <code>mirai()</code> take time when it’s meant to return immediately?</h3>
+<p>A <code>mirai()</code> call returns almost instantaneously, as does Shiny <code>ExtendedTask</code>.
+The only reason it takes time is passing large objects requiring serialization to the parallel process.</p>
+<p>Be careful passing functions or environments to <code>mirai()</code> via <code>...</code> or <code>.args</code>.
+Functions include their closure (enclosing environment), and environments include parent environments.
+You may be passing more than intended.</p>
+<p>Use <code>lobstr::obj_size()</code> from the lobstr package to check actual object size (more accurate than base R’s <code>object.size</code>).</p>
+<p><strong>Mitigation for large objects:</strong></p>
 <ul>
-<li>For functions, use <code>carrier::crate()</code> from the carrier package. This is what we use in purrr, and it makes sure only what’s necessary is ‘crated’ with the function. To crate an existing function, use an anonymous function (making sure to also supply anything required by <code>fn</code> as part of the <code>...</code>):</li>
+<li><strong>Functions</strong>: Use <code>carrier::crate()</code> from the carrier package (used in purrr). This ensures only necessary components are ‘crated’ with the function. To crate an existing function, use an anonymous function (supplying anything required by <code>fn</code> via <code>...</code>):</li>
 </ul>
 <pre><code class="language-r">func &lt;- carrier::crate(\(x) fn(x), fn = fn)
 </code></pre>
 <ul>
-<li>For environments, consider using <code>parent.env(e) &lt;- emptyenv()</code>. This is not required for R6 classes as they are already isolated by default. Regardless of any parent environment, an environment / R6 class could still contain many items that are not needed by the parallel process, in which case consider passing individual members (<code>env$x</code>, <code>env$y</code>) rather than the entire object (<code>env</code>) where possible.</li>
+<li><strong>Environments</strong>: Consider <code>parent.env(e) &lt;- emptyenv()</code>. Not required for R6 classes (already isolated by default). Environments or R6 classes may contain unnecessary items for the parallel process - consider passing individual members (<code>env$x</code>, <code>env$y</code>) rather than the entire object (<code>env</code>).</li>
 </ul>
-<h3 id="sec:5-how-to-create-daemons-on-demand-or-shutdown-daemons-when-they-re-not-used">5. How to create daemons on-demand or shutdown daemons when they’re not used</h3>
-<p>Setting daemons can be totally separate from the task of actually launching (deploying) them. To just set daemons when you’re using only your local machine:</p>
+<h3 id="sec:5-creating-daemons-on-demand-or-shutting-down-idle-daemons">5. Creating daemons on-demand or shutting down idle daemons</h3>
+<p>Setting daemons is separate from launching (deploying) them. To set daemons for local use:</p>
 <pre><code class="language-r">daemons(url = local_url())
 </code></pre>
-<p>or if you’re using your local machine and/or remote machines:</p>
+<p>For local and/or remote machines:</p>
 <pre><code class="language-r">daemons(url = host_url())
 </code></pre>
-<p>This sets up daemons. You can think of this as a ‘base station’ that listens for incoming daemon connections.</p>
-<p>When you actually want to launch (deploy) a daemon, you may use either:</p>
+<p>This creates a ‘base station’ listening for incoming daemon connections.</p>
+<p>To launch (deploy) a daemon:</p>
 <pre><code class="language-r">launch_local()
 </code></pre>
 <p>or</p>
 <pre><code class="language-r">launch_remote(remote = ssh_config(&quot;ssh://servername&quot;)) # or cluster_config()
 </code></pre>
-<p>The key to adopting a flexible-use pattern that lets you scale up and down is to specify one of the following arguments to the <code>...</code> argument of <code>launch_local()</code> or <code>launch_remote()</code>. You may also supply these to the initial <code>daemons()</code> call for them to apply by default for all launches:</p>
+<p>For flexible scaling up and down, specify one of these arguments to <code>...</code> in <code>launch_local()</code> or <code>launch_remote()</code>. Supply these to the initial <code>daemons()</code> call to apply by default for all launches:</p>
 <ul>
-<li><code>maxtasks</code>: integer number of tasks to perform before exiting.</li>
-<li><code>idletime</code>: milliseconds idle time before exiting.</li>
-<li><code>walltime</code>: milliseconds (soft) wall time before exiting (i.e. at least this amount of time, and possibly more as there is no forcible timeout mid-task)</li>
+<li><code>maxtasks</code>: Integer number of tasks to perform before exiting</li>
+<li><code>idletime</code>: Milliseconds idle time before exiting</li>
+<li><code>walltime</code>: Milliseconds soft wall time before exiting (at least this amount, possibly more - no forcible timeout mid-task)</li>
 </ul>
-<p>As an example, to launch a daemon to perform one task only:</p>
+<p>To launch a daemon for one task only:</p>
 <pre><code class="language-r">launch_remote(remote = ssh_config(&quot;ssh://servername&quot;), maxtasks = 1L)
 </code></pre>
-<p>In this way, you may use <code>cluster_config()</code> to launch jobs on an HPC cluster on demand, without using persistent daemons. Note that you will incur the latency costs of however long it takes to launch the job.</p>
+<p>This enables on-demand HPC cluster jobs via <code>cluster_config()</code> without persistent daemons. Note: you incur latency costs from job launch time.</p>
 </div>
 </body>
 </html>
