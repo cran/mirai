@@ -7,49 +7,46 @@
 everywhere(.expr, ..., .args = list(), .min = 1L, .compute = NULL)
 }
 \arguments{
-\item{.expr}{an expression to evaluate asynchronously (of arbitrary length,
-wrapped in \{ \} where necessary), \strong{or else} a pre-constructed language
-object.}
+\item{.expr}{(expression) code to evaluate asynchronously, or a language
+object. Wrap multi-line expressions in \code{{}}.}
 
-\item{...}{(optional) \strong{either} named arguments (name = value pairs)
-specifying objects referenced, but not defined, in \code{.expr}, \strong{or} an
-environment containing such objects. See 'evaluation' section below.}
-
-\item{.args}{(optional) \strong{either} a named list specifying objects
-referenced, but not defined, in \code{.expr}, \strong{or} an environment containing
-such objects. These objects will remain local to the evaluation environment
-as opposed to those supplied in \code{...} above - see 'evaluation' section
+\item{...}{(named arguments | environment) objects required by \code{.expr},
+assigned to the daemon's global environment. See 'evaluation' section
 below.}
 
-\item{.min}{(only applicable when using dispatcher) integer minimum number of
-daemons on which to evaluate the expression. A synchronization point is
-created, which can be useful for remote daemons, as these may take some
-time to connect.}
+\item{.args}{(named list | environment) objects required by .expr, kept local
+to the evaluation environment (unlike \code{...}). See 'evaluation' section
+below.}
 
-\item{.compute}{character value for the compute profile to use (each has its
-own independent set of daemons), or NULL to use the 'default' profile.}
+\item{.min}{(integer) minimum daemons to evaluate on (dispatcher only).
+Creates a synchronization point, useful for remote daemons that take time
+to connect.}
+
+\item{.compute}{(character) name of the compute profile. Each profile has its
+own independent set of daemons. \code{NULL} (default) uses the 'default'
+profile.}
 }
 \value{
 A 'mirai_map' (list of 'mirai' objects).
 }
 \description{
 Evaluate an expression 'everywhere' on all connected daemons for the
-specified compute profile - this must be set prior to calling this function.
-Performs operations across daemons such as loading packages or exporting
-common data. Resultant changes to the global environment, loaded packages and
-options are persisted regardless of a daemon's \code{cleanup} setting.
+specified compute profile. Daemons must be set prior to calling this
+function. Performs operations across daemons such as loading packages or
+exporting common data. Resultant changes to the global environment, loaded
+packages and options are persisted regardless of a daemon's \code{cleanup}
+setting.
 }
 \details{
-If using dispatcher, this function forces a synchronization point at
-dispatcher, whereby the \code{\link[=everywhere]{everywhere()}} call must have been evaluated on all
-daemons prior to subsequent mirai evaluations taking place.
+If using dispatcher, this function forces a synchronization point: the
+\code{\link[=everywhere]{everywhere()}} call must complete on all daemons before subsequent mirai
+evaluations proceed.
 
 Calling \code{\link[=everywhere]{everywhere()}} does not affect the RNG stream for mirai calls when
 using a reproducible \code{seed} value at \code{\link[=daemons]{daemons()}}. This allows the seed
-associated for each mirai call to be the same, regardless of the number of
-daemons actually used to evaluate the code. Note that this means the code
-evaluated in an \code{\link[=everywhere]{everywhere()}} call is itself non-reproducible if it should
-involve random numbers.
+associated with each mirai call to be the same, regardless of the number of
+daemons used. However, code evaluated in an \code{\link[=everywhere]{everywhere()}} call is itself
+non-reproducible if it involves random numbers.
 }
 \section{Evaluation}{
 
@@ -65,10 +62,10 @@ Functions from a package should use namespaced calls such as
 \code{mirai::mirai()}, or else the package should be loaded beforehand as part of
 \code{.expr}.
 
-For evaluation to occur \emph{as if} in your global environment, supply objects to
-\code{...} rather than \code{.args}, e.g. for non-local variables or helper functions
-required by other functions, as scoping rules may otherwise prevent them from
-being found.
+Supply objects to \code{...} rather than \code{.args} for evaluation to occur \emph{as if}
+in your global environment. This is needed for non-local variables or helper
+functions required by other functions, which scoping rules may otherwise
+prevent from being found.
 }
 
 \examples{

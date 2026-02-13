@@ -8,10 +8,9 @@
 #' These functions are exported for use by packages extending \pkg{mirai} with
 #' alternative launchers of [daemon()] processes.
 #'
-#' For `nextstream`: This function should be called for its return value
-#' when required. The function also has the side effect of automatically
-#' advancing the stream stored within the compute profile. This ensures that the
-#' next recursive stream is returned when the function is called again.
+#' For `nextstream`: Calling this function advances the stream stored within
+#' the compute profile. This ensures that the next recursive stream is returned
+#' on subsequent calls.
 #'
 #' @inheritParams mirai
 #'
@@ -38,10 +37,9 @@ nextstream <- function(.compute = "default") next_stream(..[[.compute]])
 #'
 #' `nextget` retrieves the specified item from the specified compute profile.
 #'
-#' @param x character value of item to retrieve. One of `"n"` (number of
-#'   dispatcher daemons), `"dispatcher"` (the URL dispatcher uses to connect to
-#'   host) `"url"` (the URL to connect to dispatcher from daemons) or `"tls"`
-#'   (the stored client TLS configuration for use by daemons).
+#' @param x (character) item to retrieve: `"n"` (daemon count), `"dispatcher"`
+#'   (dispatcher-to-host URL), `"url"` (daemon connection URL), or `"tls"`
+#'   (client TLS configuration).
 #'
 #' @return For `nextget`: the requested item, or else NULL if not present.
 #'
@@ -55,7 +53,7 @@ nextget <- function(x, .compute = "default") ..[[.compute]][[x]]
 #'
 #' `nextcode` translates integer exit codes returned by [daemon()].
 #'
-#' @param xc integer return value of [daemon()].
+#' @param xc (integer) return value from [daemon()].
 #'
 #' @return For `nextcode`: character string.
 #'

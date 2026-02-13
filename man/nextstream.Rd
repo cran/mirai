@@ -13,15 +13,15 @@ nextget(x, .compute = "default")
 nextcode(xc)
 }
 \arguments{
-\item{.compute}{character value for the compute profile to use (each has its
-own independent set of daemons), or NULL to use the 'default' profile.}
+\item{.compute}{(character) name of the compute profile. Each profile has its
+own independent set of daemons. \code{NULL} (default) uses the 'default'
+profile.}
 
-\item{x}{character value of item to retrieve. One of \code{"n"} (number of
-dispatcher daemons), \code{"dispatcher"} (the URL dispatcher uses to connect to
-host) \code{"url"} (the URL to connect to dispatcher from daemons) or \code{"tls"}
-(the stored client TLS configuration for use by daemons).}
+\item{x}{(character) item to retrieve: \code{"n"} (daemon count), \code{"dispatcher"}
+(dispatcher-to-host URL), \code{"url"} (daemon connection URL), or \code{"tls"}
+(client TLS configuration).}
 
-\item{xc}{integer return value of \code{\link[=daemon]{daemon()}}.}
+\item{xc}{(integer) return value from \code{\link[=daemon]{daemon()}}.}
 }
 \value{
 For \code{nextstream}: a length 7 integer vector, as given by
@@ -45,10 +45,9 @@ for the specified compute profile and advances it to the next stream.
 These functions are exported for use by packages extending \pkg{mirai} with
 alternative launchers of \code{\link[=daemon]{daemon()}} processes.
 
-For \code{nextstream}: This function should be called for its return value
-when required. The function also has the side effect of automatically
-advancing the stream stored within the compute profile. This ensures that the
-next recursive stream is returned when the function is called again.
+For \code{nextstream}: Calling this function advances the stream stored within
+the compute profile. This ensures that the next recursive stream is returned
+on subsequent calls.
 }
 \examples{
 daemons(sync = TRUE)

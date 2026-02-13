@@ -1,12 +1,13 @@
 #' mirai: Minimalist Async Evaluation Framework for R
 #'
-#' Designed for simplicity, a 'mirai' evaluates an R expression asynchronously,
-#' locally or distributed over the network. Built on 'nanonext' and 'NNG' for
-#' modern networking and concurrency, scales efficiently to millions of tasks
-#' over thousands of parallel processes. Provides optimal scheduling over fast
-#' 'IPC', TCP, and TLS connections, integrating with SSH or cluster managers.
-#' Implements event-driven promises for reactive programming, and supports
-#' custom serialization for cross-language data types.
+#' *moving already* \cr \cr
+#' Evaluates R expressions asynchronously and in parallel, locally or
+#' distributed across networks. An official parallel cluster type for R. Built
+#' on 'nanonext' and 'NNG', its non-polling, event-driven architecture scales
+#' from a laptop to thousands of processes across high-performance computing
+#' clusters and cloud platforms. Features FIFO scheduling with task
+#' cancellation, promises for reactive programming, 'OpenTelemetry' distributed
+#' tracing, and custom serialization for cross-language data types.
 #'
 #' @section Notes:
 #'
@@ -15,8 +16,8 @@
 #'  Unix domain sockets on MacOS, Solaris and other POSIX platforms, and named
 #'  pipes on Windows.
 #'
-#'  This may be overriden, if desired, by specifying 'url' in the [daemons()]
-#'  interface and launching daemons using [launch_local()].
+#'  This may be overridden by specifying 'url' in [daemons()] and launching
+#'  daemons using [launch_local()].
 #'
 #' @section OpenTelemetry:
 #'
@@ -30,11 +31,11 @@
 #' `vignette("mirai", package = "mirai")`
 #'
 #' @importFrom nanonext .advance call_aio call_aio_ collect_aio collect_aio_
-#'   .context cv cv_reset cv_signal cv_value dial ip_addr is_error_value .keep
-#'   listen .mark mclock monitor msleep nng_error opt opt<- parse_url pipe_id
-#'   pipe_notify random .read_header .read_marker read_monitor reap recv
-#'   recv_aio request send serial_config socket stat stop_aio stop_request
-#'   tls_config unresolved .unresolved until wait wait_ write_cert
+#'   .context cv cv_reset cv_signal cv_value dial .dispatcher ip_addr
+#'   is_error_value .keep listen .mark mclock monitor msleep ncurl nng_error opt
+#'   opt<- parse_url pipe_id pipe_notify race_aio random reap recv recv_aio
+#'   request send serial_config socket stat stop_aio stop_request tls_config
+#'   unresolved .unresolved until wait wait_ write_cert
 #'
 "_PACKAGE"
 
@@ -79,6 +80,7 @@ cli_enabled <- FALSE
 ._ <- list2env(
   list(
     arglen = "`n` must equal the length of `args`, or either must be 1",
+    character_url = "`url` must be of type character, not %s",
     cluster_inactive = "cluster is no longer active",
     daemons_unset = "daemons must be set to use this function",
     dot_required = "`.` must be an element of the character vector(s) supplied to `args`",
@@ -90,6 +92,8 @@ cli_enabled <- FALSE
     n_one = "`n` must be 1 or greater",
     n_zero = "the number of daemons must be zero or greater",
     numeric_n = "`n` must be numeric, did you mean to provide `url`?",
+    posit_api = "can only be used from Posit Workbench",
+    secretbase = "the secretbase package is required, try: `install.packages('secretbase')`",
     sync_daemons = "mirai: initial sync with daemon(s) [%d secs elapsed]",
     sync_dispatcher = "mirai: initial sync with dispatcher [%d secs elapsed]",
     synchronous = "daemons cannot be launched for synchronous compute profiles",

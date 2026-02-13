@@ -4,26 +4,18 @@
 \alias{dispatcher}
 \title{Dispatcher}
 \usage{
-dispatcher(host, url = NULL, n = 0L, ...)
+dispatcher(host, url = NULL, n = 0L)
 }
 \arguments{
-\item{host}{the character URL dispatcher should dial in to, typically an IPC
-address.}
+\item{host}{(character) URL to dial into, typically an IPC address.}
 
-\item{url}{the character URL dispatcher should listen at (and daemons should
-dial in to), including the port to connect to e.g. tcp://hostname:5555' or
-'tcp://10.75.32.70:5555'. Specify 'tls+tcp://' to use secure TLS
-connections.}
+\item{url}{(character) URL to listen at for daemon connections, e.g.
+'tcp://hostname:5555'. Use 'tls+tcp://' for secure TLS.}
 
-\item{n}{if specified, the integer number of daemons to be launched locally
-by the host process.}
-
-\item{...}{(optional) additional arguments passed through to \code{\link[=daemon]{daemon()}} if
-launching daemons. These include \code{asyncdial}, \code{autoexit}, \code{cleanup},
-\code{output}, \code{maxtasks}, \code{idletime}, \code{walltime} and \code{tlscert}.}
+\item{n}{(integer) number of local daemons launched by host.}
 }
 \value{
-Invisible NULL.
+Invisibly, an integer exit code: 0L for normal termination.
 }
 \description{
 Dispatches tasks from a host to daemons for processing, using FIFO
@@ -32,9 +24,7 @@ controlled by \code{\link[=daemons]{daemons()}} and this function should not nee
 directly.
 }
 \details{
-The network topology is such that a dispatcher acts as a gateway between the
-host and daemons, ensuring that tasks received from the host are dispatched
-on a FIFO basis for processing. Tasks are queued at the dispatcher to ensure
-tasks are only sent to daemons that can begin immediate execution of the
-task.
+Dispatcher acts as a gateway between the host and daemons, dispatching tasks
+on a FIFO basis. Tasks are queued until a daemon is available for immediate
+execution.
 }

@@ -7,34 +7,30 @@
 collect_mirai(x, options = NULL)
 }
 \arguments{
-\item{x}{a 'mirai' object, or list of 'mirai' objects.}
+\item{x}{(mirai | list) a 'mirai' object or list of 'mirai' objects.}
 
-\item{options}{(if \code{x} is a list of mirai) a character vector comprising any
-combination of collection options for \code{\link[=mirai_map]{mirai_map()}}, such as \code{".flat"} or
-\code{c(".progress", ".stop")}.}
+\item{options}{(character) collection options for list input, e.g. \code{".flat"}
+or \code{c(".progress", ".stop")}. See Options section.}
 }
 \value{
 An object (the return value of the 'mirai'), or a list of such
 objects (the same length as \code{x}, preserving names).
 }
 \description{
-Waits for the 'mirai' to resolve if still in progress, and returns its value
-directly. It is a more efficient version of and equivalent to
+Waits for the 'mirai' to resolve if still in progress (blocking but
+interruptible) and returns its value directly. Equivalent to
 \code{call_mirai(x)$data}.
 }
 \details{
-This function will wait for the asynchronous operation(s) to complete if
-still in progress, blocking but interruptible.
-
 \code{x[]} is an equivalent way to wait for and return the value of a mirai \code{x}.
 }
 \section{Options}{
 
 
-As an alternative to a character vector, a list where the names are the
-collection options is also accepted. The value for \code{.progress} is passed to
-the cli progress bar - if a character value as the name, and if a list as
-named parameters to \code{cli::cli_progress_bar}. Examples:
+A named list may also be supplied instead of a character vector, where the
+names are the collection options. The value for \code{.progress} is passed to the
+cli progress bar: a character value sets the bar name, and a list is passed
+as named parameters to \code{cli::cli_progress_bar}. Examples:
 \code{c(.stop = TRUE, .progress = "bar name")} or
 \code{list(.stop = TRUE, .progress = list(name = "bar", type = "tasks"))}
 }

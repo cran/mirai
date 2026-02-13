@@ -7,10 +7,8 @@
 status(.compute = NULL)
 }
 \arguments{
-\item{.compute}{character value for the compute profile to query, or NULL to
-query the 'default' profile.
-
-\strong{or} a 'miraiCluster' to obtain its status.}
+\item{.compute}{(character | miraiCluster) compute profile name, or \code{NULL}
+for 'default'. Also accepts a 'miraiCluster'.}
 }
 \value{
 A named list comprising:
@@ -29,14 +27,7 @@ been received (either completed or cancelled).
 Retrieve status information for the specified compute profile, comprising
 current connections and daemons status.
 }
-\examples{
-\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
-status()
-daemons(url = "tcp://[::1]:0")
-status()
-daemons(0)
-\dontshow{\}) # examplesIf}
-}
 \seealso{
 \code{\link[=info]{info()}} for more succinct information statistics.
 }
+\keyword{internal}

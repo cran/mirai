@@ -1,4 +1,4 @@
-# minitest - a minimal testing framework v0.0.4 --------------------------------
+# minitest - a minimal testing framework v0.0.5 --------------------------------
 test_library <- function(package) library(package = package, character.only = TRUE)
 test_true <- function(x) invisible(isTRUE(x) || {print(x); stop("the above was returned instead of TRUE")})
 test_false <- function(x) invisible(isFALSE(x) || {print(x); stop("the above was returned instead of FALSE")})
@@ -11,6 +11,7 @@ test_equal <- function(a, b) invisible(a == b || {print(a); print(b); stop("the 
 test_identical <- function(a, b) invisible(identical(a, b) || {print(a); print(b); stop("the above expressions were not identical")})
 test_print <- function(x) invisible(is.character(capture.output(print(x))) || stop("print output of expression cannot be captured as a character value"))
 test_error <- function(x, containing = "") invisible(inherits(x <- tryCatch(x, error = identity), "error") && grepl(containing, x[["message"]], fixed = TRUE) || stop("Expected error message containing: ", containing, "\nActual error message: ", x[["message"]]))
+NOT_CRAN <- Sys.getenv("NOT_CRAN") == "true"
 # ------------------------------------------------------------------------------
 
 test_library("mirai")
@@ -30,6 +31,7 @@ test_error(daemons(-1), "zero or greater")
 test_error(daemons(raw(0L)), "must be numeric")
 test_error(daemons(1, dispatcher = ""))
 test_error(daemons(url = local_url(), dispatcher = NA))
+test_error(daemons(url = host_url), "must be of type character")
 test_error(daemon("URL"))
 test_error(launch_local(1L), "daemons must be set")
 test_error(race_mirai(list()), "daemons must be set")
@@ -58,7 +60,12 @@ test_true(grepl("5555", local_url(tcp = TRUE, port = 5555), fixed = TRUE))
 test_type("list", ssh_config("ssh://remotehost"))
 test_type("list", ssh_config("ssh://remotehost", tunnel = TRUE))
 test_type("list", cluster_config())
-test_true(is_mirai_interrupt(r <- mirai:::mk_interrupt_error()))
+test_type("list", cfg <- http_config(url = "https://example.com", cookie = "abc", data = '{"cmd":"%s"}'))
+test_equal(cfg$type, "http")
+test_equal(cfg$url, "https://example.com")
+test_equal(cfg$cookie, "abc")
+test_equal(cfg$data, '{"cmd":"%s"}')
+test_true(is_mirai_interrupt(r <- mirai:::mk_mirai_interrupt()))
 test_print(r)
 test_true(is_mirai_error(r <- `class<-`("Error in: testing\n", c("miraiError", "errorValue", "try-error"))))
 test_print(r)
@@ -104,6 +111,8 @@ connection && {
   if (is_mirai_error(me)) test_true(length(me$stack.trace) >= 2L)
   if (is_mirai_error(me)) test_true(all(as.logical(lapply(me$stack.trace, is.language))))
   if (is_mirai_error(me)) test_type("character", me$condition.class)
+  if (is_mirai_error(me)) test_type("character", conditionMessage(me))
+  if (is_mirai_error(me)) test_type("language", conditionCall(me))
   test_false(is_mirai_interrupt(me))
   test_class("errorValue", me)
   test_print(me)
@@ -116,11 +125,17 @@ connection && {
   if (!is_error_value(dm$data)) test_class("matrix", dm$data)
   test_print(dm)
   m1 <- mirai(Sys.sleep(0.1), .timeout = 200L)
-  m3 <- mirai({}, .timeout = 200L)
-  m2 <- mirai(Sys.sleep(0.1), .timeout = 200L)
-  test_type("list", race_mirai(list(m1, m2)))
-  test_type("list", race_mirai(list(m1, m2)))
-  test_type("list", race_mirai(list(m1, m2)))
+  m2 <- mirai({}, .timeout = 200L)
+  m3 <- mirai(Sys.sleep(0.1), .timeout = 200L)
+  test_zero(race_mirai(list()))
+  ml <- list(m1, m2, m3)
+  while (length(ml)) {
+    idx <- race_mirai(ml)
+    test_type("integer", idx)
+    test_true(idx >= 1L && idx <= length(ml))
+    test_class("mirai", ml[[idx]])
+    ml <- ml[-idx]
+  }
   test_type("integer", info())
   test_type("integer", status()[["connections"]])
   test_type("character", status()[["daemons"]])
@@ -262,7 +277,7 @@ connection && {
   test_null(stopCluster(cl))
 }
 # advanced daemons and dispatcher tests
-connection && Sys.getenv("NOT_CRAN") == "true" && {
+connection && NOT_CRAN && {
   Sys.sleep(0.5)
   test_true(daemons(url = "ws://:0", correctype = 0L, token = TRUE))
   test_false(daemons(0L))
@@ -309,11 +324,12 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
   test_type("integer", .Random.seed)
 }
 # TLS tests
-connection && Sys.getenv("NOT_CRAN") == "true" && {
+connection && NOT_CRAN && {
   Sys.sleep(0.5)
   cfg <- serial_config("custom", function(x) serialize(x, NULL), unserialize)
   test_true(daemons(url = host_url(), pass = "test", serial = cfg))
   if (.Platform$OS.type == "unix") test_type("character", launch_remote(remote = cluster_config(command = "/bin/sh", options = "#SBATCH", rscript = file.path(R.home("bin"), "Rscript"))))
+  test_type("list", launch_remote(2L, remote = http_config(url = "http://127.0.0.1:0", data = '{"cmd":"%s"}')))
   test_equal(launch_local(1L), 1L)
   Sys.sleep(1L)
   q <- quote({ list2env(list(b = 2), envir = globalenv()); 0L})
@@ -335,7 +351,7 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
   test_false(test_tls(nanonext::write_cert(cn = "127.0.0.1")))
 }
 # promises tests
-connection && requireNamespace("promises", quietly = TRUE) && Sys.getenv("NOT_CRAN") == "true" && {
+connection && requireNamespace("promises", quietly = TRUE) && NOT_CRAN && {
   run_now <- getNamespace("later")[["run_now"]]
   Sys.sleep(0.5)
   test_true(daemons(1, notused = "wrongtype"))
@@ -363,7 +379,7 @@ connection && requireNamespace("promises", quietly = TRUE) && Sys.getenv("NOT_CR
   test_false(daemons(NULL))
 }
 # mirai daemon limits tests
-connection && Sys.getenv("NOT_CRAN") == "true" && {
+connection && NOT_CRAN && {
   Sys.sleep(0.5)
   test_true(daemons(1, cleanup = FALSE, maxtasks = 2L))
   test_true(daemons_set("default"))
@@ -393,7 +409,7 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
   test_false(daemons(0))
 }
 # mirai cancellation tests
-connection && Sys.getenv("NOT_CRAN") == "true" && {
+connection && NOT_CRAN && {
   Sys.sleep(0.5)
   Sys.unsetenv("R_DEFAULT_PACKAGES")
   test_true(daemons(1, dispatcher = TRUE, cleanup = FALSE))
@@ -414,10 +430,15 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
   test_equal(info()[["connections"]], 1L)
   test_equal(length(nextget("url")), 1L)
   test_class("miraiLaunchCmd", launch_remote(1))
+  for (i in 1:25) {
+    m <- mirai_map(1:5, function(x) { Sys.sleep(0.01); stop("error") })
+    tryCatch(m[.stop], error = identity)
+  }
+  test_equal(info()[["connections"]], 1L)
   test_false(daemons(0))
 }
 # additional stress testing
-connection && Sys.getenv("NOT_CRAN") == "true" && {
+connection && NOT_CRAN && {
   Sys.sleep(0.5)
   q <- vector(mode = "list", length = 10000L)
   Sys.setenv(R_DEFAULT_PACKAGES = "stats,utils")
@@ -432,11 +453,11 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
   for (i in seq_len(10000L)) {q[[i]] <- mirai({Sys.sleep(0.001); rnorm(1)}); attr(q[[i]], "info") <- info()}
   test_equal(length(unique(unlist(collect_mirai(q)))), 10000L)
   test_true(all(as.logical(lapply(lapply(q, attr, "info"), is.integer))))
-  test_equal(info()[["completed"]], 20020L)
+  test_equal(info()[["completed"]], 20018L)
   test_false(daemons(0))
 }
 # reproducible RNG tests
-connection && Sys.getenv("NOT_CRAN") == "true" && {
+connection && NOT_CRAN && {
   test_true(daemons(2, seed = 1234L))
   test_equal(launch_local(), 1L)
   test_type("character", launch_remote())
@@ -453,7 +474,8 @@ connection && Sys.getenv("NOT_CRAN") == "true" && {
   test_false(daemons_set("gpu"))
   test_identical(m, n)
 }
-connection && requireNamespace("otelsdk", quietly = TRUE) && Sys.getenv("NOT_CRAN") == "true" && {
+# OTel tests
+connection && requireNamespace("otelsdk", quietly = TRUE) && NOT_CRAN && {
   record <- mirai:::with_otel_record({
     url <- local_url()
     purl <- nanonext::parse_url(url)
@@ -515,6 +537,44 @@ connection && requireNamespace("otelsdk", quietly = TRUE) && Sys.getenv("NOT_CRA
   test_equal(traces[[15L]]$attributes$network.transport, purl[["scheme"]])
   test_false(traces[[15L]]$attributes$mirai.dispatcher)
   test_equal(traces[[15L]]$attributes$mirai.compute, "default")
+}
+# Posit Workbench tests
+requireNamespace("secretbase", quietly = TRUE) && {
+  old_server <- Sys.getenv("RS_SERVER_ADDRESS")
+  old_cookie <- Sys.getenv("RS_SESSION_RPC_COOKIE")
+  Sys.setenv(RS_SERVER_ADDRESS = "http://127.0.0.1", RS_SESSION_RPC_COOKIE = "test_cookie")
+  test_equal(mirai:::posit_workbench_url(), "http://127.0.0.1/api/launch_job")
+  test_equal(mirai:::posit_workbench_cookie(), "test_cookie")
+  ns <- parent.env(getNamespace("mirai"))
+  original_ncurl <- ns[["ncurl"]]
+  unlockBinding("ncurl", ns)
+  ns[["ncurl"]] <- function(url, ...) list(
+    status = 200L,
+    data = secretbase::jsonenc(list(
+      result = list(clusters = list(list(
+        name = "k8s-cluster", type = "Kubernetes", defaultImage = "rstudio/r-base:latest",
+        resourceProfiles = list(list(name = "small"))
+      )))
+    ))
+  )
+  result <- mirai:::posit_workbench_data()
+  test_type("character", result)
+  decoded <- secretbase::jsondec(result)
+  test_equal(decoded[["method"]], "launch_job")
+  test_equal(decoded[["kwparams"]][["job"]][["cluster"]], "k8s-cluster")
+  test_equal(decoded[["kwparams"]][["job"]][["resourceProfile"]], "small")
+  test_equal(decoded[["kwparams"]][["job"]][["name"]], "mirai_daemon")
+  test_equal(decoded[["kwparams"]][["job"]][["exe"]], "Rscript")
+  test_equal(decoded[["kwparams"]][["job"]][["container"]][["image"]], "rstudio/r-base:latest")
+  result2 <- mirai:::posit_workbench_data(rscript = "/usr/bin/Rscript")
+  test_equal(secretbase::jsondec(result2)[["kwparams"]][["job"]][["exe"]], "/usr/bin/Rscript")
+  ns[["ncurl"]] <- original_ncurl
+  lockBinding("ncurl", ns)
+  if (nzchar(old_server)) Sys.setenv(RS_SERVER_ADDRESS = old_server) else Sys.unsetenv("RS_SERVER_ADDRESS")
+  if (nzchar(old_cookie)) Sys.setenv(RS_SESSION_RPC_COOKIE = old_cookie) else Sys.unsetenv("RS_SESSION_RPC_COOKIE")
+  test_type("character", mirai:::posit_workbench_url())
+  test_type("character", mirai:::posit_workbench_cookie())
+  nzchar(mirai:::posit_workbench_cookie()) || test_error(mirai:::posit_workbench_data(), "Posit Workbench")
 }
 test_false(daemons(0))
 Sys.sleep(1L)

@@ -3,15 +3,15 @@
 #' mirai Map
 #'
 #' Asynchronous parallel map of a function over a list or vector using
-#' \pkg{mirai}, with optional \pkg{promises} integration. Performs multiple map
-#' over the rows of a dataframe or matrix.
+#' \pkg{mirai}, with optional \pkg{promises} integration. For matrix or
+#' dataframe inputs, maps over rows.
 #'
 #' Sends each application of function `.f` on an element of `.x` (or row of
 #' `.x`) for computation in a separate [mirai()] call. If `.x` is named, names
 #' are preserved.
 #'
-#' This simple and transparent behaviour is designed to make full use of
-#' \pkg{mirai} scheduling to minimise overall execution time.
+#' Takes advantage of \pkg{mirai} scheduling to minimise overall execution
+#' time.
 #'
 #' Facilitates recovery from partial failure by returning all 'miraiError' /
 #' 'errorValue' as the case may be, thus allowing only failures to be re-run.
@@ -19,19 +19,16 @@
 #' This function requires daemons to have previously been set, and will error
 #' otherwise.
 #'
-#' @param .x a list or atomic vector. Also accepts a matrix or dataframe, in
-#'   which case multiple map is performed over its rows.
-#' @param .f a function to be applied to each element of `.x`, or row of `.x` as
-#'   the case may be.
-#' @param ... (optional) named arguments (name = value pairs) specifying objects
-#'   referenced, but not defined, in `.f`.
-#' @param .args (optional) further constant arguments to `.f`, provided as a
-#'   list.
-#' @param .promise (optional) if supplied, registers a promise against each
-#'   mirai. Either a function, supplied to the `onFulfilled` argument of
-#'   `promises::then()` or a list of 2 functions, supplied respectively to
-#'   `onFulfilled` and `onRejected` of `promises::then()`. Using this argument
-#'   requires the \pkg{promises} package.
+#' @param .x (list | vector | matrix | data.frame) input to map over. For matrix
+#'   or dataframe, maps over rows (see Multiple Map section).
+#' @param .f (function) applied to each element of `.x`, or each row of a
+#'   matrix / dataframe.
+#' @param ... (named arguments) objects referenced but not defined in `.f`.
+#' @param .args (list) constant arguments passed to `.f`.
+#' @param .promise (function | list) registers a promise against each mirai.
+#'   Either an `onFulfilled` function, or a list of (`onFulfilled`,
+#'   `onRejected`) functions for [promises::then()]. Requires the \pkg{promises}
+#'   package.
 #' @inheritParams mirai
 #'
 #' @return A 'mirai_map' (list of 'mirai' objects).
@@ -65,24 +62,22 @@
 #' preserved as names of the output.
 #'
 #' This allows map over 2 or more arguments, and `.f` should accept at least as
-#' many arguments as there are columns. If the dataframe has names, or the
-#' matrix column dimnames, named arguments are provided to `.f`.
+#' many arguments as there are columns. If the dataframe has column names, or
+#' the matrix has column dimnames, arguments are passed to `.f` by name.
 #'
 #' To map over **columns** instead, first wrap a dataframe in [as.list()], or
 #' transpose a matrix using [t()].
 #'
 #' @section Nested Maps:
 #'
-#' At times you way wish to run maps within maps. To do this, the function
-#' provided to the outer map needs to include a call to [daemons()] to set
-#' daemons used by the inner map. To guard against inadvertently spawning an
-#' excessive number of daemons on the same machine, attempting to launch local
-#' daemons within a map using `daemons(n)` will error.
+#' To run maps within maps, the function provided to the outer map must include
+#' a call to [daemons()] to set daemons for the inner map. To guard against
+#' inadvertently spawning an excessive number of daemons on the same machine,
+#' attempting to launch local daemons within a map using `daemons(n)` will
+#' error.
 #'
-#' A legitimate use of this pattern however is when the outer daemons are
-#' launched on remote machines, and you then wish to launch daemons locally on
-#' each of those machines. In this case, use the following solution: instead of
-#' a single call to `daemons(n)` make 2 separate calls to
+#' When the outer daemons run on remote machines and you want local daemons on
+#' each, use 2 separate calls instead of `daemons(n)`:
 #' `daemons(url = local_url()); launch_local(n)`. This is equivalent, and is
 #' permitted from within a map.
 #'
