@@ -593,7 +593,7 @@ m &lt;- mirai({
               )
             )
           },
-          msg = req$HEADERS$msg
+          msg = req$HTTP_MSG
         ) %...&gt;% (function(x) {
           res$status &lt;- x$status
           res$body &lt;- x$body
@@ -615,28 +615,28 @@ res &lt;- lapply(
 )
 collect_aio(res)
 #&gt; [[1]]
-#&gt; [1] &quot;{\&quot;error\&quot;:\&quot;500 - Internal server error\&quot;}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:52\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[80775]}&quot;
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;{\&quot;error\&quot;:\&quot;500 - Internal server error\&quot;}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:52\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[80773]}&quot;
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] &quot;{\&quot;error\&quot;:\&quot;500 - Internal server error\&quot;}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:53\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[80785]}&quot;
 #&gt; 
 #&gt; [[4]]
-#&gt; [1] &quot;{\&quot;error\&quot;:\&quot;500 - Internal server error\&quot;}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:52\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[80785]}&quot;
 #&gt; 
 #&gt; [[5]]
-#&gt; [1] &quot;{\&quot;error\&quot;:\&quot;500 - Internal server error\&quot;}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:52\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[80791]}&quot;
 #&gt; 
 #&gt; [[6]]
-#&gt; [1] &quot;{\&quot;error\&quot;:\&quot;500 - Internal server error\&quot;}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:53\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[80791]}&quot;
 #&gt; 
 #&gt; [[7]]
-#&gt; [1] &quot;{\&quot;error\&quot;:\&quot;500 - Internal server error\&quot;}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:53\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[80775]}&quot;
 #&gt; 
 #&gt; [[8]]
-#&gt; [1] &quot;{\&quot;error\&quot;:\&quot;500 - Internal server error\&quot;}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:53\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[80773]}&quot;
 
 daemons(0)
 </code></pre>
@@ -693,28 +693,28 @@ res &lt;- lapply(
 )
 collect_aio(res)
 #&gt; [[1]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-10 12:49:47\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[45865]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:56\&quot;],\&quot;msg\&quot;:[\&quot;1\&quot;],\&quot;pid\&quot;:[80857]}&quot;
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-10 12:49:47\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[45867]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:56\&quot;],\&quot;msg\&quot;:[\&quot;2\&quot;],\&quot;pid\&quot;:[80867]}&quot;
 #&gt; 
 #&gt; [[3]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-10 12:49:47\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[45877]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:56\&quot;],\&quot;msg\&quot;:[\&quot;3\&quot;],\&quot;pid\&quot;:[80855]}&quot;
 #&gt; 
 #&gt; [[4]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-10 12:49:47\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[45883]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:57\&quot;],\&quot;msg\&quot;:[\&quot;4\&quot;],\&quot;pid\&quot;:[80867]}&quot;
 #&gt; 
 #&gt; [[5]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-10 12:49:48\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[45865]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:56\&quot;],\&quot;msg\&quot;:[\&quot;5\&quot;],\&quot;pid\&quot;:[80873]}&quot;
 #&gt; 
 #&gt; [[6]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-10 12:49:48\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[45877]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:57\&quot;],\&quot;msg\&quot;:[\&quot;6\&quot;],\&quot;pid\&quot;:[80855]}&quot;
 #&gt; 
 #&gt; [[7]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-10 12:49:48\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[45883]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:57\&quot;],\&quot;msg\&quot;:[\&quot;7\&quot;],\&quot;pid\&quot;:[80873]}&quot;
 #&gt; 
 #&gt; [[8]]
-#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-10 12:49:48\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[45867]}&quot;
+#&gt; [1] &quot;{\&quot;time\&quot;:[\&quot;2026-02-27 00:08:57\&quot;],\&quot;msg\&quot;:[\&quot;8\&quot;],\&quot;pid\&quot;:[80857]}&quot;
 
 daemons(0)
 </code></pre>

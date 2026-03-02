@@ -1,4 +1,4 @@
-# minitest - a minimal testing framework v0.0.5 --------------------------------
+# minitest - a minimal testing framework v0.0.6 --------------------------------
 test_library <- function(package) library(package = package, character.only = TRUE)
 test_true <- function(x) invisible(isTRUE(x) || {print(x); stop("the above was returned instead of TRUE")})
 test_false <- function(x) invisible(isFALSE(x) || {print(x); stop("the above was returned instead of FALSE")})
@@ -11,6 +11,8 @@ test_equal <- function(a, b) invisible(a == b || {print(a); print(b); stop("the 
 test_identical <- function(a, b) invisible(identical(a, b) || {print(a); print(b); stop("the above expressions were not identical")})
 test_print <- function(x) invisible(is.character(capture.output(print(x))) || stop("print output of expression cannot be captured as a character value"))
 test_error <- function(x, containing = "") invisible(inherits(x <- tryCatch(x, error = identity), "error") && grepl(containing, x[["message"]], fixed = TRUE) || stop("Expected error message containing: ", containing, "\nActual error message: ", x[["message"]]))
+mock_binding <- function(ns, name, value) { original <- ns[[name]]; unlockBinding(name, ns); ns[[name]] <- value; original }
+restore_binding <- function(ns, name, value) { ns[[name]] <- value; lockBinding(name, ns) }
 NOT_CRAN <- Sys.getenv("NOT_CRAN") == "true"
 # ------------------------------------------------------------------------------
 
@@ -282,7 +284,12 @@ connection && NOT_CRAN && {
   test_true(daemons(url = "ws://:0", correctype = 0L, token = TRUE))
   test_false(daemons(0L))
   test_zero(with(daemons(url = "tcp://:0", correcttype = c(1, 0), token = TRUE), {8L - 9L + 1L}))
-  test_true(daemons(n = 2, "ws://:0"))
+  ns <- getNamespace("mirai")
+  original_ll <- mock_binding(ns, ".limit_long", 100L)
+  original_lls <- mock_binding(ns, ".limit_long_secs", 1L)
+  suppressMessages(test_true(daemons(n = 2, "ws://:0")))
+  restore_binding(ns, ".limit_long_secs", original_lls)
+  restore_binding(ns, ".limit_long", original_ll)
   test_type("character", nextget("dispatcher"))
   test_equal(length(nextget("url")), 1L)
   Sys.sleep(1L)
@@ -539,24 +546,26 @@ connection && requireNamespace("otelsdk", quietly = TRUE) && NOT_CRAN && {
   test_equal(traces[[15L]]$attributes$mirai.compute, "default")
 }
 # Posit Workbench tests
-requireNamespace("secretbase", quietly = TRUE) && {
+nzchar(Sys.getenv("RS_SERVER_ADDRESS")) || test_error(mirai:::posit_workbench_fetch("api/test"), "Posit Workbench")
+requireNamespace("secretbase", quietly = TRUE) && requireNamespace("later", quietly = TRUE) && {
   old_server <- Sys.getenv("RS_SERVER_ADDRESS")
   old_cookie <- Sys.getenv("RS_SESSION_RPC_COOKIE")
   Sys.setenv(RS_SERVER_ADDRESS = "http://127.0.0.1", RS_SESSION_RPC_COOKIE = "test_cookie")
   test_equal(mirai:::posit_workbench_url(), "http://127.0.0.1/api/launch_job")
   test_equal(mirai:::posit_workbench_cookie(), "test_cookie")
-  ns <- parent.env(getNamespace("mirai"))
-  original_ncurl <- ns[["ncurl"]]
-  unlockBinding("ncurl", ns)
-  ns[["ncurl"]] <- function(url, ...) list(
-    status = 200L,
-    data = secretbase::jsonenc(list(
+  mock_cluster_json <- function(name = "k8s-cluster", image = "rstudio/r-base:latest", profile = "small")
+    secretbase::jsonenc(list(
       result = list(clusters = list(list(
-        name = "k8s-cluster", type = "Kubernetes", defaultImage = "rstudio/r-base:latest",
-        resourceProfiles = list(list(name = "small"))
+        name = name, type = "Kubernetes", defaultImage = image,
+        resourceProfiles = list(list(name = profile))
       )))
     ))
-  )
+  ns <- parent.env(getNamespace("mirai"))
+  dot <- mirai:::.
+  old_pwb <- dot[["pwb_cookie"]]
+  original_ncurl <- mock_binding(ns, "ncurl", function(url, ...) list(
+    status = 200L, data = mock_cluster_json()
+  ))
   result <- mirai:::posit_workbench_data()
   test_type("character", result)
   decoded <- secretbase::jsondec(result)
@@ -568,8 +577,41 @@ requireNamespace("secretbase", quietly = TRUE) && {
   test_equal(decoded[["kwparams"]][["job"]][["container"]][["image"]], "rstudio/r-base:latest")
   result2 <- mirai:::posit_workbench_data(rscript = "/usr/bin/Rscript")
   test_equal(secretbase::jsondec(result2)[["kwparams"]][["job"]][["exe"]], "/usr/bin/Rscript")
-  ns[["ncurl"]] <- original_ncurl
-  lockBinding("ncurl", ns)
+  mock_rs <- new.env(parent = emptyenv())
+  mock_rs[[".rs.api.viewer"]] <- function(url) {
+    nanonext::ncurl_aio(url, headers = c(cookie = "mock_browser_cookie"), timeout = 5000L)
+  }
+  mock_rs[[".rs.api.executeCommand"]] <- function(...) invisible()
+  attach(mock_rs, name = "tools:rstudio")
+  ns[["ncurl"]] <- function(url, ...) list(status = 200L, data = "mock_api_response")
+  result <- mirai:::posit_workbench_fetch("api/get_compute_envs")
+  test_equal(result[["status"]], 200L)
+  test_equal(result[["cookie"]], "mock_browser_cookie")
+  test_equal(result[["data"]], "mock_api_response")
+  dot[["pwb_cookie"]] <- NULL
+  Sys.setenv(RS_SESSION_RPC_COOKIE = "env_cookie")
+  test_equal(mirai:::posit_workbench_cookie(), "env_cookie")
+  call_count <- 0L
+  ns[["ncurl"]] <- function(url, ...) {
+    call_count <<- call_count + 1L
+    if (call_count == 1L) list(status = 503L, data = NULL)
+    else list(status = 200L, data = mock_cluster_json("cluster1", "image:latest", "default"))
+  }
+  result <- mirai:::posit_workbench_data()
+  test_type("character", result)
+  test_equal(dot[["pwb_cookie"]], "mock_browser_cookie")
+  test_equal(mirai:::posit_workbench_cookie(), "mock_browser_cookie")
+  dot[["pwb_cookie"]] <- NULL
+  ns[["ncurl"]] <- function(url, ...) list(
+    status = 200L, data = mock_cluster_json("cluster2", "image:v2", "large")
+  )
+  result <- mirai:::posit_workbench_data()
+  test_type("character", result)
+  test_null(dot[["pwb_cookie"]])
+  test_equal(mirai:::posit_workbench_cookie(), "env_cookie")
+  dot[["pwb_cookie"]] <- old_pwb
+  restore_binding(ns, "ncurl", original_ncurl)
+  detach("tools:rstudio")
   if (nzchar(old_server)) Sys.setenv(RS_SERVER_ADDRESS = old_server) else Sys.unsetenv("RS_SERVER_ADDRESS")
   if (nzchar(old_cookie)) Sys.setenv(RS_SESSION_RPC_COOKIE = old_cookie) else Sys.unsetenv("RS_SESSION_RPC_COOKIE")
   test_type("character", mirai:::posit_workbench_url())

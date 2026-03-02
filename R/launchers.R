@@ -91,87 +91,44 @@ launch_remote <- function(n = 1L, remote = remote_config(), ..., .compute = NULL
   tls <- envir[["tls"]]
 
   if (is.character(remote[["type"]]) && remote[["type"]] == "http") {
-    api_url <- if (is.function(remote[["url"]])) remote[["url"]]() else remote[["url"]]
-    method <- remote[["method"]]
-    cookie <- if (is.function(remote[["cookie"]])) remote[["cookie"]]() else remote[["cookie"]]
-    token <- if (is.function(remote[["token"]])) remote[["token"]]() else remote[["token"]]
-    data <- if (is.function(remote[["data"]])) remote[["data"]]() else remote[["data"]]
-    headers <- c(Authorization = sprintf("Bearer %s", token), Cookie = cookie)
-    res <- lapply(seq_len(n), function(i) {
-      cmd <- write_args(url, dots, maybe_next_stream(envir), tls)
-      cmd <- gsub("\\", "\\\\", cmd, fixed = TRUE)
-      cmd <- gsub("\"", "\\\"", cmd, fixed = TRUE)
-      ncurl(
-        url = api_url,
-        method = method,
-        headers = headers,
-        data = sprintf(data, cmd),
-        timeout = .limit_short
-      )
-    })
+    res <- launch_remote_http(n, remote, url, write_args, dots, envir, tls)
     return(invisible(res))
   }
 
   command <- remote[["command"]]
   rscript <- remote[["rscript"]]
   quote <- remote[["quote"]]
+  args <- if (length(command)) remote[["args"]]
 
-  if (length(command)) {
-    args <- remote[["args"]]
-
-    if (is.list(args)) {
-      tunnel <- remote[["tunnel"]]
-
-      if (tunnel) {
-        purl <- parse_url(url)
-        purl[["hostname"]] == "127.0.0.1" || stop(._[["localhost"]])
-        prefix <- sprintf("-R %s:127.0.0.1:%s", purl[["port"]], purl[["port"]])
-        for (i in seq_along(args)) {
-          args[[i]][1L] <- sprintf("%s %s", prefix, args[[i]][1L])
-        }
-      }
-
-      if (length(args) == 1L) {
-        args <- args[[1L]]
-      } else if (n == 1L || n == length(args)) {
-        cmds <- sprintf(
-          "%s -e %s",
-          rscript,
-          lapply(seq_along(args), function(i) {
-            shQuote(write_args(url, dots, maybe_next_stream(envir), tls))
-          })
-        )
-
-        for (i in seq_along(args)) {
-          system2(
-            command,
-            args = `[<-`(args[[i]], find_dot(args[[i]]), if (quote) shQuote(cmds[i]) else cmds[i]),
-            wait = FALSE
-          )
-        }
-
-        return(`class<-`(cmds, "miraiLaunchCmd"))
-      } else {
-        stop(._[["arglen"]])
-      }
+  if (is.list(args)) {
+    if (remote[["tunnel"]]) {
+      args <- apply_ssh_tunnel(args, url)
+    }
+    if (length(args) == 1L) {
+      args <- args[[1L]]
+    } else {
+      n == 1L || n == length(args) || stop(._[["arglen"]])
     }
   }
 
   cmds <- sprintf(
     "%s -e %s",
     rscript,
-    lapply(seq_len(n), function(i) shQuote(write_args(url, dots, maybe_next_stream(envir), tls)))
+    lapply(seq_len(if (is.list(args)) length(args) else n), function(i) {
+      shQuote(write_args(url, dots, maybe_next_stream(envir), tls))
+    })
   )
 
   if (length(command)) {
-    for (cmd in cmds) {
+    for (i in seq_along(cmds)) {
+      arg <- if (is.list(args)) args[[i]] else args
       system2(
         command,
         args = if (is.null(quote)) {
-          arg <- `[<-`(args, find_dot(args), cmd)
+          arg <- `[<-`(arg, find_dot(arg), cmds[i])
           c("-c", shQuote(sprintf("%s%s%s", arg[1L], arg[2L], arg[3L])))
         } else {
-          `[<-`(args, find_dot(args), if (quote) shQuote(cmd) else cmd)
+          `[<-`(arg, find_dot(arg), if (quote) shQuote(cmds[i]) else cmds[i])
         },
         wait = FALSE
       )
@@ -532,6 +489,43 @@ print.miraiLaunchCmd <- function(x, ...) {
 
 # internals --------------------------------------------------------------------
 
+resolve_field <- function(x) if (is.function(x)) x() else x
+
+launch_remote_http <- function(n, remote, url, write_args, dots, envir, tls) {
+  api_url <- resolve_field(remote[["url"]])
+  method <- remote[["method"]]
+  data <- resolve_field(remote[["data"]])
+  token <- resolve_field(remote[["token"]])
+  cookie <- resolve_field(remote[["cookie"]])
+  headers <- c(
+    Authorization = sprintf("Bearer %s", token),
+    Cookie = cookie,
+    `X-RS-Session-Server-RPC-Cookie` = cookie
+  )
+  lapply(seq_len(n), function(i) {
+    cmd <- write_args(url, dots, maybe_next_stream(envir), tls)
+    cmd <- gsub("\\", "\\\\", cmd, fixed = TRUE)
+    cmd <- gsub("\"", "\\\"", cmd, fixed = TRUE)
+    ncurl(
+      url = api_url,
+      method = method,
+      headers = headers,
+      data = sprintf(data, cmd),
+      timeout = .limit_short
+    )
+  })
+}
+
+apply_ssh_tunnel <- function(args, url) {
+  purl <- parse_url(url)
+  purl[["hostname"]] == "127.0.0.1" || stop(._[["localhost"]])
+  prefix <- sprintf("-R %s:127.0.0.1:%s", purl[["port"]], purl[["port"]])
+  for (i in seq_along(args)) {
+    args[[i]][1L] <- sprintf("%s %s", prefix, args[[i]][1L])
+  }
+  args
+}
+
 find_dot <- function(args) {
   sel <- args == "."
   any(sel) || stop(._[["dot_required"]], call. = FALSE)
@@ -547,7 +541,11 @@ posit_workbench_data <- function(rscript = "Rscript") posit_workbench_get("data"
 posit_workbench_get <- function(what, rscript = NULL) {
   switch(
     what,
-    cookie = Sys.getenv("RS_SESSION_RPC_COOKIE"),
+    cookie = if (is.null(.[["pwb_cookie"]])) {
+      Sys.getenv("RS_SESSION_RPC_COOKIE")
+    } else {
+      .[["pwb_cookie"]]
+    },
     url = file.path(Sys.getenv("RS_SERVER_ADDRESS"), "api", "launch_job"),
     data = {
       requireNamespace("secretbase", quietly = TRUE) || stop(._[["secretbase"]])
@@ -556,10 +554,14 @@ posit_workbench_get <- function(what, rscript = NULL) {
       nzchar(url) && nzchar(cookie) || stop(._[["posit_api"]])
       envs <- ncurl(
         file.path(url, "api", "get_compute_envs"),
-        headers = c(Cookie = cookie),
+        headers = c(Cookie = cookie, `X-RS-Session-Server-RPC-Cookie` = cookie),
         timeout = .limit_short
       )
-      envs[["status"]] == 200L || stop(._[["posit_api"]])
+      if (envs[["status"]] != 200L) {
+        envs <- posit_workbench_fetch("api/get_compute_envs")
+        envs[["status"]] == 200L || stop(._[["posit_api"]])
+        .$pwb_cookie <- envs[["cookie"]]
+      }
       cluster <- secretbase::jsondec(envs[["data"]])[["result"]][["clusters"]][[1L]]
       lp <- sprintf(".libPaths(c(%s))", paste(sprintf("\"%s\"", .libPaths()), collapse = ","))
       job <- list(
@@ -574,4 +576,32 @@ posit_workbench_get <- function(what, rscript = NULL) {
       secretbase::jsonenc(json)
     }
   )
+}
+
+posit_workbench_fetch <- function(endpoint) {
+  nzchar(Sys.getenv("RS_SERVER_ADDRESS")) || stop(._[["posit_api"]])
+  rs <- as.environment("tools:rstudio")
+  cookie <- NULL
+  srv <- http_server(
+    url = "http://127.0.0.1:0",
+    handlers = handler("/", function(req) {
+      cookie <<- req[["headers"]][["cookie"]]
+      list(status = 200L, body = "mirai <> Posit Workbench")
+    })
+  )
+  on.exit(srv$close())
+  srv$start()
+  rs[[".rs.api.viewer"]](srv$url)
+  timeout <- mclock() + .limit_short
+  while (is.null(cookie) && mclock() < timeout) {
+    later::run_now(1L)
+  }
+  is.null(cookie) && stop(._[["posit_api"]])
+  rs[[".rs.api.executeCommand"]]("activateConsole")
+  res <- ncurl(
+    url = file.path(Sys.getenv("RS_SERVER_ADDRESS"), endpoint),
+    headers = c(Cookie = cookie),
+    timeout = .limit_short
+  )
+  list(status = res[["status"]], cookie = cookie, data = res[["data"]])
 }
