@@ -154,9 +154,9 @@ unresolved(m)
 # Do work whilst unresolved
 
 m[]
-#&gt; [1] 3.371159 4.680047 4.968465 4.693166 3.895580
+#&gt; [1] 5.270938 5.500935 5.818627 3.365140 5.994334
 m$data
-#&gt; [1] 3.371159 4.680047 4.968465 4.693166 3.895580
+#&gt; [1] 5.270938 5.500935 5.818627 3.365140 5.994334
 </code></pre>
 <p>A mirai is <em>unresolved</em> until its result is received, then <em>resolved</em>.
 Use <code>unresolved()</code> to check its state.</p>
@@ -176,7 +176,7 @@ args &lt;- list(time = 2L, mean = 4)
 
 m1 &lt;- mirai(.expr = expr, .args = args)
 m1[]
-#&gt; [1] 2.150206 3.954099 5.314667 3.547804 4.939130
+#&gt; [1] 3.890969 4.009599 3.380416 3.514127 4.899060
 </code></pre>
 <p>This example performs an asynchronous write operation.
 Passing <code>environment()</code> to ‘.args’ conveniently provides all objects from the calling environment (like <code>x</code> and <code>file</code>):</p>
@@ -230,9 +230,15 @@ m3[]
 
 m3$data$stack.trace
 #&gt; [[1]]
-#&gt; stop(&quot;positive&quot;)
+#&gt; .handleSimpleError(function (cnd) 
+#&gt; {
+#&gt;     `[[&lt;-`(., &quot;syscalls&quot;, sys.calls())
+#&gt; }, &quot;positive&quot;, base::quote(f(1)))
 #&gt; 
 #&gt; [[2]]
+#&gt; stop(&quot;positive&quot;)
+#&gt; 
+#&gt; [[3]]
 #&gt; f(1)
 m3$data$condition.class
 #&gt; [1] &quot;simpleError&quot; &quot;error&quot;       &quot;condition&quot;
@@ -275,12 +281,17 @@ To load only the base package (cutting startup time in half), set <code>R_SCRIPT
 <p>Specify the number of daemons to launch:</p>
 <pre><code class="language-r">daemons(6)
 </code></pre>
-<p>Set <code>n</code> to one less than available cores for optimal performance.
-Consider cores reserved for other purposes.</p>
+<p>For CPU-bound work, set <code>n</code> to roughly one less than your number of CPU cores, leaving a core free for the host R process and OS.
+Account for any cores reserved for other purposes.
+For I/O-bound work (waiting on network, disk, or subprocess), <code>n</code> can exceed core count since daemons spend most of their time idle.
+Each local daemon runs a full R process, so check that per-daemon memory footprint times <code>n</code> fits in host RAM.</p>
 <h4 id="sec:with-dispatcher-default">With Dispatcher (default)</h4>
-<p>The default <code>dispatcher = TRUE</code> creates a background dispatcher process that manages daemon connections.
-Tasks dispatch efficiently in FIFO order, queueing at the dispatcher and sending to daemons as they become available.
-The event-driven approach consumes no resources while waiting and stays synchronized with events.</p>
+<p>The default <code>dispatcher = TRUE</code> enables optimal first-in-first-out (FIFO) scheduling.
+Tasks queue at the dispatcher and send to daemons as they become available.
+The <code>memory</code> argument caps the approximate total memory (MB, metric — 1 MB = 1,000,000 bytes) of queued task payloads at dispatcher.
+New tasks block until existing ones are dispatched, providing memory-based backpressure to prevent the host process from running out of memory.
+Current usage is surfaced under the <code>memory</code> field of <code>status()</code> (in MB, matching the argument unit).
+It also enables mirai cancellation via <code>stop_mirai()</code> or the <code>.timeout</code> argument to <code>mirai()</code>.</p>
 <p><code>info()</code> provides current statistics as an integer vector:</p>
 <ul>
 <li><code>connections</code>: currently active daemons</li>
@@ -293,6 +304,7 @@ The event-driven approach consumes no resources while waiting and stays synchron
 #&gt; connections  cumulative    awaiting   executing   completed 
 #&gt;           6           6           0           0           0
 </code></pre>
+<p>For a fuller picture as a list — including the listening URL and queue memory pressure — use <code>status()</code>.</p>
 <p>Set daemons to zero to reset.
 This reverts to creating a new background process per request.</p>
 <pre><code class="language-r">daemons(0)
@@ -338,7 +350,69 @@ Example with <code>box::use()</code>:</p>
 
 daemons(0)
 </code></pre>
-<h3 id="sec:4-mirai-map">4. mirai_map</h3>
+<h3 id="sec:4-memory-management">4. Memory Management</h3>
+<p>This section covers two complementary tools: queue backpressure at the dispatcher, and shared memory to avoid copying large objects to local daemons.</p>
+<h4 id="sec:queue-backpressure">Queue Backpressure</h4>
+<p>Queue backpressure applies only in dispatcher mode (<code>dispatcher = TRUE</code>, the default), where all tasks queue at a single host process.
+Under <code>dispatcher = FALSE</code>, tasks distribute round-robin to daemons and each daemon holds its own backlog — memory pressure spreads across daemon processes rather than concentrating at the host.</p>
+<p>Each <code>mirai()</code> call serialises its arguments and hands them to the dispatcher, which holds them until a daemon is free.
+By default the queue is unbounded, so passing large objects or submitting faster than daemons can consume risks host out-of-memory.</p>
+<p>The <code>memory</code> argument to <code>daemons()</code> caps the approximate total payload of queued tasks at dispatcher (in MB, metric — 1 MB = 1,000,000 bytes).
+New <code>mirai()</code> calls block until queued bytes drop below this threshold, providing memory-based backpressure.</p>
+<pre><code class="language-r">daemons(2, memory = 100)
+</code></pre>
+<p>Inspect current and peak usage via the <code>memory</code> field of <code>status()</code>:</p>
+<pre><code class="language-r">status()$memory
+#&gt;     used     peak capacity 
+#&gt;        0        0      100
+</code></pre>
+<p><code>used</code> is current and <code>peak</code> is the high-watermark queued payload, both in MB.
+Profile a representative workload with <code>memory = NULL</code> first (where <code>capacity</code> reports <code>NA</code>) to capture organic demand, then set <code>memory</code> at or above the observed <code>peak</code>.</p>
+<p>If profiling isn’t practical, treat <code>memory</code> as a fraction of host RAM rather than the whole of it.
+With local daemons, the same machine runs the host R process, the dispatcher, and <code>n</code> daemon processes — and each daemon holds an in-flight payload copy while executing — so total memory pressure scales with <code>n</code>.
+A reasonable starting point is <code>ps::ps_system_memory()[[&quot;avail&quot;]] / 2e6</code> (half of currently available RAM, in MB), revised down if <code>n</code> is large or payloads are big.
+With remote daemons only the host and dispatcher consume local RAM, so the budget can be more generous.</p>
+<h4 id="sec:non-blocking-submission">Non-blocking Submission</h4>
+<p>Blocking the host R thread is acceptable in batch scripts, but not in event-loop contexts.
+A Shiny session that calls <code>mirai()</code> from inside an ExtendedTask can’t afford to block while the queue drains — that same session is also driving the UI for all users.</p>
+<p><code>try_mirai()</code> returns immediately when the queue is full, instead of blocking:</p>
+<ul>
+<li>Below capacity, behaves identically to <code>mirai()</code> and returns a mirai.</li>
+<li>At capacity, returns <code>NULL</code> invisibly without blocking, leaving the caller to decide what to do next.</li>
+</ul>
+<pre><code class="language-r">m &lt;- try_mirai(rnorm(10)) %||% stop(&quot;queue full&quot;)
+</code></pre>
+<p>The three response strategies are: drop the task (best when the work is idempotent and frequent), retry later (queue behind a <code>later::later()</code> call), or propagate backpressure upstream by raising a condition (as in the example above).
+Which is right is application-specific.</p>
+<p>With <code>memory</code> unset or no dispatcher, <code>try_mirai()</code> always returns a mirai and behaves identically to <code>mirai()</code> — safe to use unconditionally; it only diverges in the bounded-queue case.</p>
+<p><code>daemons(memory = ...)</code> and <code>try_mirai()</code> together are the canonical event-loop combination: set the cap to what the session can afford to hold, submit through <code>try_mirai()</code>, and the application adapts to load instead of locking up.</p>
+<pre><code class="language-r">daemons(0)
+</code></pre>
+<h4 id="sec:shared-memory-with-local-daemons">Shared Memory with Local Daemons</h4>
+<p>Each <code>mirai()</code> call serialises its arguments to the daemon and the result back, even when the daemon is on the same machine.
+For large objects, this copy can dominate evaluation time.</p>
+<p>The <a href="https://github.com/shikokuchuo/mori"><code>mori</code></a> package provides shared-memory R objects that local daemons read in place, without copying.
+Wrap an atomic vector, list, or dataframe with <code>mori::share()</code>:</p>
+<pre><code class="language-r">library(lobstr)
+daemons(4)
+
+x &lt;- mori::share(rnorm(1e6))
+m &lt;- mirai(list(size = lobstr::obj_size(y), sum = sum(y)), y = x)
+m[]
+#&gt; $size
+#&gt; 840 B
+#&gt; 
+#&gt; $sum
+#&gt; [1] -1208.687
+
+daemons(0)
+</code></pre>
+<p>Only a reference to the shared memory is serialised across the wire; the daemon accesses the data directly via ALTREP (R’s alternative representation system).
+<code>lobstr::obj_size(y)</code> on the daemon reflects just the wrapper, confirming the 8 MB vector was never copied across.</p>
+<p>Shared objects are local-machine only and cannot be transferred to remote daemons — use regular argument-passing for distributed work.</p>
+<p><code>share()</code> and <code>memory =</code> compose: a <code>share()</code>-wrapped argument shrinks the queued payload to just a reference, sidestepping backpressure on the input side.
+A daemon can also <code>share()</code> its return value for symmetric zero-copy on the result side.</p>
+<h3 id="sec:5-mirai-map">5. mirai_map</h3>
 <p><code>mirai_map()</code> performs asynchronous parallel mapping over lists or vectors.</p>
 <blockquote>
 <p>Requires <code>daemons()</code> to be set (avoids launching too many ephemeral daemons).</p>
@@ -413,7 +487,7 @@ Instead:</p>
 <pre><code class="language-r">daemons(url = local_url())
 launch_local(n)
 </code></pre>
-<h3 id="sec:5-remote-infrastructure">5. Remote Infrastructure</h3>
+<h3 id="sec:6-remote-infrastructure">6. Remote Infrastructure</h3>
 <p>This section covers setting up remote daemons, launching them on remote machines, and securing connections with TLS.</p>
 <h4 id="sec:remote-daemons-overview">Remote Daemons Overview</h4>
 <p>Remote daemons run on network machines to process tasks remotely.</p>
@@ -429,14 +503,13 @@ For example, port 5555 on the IPv6 address <code>::ffff:a6f:50d</code> would be 
 <p>Query <code>launch_remote()</code> for the assigned port:</p>
 <pre><code class="language-r">launch_remote()
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://10.154.3.14:49440&quot;)'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.7.113:53887&quot;)'
 </code></pre>
 <p>Dynamically scale the number of daemons up or down as needed.</p>
 <p>Reset all connections:</p>
 <pre><code class="language-r">daemons(0)
 </code></pre>
-<p>Closing connections exits all daemons.
-With dispatcher, this exits the dispatcher first, then all connected daemons.</p>
+<p>Closing connections exits all daemons.</p>
 <h4 id="sec:launching-remote-daemons">Launching Remote Daemons</h4>
 <blockquote>
 <p>Launchers deploy daemons on remote machines.
@@ -448,7 +521,7 @@ Remote launchers run <code>Rscript</code> on remote machines.</p>
 <p>Four configuration options:</p>
 <ol>
 <li><code>ssh_config()</code> for SSH access</li>
-<li><code>cluster_config()</code> for HPC resource managers (Slurm, SGE, Torque/PBS, LSF)</li>
+<li><code>cluster_config()</code> for high-performance computing (HPC) resource managers (Slurm, SGE, Torque/PBS, LSF)</li>
 <li><code>http_config()</code> for HTTP API launch (e.g., Posit Workbench)</li>
 <li><code>remote_config()</code> for generic/custom launchers</li>
 </ol>
@@ -569,6 +642,22 @@ This means the configuration can be created early (e.g., at session start) while
 <p>Launch daemons in Posit Workbench:</p>
 <pre><code class="language-r">daemons(n = 2, url = host_url(), remote = http_config())
 </code></pre>
+<p>The default Workbench launch may be customised by supplying additional options to <code>http_config()</code>, which are forwarded to the <code>data</code> builder.
+Select a named cluster and resource profile:</p>
+<pre><code class="language-r">daemons(
+  n = 2,
+  url = host_url(),
+  remote = http_config(cluster = &quot;Kubernetes&quot;, resource_profile = &quot;rstudio&quot;)
+)
+</code></pre>
+<p>Or specify custom resources in place of a named profile (4 CPUs, 8 GB memory):</p>
+<pre><code class="language-r">daemons(
+  n = 2,
+  url = host_url(),
+  remote = http_config(cluster = &quot;Kubernetes&quot;, cpus = 4, memory = 8192)
+)
+</code></pre>
+<p>The full list of accepted options (<code>rscript</code>, <code>job_name</code>, <code>cluster</code>, <code>resource_profile</code>, <code>cpus</code>, <code>memory</code>) is documented at <code>?http_config</code>.</p>
 <h5 id="sec:custom-http-apis">Custom HTTP APIs</h5>
 <p>For custom HTTP APIs, provide URL, authentication, and request body.
 The <code>data</code> argument should include <code>&quot;%s&quot;</code> as a placeholder where the daemon launch command is inserted at launch time:</p>
@@ -613,7 +702,7 @@ Slurm example:</p>
 <pre><code class="language-r">daemons(url = host_url())
 launch_remote()
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://10.154.3.14:49441&quot;)'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.7.113:53888&quot;)'
 daemons(0)
 </code></pre>
 <h4 id="sec:tls-secure-connections">TLS Secure Connections</h4>
@@ -627,36 +716,36 @@ Private keys remain on the host.</p>
 <p>Self-signed certificates are included in <code>launch_remote()</code> commands:</p>
 <pre><code class="language-r">launch_remote(1)
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://10.154.3.14:49442&quot;,tlscert=c(&quot;-----BEGIN CERTIFICATE-----
-#&gt; MIIFPTCCAyWgAwIBAgIBATANBgkqhkiG9w0BAQsFADA2MRQwEgYDVQQDDAsxMC4x
-#&gt; NTQuMy4xNDERMA8GA1UECgwITmFub25leHQxCzAJBgNVBAYTAkpQMB4XDTAxMDEw
-#&gt; MTAwMDAwMFoXDTMwMTIzMTIzNTk1OVowNjEUMBIGA1UEAwwLMTAuMTU0LjMuMTQx
-#&gt; ETAPBgNVBAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDCCAiIwDQYJKoZIhvcNAQEB
-#&gt; BQADggIPADCCAgoCggIBAItezzjpIfLF1RT3QbuKUXS/YKDF6bd4TlEAfAH58BGh
-#&gt; Ds8sR9gmiguockMONgYCCKZMY7ccFqycQGa0phE69udpGFvpucx1R7GblzlY9jHa
-#&gt; rHhivqSdSAXXwMILA7OcOj/j+tteTCdnCTDVUQYYghN+BLTxqxRwsVuw140aFLRF
-#&gt; 2xi986TeHK5noUd+T5IUiijlRBF+nb2I+CtkA/EoEr6/+tJyfMPB5MO5tjq/S8/G
-#&gt; mIfhOZB7OBVYeuWiA83ZSQuOVCj+8HRbTMa8IinfmO/+9ukv1veykj7MJeEl0MBk
-#&gt; OvtOuCKhqc+/XqdNO03BQIKznQ8zsuWuEyjVcH3K/7R4/DdkRRDs9OMF25ccZsal
-#&gt; EHcoI4YPdgY4G6GIgo5CDXy/bHddffh0fuO8GwowfpfDX1jVcLH6zceUW4gaKto5
-#&gt; 8592yH/TzWEOxf31ie0P1G/xxkJzgunL9/32dUstAXyNM+LMm4DoJDrP484l40/i
-#&gt; +OkthXT2VZIngD8XiTF+3pdEZ4L3p/TJhCi33jeMMHk2auoB/DDKZDXzHcqHedR5
-#&gt; epB97DNDl+mzK6o5g1PC/EW5/DmDXbs7XeYC8LdCWYRbarBgAO31EhvuWOYn6pnm
-#&gt; L8fFRAUbGQwpK/0G7XSXLPS7WbMIxEyju+7g6fyT43AXxk/OAKdpQrSuo9mcn8TN
-#&gt; AgMBAAGjVjBUMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFBfzosBcf9Le
-#&gt; NliCnLkwPfh+l0y4MB8GA1UdIwQYMBaAFBfzosBcf9LeNliCnLkwPfh+l0y4MA0G
-#&gt; CSqGSIb3DQEBCwUAA4ICAQASYDmKlYK9rNoGaEp8Ol4KI4Pu1rMEj8pLGfmuRDYQ
-#&gt; 7pDTU29dGDym3Cy5ViHfHBTgPq6opj5P7ByykIIt55efr9zzkw1MS2NF2LRWYiHF
-#&gt; jxT4DCoukDSLFELv8Jkoc8mWpST6Pr2hE3QKx63Kh6GjHUzX0BV87/Gy1jM9sP63
-#&gt; 03/rVI5VG1BQFKmqZeQfJBxstLzoEB/xVZ44ytHN+Q2QuwhzMKEPcA1jqWNlq94u
-#&gt; hg6FySyYSZxmR1otdky2q63vLyxNsS/1h1FE2YLV6VBhLH4UdQr9OfuQghSFXcov
-#&gt; 9U11zhBqx5ANyjYDxyMqI6V4+XOHXL4nxNtTTCZX0YIoSRgieYh3WTmqtM0j6EDS
-#&gt; 2QPn2W4m1oYEBPKfgeCtICFf6PkrpJ4vM+iUI9jA+AY71VvdvlZx+bXZvrNZBIs4
-#&gt; mj6XHiAcN6nlKwTcdfhhvgGJ4VTadZwzeJpLZS5ZhxnwUIlgBMfL8rFdWTYZRxG/
-#&gt; 6MApxl/eeHXbFafN2n5wWMhlNXSBFQMlxoCppONzrVgaq8/O2nsXhBpxC3/RklWm
-#&gt; yU3T2QMRQ+dQgZm30TsEnEHsndN6OpAJtaTwgD7pQb2zFAE+4JNFjWN389UwmQ7N
-#&gt; Xa5eYIyPVUoYuZWvQ95RQ9xquU9LAOqU4owcoINiEwAjhSQ4tUUUKQLhajW91urG
-#&gt; xA==
+#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://192.168.7.113:53889&quot;,tlscert=c(&quot;-----BEGIN CERTIFICATE-----
+#&gt; MIIFQTCCAymgAwIBAgIBATANBgkqhkiG9w0BAQsFADA4MRYwFAYDVQQDDA0xOTIu
+#&gt; MTY4LjcuMTEzMREwDwYDVQQKDAhOYW5vbmV4dDELMAkGA1UEBhMCSlAwHhcNMDEw
+#&gt; MTAxMDAwMDAwWhcNMzAxMjMxMjM1OTU5WjA4MRYwFAYDVQQDDA0xOTIuMTY4Ljcu
+#&gt; MTEzMREwDwYDVQQKDAhOYW5vbmV4dDELMAkGA1UEBhMCSlAwggIiMA0GCSqGSIb3
+#&gt; DQEBAQUAA4ICDwAwggIKAoICAQCGCUyn6GWWGAwNGQ5jhku6BWSKqRD/cgmEk7MA
+#&gt; Whsxb5nSPqsqh4ivTXJQZ1LzhcESX9eI9whwzknQ9MVCOA+Rij9EVzRu9Ypawvax
+#&gt; 1yDZmlwSG5WAUva9vGtMZirA09oMp8+8hKt9eY44DG3EikP5g7lxWwaCTsz0Q/br
+#&gt; 9YechhF458mGoDmM7yGp/L65mVsn52nMrK6QWJ7wrfqNyqzzz35IEI7PVxKk0KzD
+#&gt; bcUsFYsCg1+STNz1ADAlUtsJFD0RUg38oAUn0cBi77sLBX9TQihPWInUY51tzyvI
+#&gt; fukiiavDE5N56z3JKqTQZVk66H5kDEPz3/zZQB6YeNjV7UEua63a6FOLD/hVi2fa
+#&gt; C3S/ud2xEFudik3xVVoNf+oQbQ4aLH6YUlresFXhvlU/LKLmbyDwjzXq+QRdyhIt
+#&gt; mWJisrvK19/2cUSt1AflIt8nQYVgHhJsTxK40FLq7bGvwKPVibJYf0+8DW2VFqjj
+#&gt; Z2TMBjYom0Ynixs3quQ7j92+2o2WK6O6uL06pKiLNiJi8CD/7pqTXEHCkYGh03tL
+#&gt; 5w+00bIXWXH4OoYmtyuHjvDlTKYQVzMOTwxH9zotOvq88Ifzn5UBZH7RvDbqFyo8
+#&gt; KvsVXuVKcLL/F0tzraExI+Zv5/YjrSqK7Jxtrdd3QN1750rjnujiOjfU1iJwX20a
+#&gt; ZIc3JQIDAQABo1YwVDASBgNVHRMBAf8ECDAGAQH/AgEAMB0GA1UdDgQWBBRxU45I
+#&gt; ZGU7XK6DwHipxYuGgnsnCzAfBgNVHSMEGDAWgBRxU45IZGU7XK6DwHipxYuGgnsn
+#&gt; CzANBgkqhkiG9w0BAQsFAAOCAgEAIuzA09/e739fQ9/cwf7M6KXNHlv5Fd2aO5l/
+#&gt; g5B7h7o/bZgGghchYNAmC+e7o0QSUoS2giGx3EW1GsH587+5V6ZliBYnl5LeTlRW
+#&gt; 2OUq4odZYJvykpbyDatohnz+YzDQcdxYtOdJrHrqmjSuL2W28QnzKyYGTVbSi/4V
+#&gt; cN8QMw0i53iayWYDmHtshXOF5DmnNCF+8ffVuR+B4Tzf3XN98zZU7gwxEEIDzF5n
+#&gt; KfeVmAAUg69eQiALpJ6ZyWUFHQAd92H9Gezx8qMqCia1Iqym8Vg7aaWmXak0jYjm
+#&gt; 35Mrfn57Oej8b7epSzsWKvZu2ZuKyBJ0T2rjdpXJwqz3IrMFJDM6dV9NFDfnGiAq
+#&gt; uI64s80uRGvxZ+OtPvHD+1OMM9wcJGCfLx2INTII/AE6pWcCb2ddOfvv6JX1n54t
+#&gt; pu5woTWihH3BaI604fmt1g+CHHVzw0Rpi1uPzIumzD5B59a8BptbSPqkoy2YlOU4
+#&gt; 2c6VoY88pZvADYjzDMLVJHGax/FUDJeocN3TF+Ao2e9C0lPjrqb8i7tI49ZgNK6L
+#&gt; YeLYVjWIWm+BUGN5xef7IBS6x0Vwqgrsffwb/64g11MJx7Tk9N6oOXYEN4TbOEfn
+#&gt; evegzVN2xHKCml+R7W5/02yegUBEkzlo386v/5I4RfsqVb4yohp0HIZ6up6A+UPm
+#&gt; X1Lbtco=
 #&gt; -----END CERTIFICATE-----
 #&gt; &quot;,&quot;&quot;))'
 </code></pre>
@@ -695,7 +784,7 @@ Private keys remain on the host.</p>
 <li>If these are concatenated together as a single character string <code>certchain</code>, then the character vector comprising this and an empty character string <code>c(certchain, &quot;&quot;)</code> may be supplied to ‘tlscert’.</li>
 <li>Alternatively, if these are written to a file (and the file replicated on the remote machines), then the ‘tlscert’ argument may also be specified as a path/filename (assuming these are the same on each machine).</li>
 </ul>
-<h3 id="sec:6-compute-profiles">6. Compute Profiles</h3>
+<h3 id="sec:7-compute-profiles">7. Compute Profiles</h3>
 <p>The <code>.compute</code> argument to <code>daemons()</code> creates separate, independent daemon pools (<em>compute profiles</em>) for heterogeneous compute requirements:</p>
 <ul>
 <li>Target daemons with specific specs (CPUs, memory, GPU, accelerators)</li>
@@ -704,7 +793,7 @@ Private keys remain on the host.</p>
 <p>Pass a character string to <code>.compute</code> as the profile name (<code>NULL</code> defaults to ‘default’).
 Settings save under this name.</p>
 <p>Specify <code>.compute</code> in <code>mirai()</code> to use a profile (<code>NULL</code> uses ‘default’).</p>
-<p>Other functions (<code>info()</code>, <code>launch_local()</code>, <code>launch_remote()</code>) also accept <code>.compute</code>.</p>
+<p>Other functions (<code>info()</code>, <code>status()</code>, <code>launch_local()</code>, <code>launch_remote()</code>) also accept <code>.compute</code>.</p>
 <h4 id="sec:with-daemons-and-local-daemons"><code>with_daemons()</code> and <code>local_daemons()</code></h4>
 <p><code>with_daemons()</code> or <code>local_daemons()</code> with a profile name sets the default for all functions within that scope:</p>
 <pre><code class="language-r">daemons(1, .compute = &quot;cpu&quot;)
@@ -722,14 +811,14 @@ with_daemons(&quot;gpu&quot;, {
 })
 
 m1[]
-#&gt; [1] 11456
+#&gt; [1] 42715
 m2[] # different to m1
-#&gt; [1] 11482
+#&gt; [1] 42730
 
 m3[] # same as m1
-#&gt; [1] 11456
+#&gt; [1] 42715
 m4[] # same as m1
-#&gt; [1] 11456
+#&gt; [1] 42715
 
 with_daemons(&quot;cpu&quot;, daemons(0))
 with_daemons(&quot;gpu&quot;, daemons(0))
@@ -748,9 +837,9 @@ Don’t wrap <code>shiny::shinyApp()</code> since <code>runApp()</code> is calle
 </blockquote>
 <p>Shiny apps execute all mirai calls before returning (blocking).
 For other expressions, collect all mirai values to ensure completion before daemon reset.</p>
-<h3 id="sec:7-advanced-topics">7. Advanced Topics</h3>
+<h3 id="sec:8-advanced-topics">8. Advanced Topics</h3>
 <h4 id="sec:random-number-generation">Random Number Generation</h4>
-<p>mirai uses L’Ecuyer-CMRG streams (like base R’s parallel package) for statistically-sound parallel RNG.</p>
+<p>mirai uses L’Ecuyer-CMRG streams (like base R’s parallel package) for statistically-sound parallel random number generation (RNG).</p>
 <p>Streams divide the RNG sequence at far-apart intervals that don’t overlap, ensuring valid parallel results.</p>
 <p><strong>Default (<code>seed = NULL</code>)</strong>: New stream per daemon (like base R):</p>
 <ul>
@@ -776,10 +865,10 @@ mp &lt;- mirai_map(1:2, \(x) Sys.getpid())
 daemons(0)
 mp[]
 #&gt; [[1]]
-#&gt; [1] 7224
+#&gt; [1] 5757
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] 7224
+#&gt; [1] 5757
 
 
 # Use sync with the 'sync' compute profile:
@@ -790,10 +879,10 @@ with_daemons(&quot;sync&quot;, {
 daemons(0, .compute = &quot;sync&quot;)
 mp[]
 #&gt; [[1]]
-#&gt; [1] 7224
+#&gt; [1] 5757
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] 7224
+#&gt; [1] 5757
 </code></pre>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>

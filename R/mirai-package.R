@@ -1,13 +1,13 @@
 #' mirai: Minimalist Async Evaluation Framework for R
 #'
-#' *moving already* \cr \cr
 #' Evaluates R expressions asynchronously and in parallel, locally or
 #' distributed across networks. An official parallel cluster type for R. Built
 #' on 'nanonext' and 'NNG', its non-polling, event-driven architecture scales
 #' from a laptop to thousands of processes across high-performance computing
 #' clusters and cloud platforms. Features FIFO scheduling with task
-#' cancellation, promises for reactive programming, 'OpenTelemetry' distributed
-#' tracing, and custom serialization for cross-language data types.
+#' cancellation and bounded queues, promises for reactive programming,
+#' 'OpenTelemetry' distributed tracing, and custom serialization for
+#' cross-language data types.
 #'
 #' @section Notes:
 #'
@@ -30,12 +30,7 @@
 #'
 #' `vignette("mirai", package = "mirai")`
 #'
-#' @importFrom nanonext .advance call_aio call_aio_ collect_aio collect_aio_
-#'   .context cv cv_reset cv_signal cv_value dial .dispatcher handler
-#'   http_server ip_addr is_error_value .keep listen .mark mclock monitor msleep
-#'   ncurl nng_error opt opt<- parse_url pipe_id pipe_notify race_aio random
-#'   reap recv recv_aio request send serial_config socket stat stop_aio
-#'   stop_request tls_config unresolved .unresolved until wait wait_ write_cert
+#' @importFrom nanonext .advance call_aio call_aio_ collect_aio collect_aio_ .context cv cv_reset cv_signal cv_value dial .dispatcher_capacity .dispatcher_gate .dispatcher_info .dispatcher_start .dispatcher_stop .dispatcher_try_gate .dispatcher_wait handler http_server ip_addr is_error_value .keep listen .mark mclock monitor msleep ncurl nng_error opt opt<- parse_url pipe_id pipe_notify race_aio random reap recv recv_aio request send serial_config socket stat stop_aio stop_request tls_config unresolved .unresolved until wait wait_ write_cert
 #'
 "_PACKAGE"
 
@@ -95,7 +90,6 @@ cli_enabled <- FALSE
     posit_api = "can only be used from Posit Workbench",
     secretbase = "the secretbase package is required, try: `install.packages('secretbase')`",
     sync_daemons = "mirai: initial sync with daemon(s) [%d secs elapsed]",
-    sync_dispatcher = "mirai: initial sync with dispatcher [%d secs elapsed]",
     synchronous = "daemons cannot be launched for synchronous compute profiles",
     within_map = "cannot create local daemons from within mirai map"
   ),

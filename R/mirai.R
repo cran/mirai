@@ -36,7 +36,10 @@
 #'   own independent set of daemons. `NULL` (default) uses the 'default'
 #'   profile.
 #'
-#' @return A 'mirai' object.
+#' @return For [mirai()]: a 'mirai' object.
+#'
+#'   For [try_mirai()]: a 'mirai' object, or `NULL` (invisibly) if the
+#'   dispatcher's `memory` capacity is exhausted at the time of submission.
 #'
 #' @section Evaluation:
 #'
@@ -137,60 +140,62 @@
 #' @export
 #'
 mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) {
-  missing(.expr) && stop(._[["missing_expression"]])
+  v <- validate_dispatch(missing(.expr), list(...), .args)
   envir <- compute_env(.compute)
-
   expr <- substitute(.expr)
-  globals <- list(...)
-  length(globals) &&
-    {
-      gn <- names(globals)
-      if (is.null(gn)) {
-        is.environment(globals[[1L]]) || stop(._[["named_dots"]])
-        globals <- as.list.environment(globals[[1L]], all.names = TRUE)
-        globals[[".Random.seed"]] <- NULL
-      }
-      all(nzchar(gn)) || stop(._[["named_dots"]])
-    }
-  ctx_spn <- otel_mirai_span(envir)
-  if (length(envir[["seed"]])) {
-    globals[[".Random.seed"]] <- next_stream(envir)
-  }
-  data <- list(
-    ._expr_. = if (
-      is.symbol(expr) && exists(as.character(expr), envir = parent.frame()) && is.language(.expr)
-    ) {
-      .expr
-    } else {
-      expr
-    },
-    ._globals_. = globals,
-    ._otel_. = ctx_spn[[1L]]
-  )
 
-  if (length(.args)) {
-    if (is.environment(.args)) {
-      .args <- as.list.environment(.args, all.names = TRUE)
-    } else {
-      length(names(.args)) && all(nzchar(names(.args))) || stop(._[["named_args"]])
-    }
-    data <- c(.args, data)
+  if (!is.null(envir)) {
+    disp <- envir[["dispatcher"]]
+    is.null(disp) || envir[["unbounded"]] || .dispatcher_gate(disp)
   }
 
-  is.null(envir) && return(ephemeral_daemon(data, .timeout))
+  do_mirai(expr, .expr, v[[1L]], v[[2L]], .timeout, envir, parent.frame())
+}
 
-  req <- request(
-    .context(envir[["sock"]]),
-    data,
-    send_mode = 1L,
-    recv_mode = 1L,
-    timeout = .timeout,
-    cv = envir[["cv"]],
-    id = envir[["dispatcher"]]
-  )
-  otel_set_span_id(ctx_spn[[2L]], attr(req, "id"))
-  envir[["sync"]] && evaluate_sync(envir)
-  invisible(req)
+#' @rdname mirai
+#'
+#' @section Memory:
+#'
+#' The `memory` argument to [daemons()] caps the queued task payload at
+#' dispatcher (in MB), preventing host out-of-memory. [mirai()] blocks the
+#' calling R thread on submission until queued bytes drop below this capacity.
+#'
+#' [try_mirai()] is a non-blocking variant for event-loop contexts (Shiny,
+#' promises) where the host R thread cannot afford to wait. It returns `NULL`
+#' (invisibly) immediately if the queue is at the memory limit, instead of
+#' blocking. With no dispatcher, or `memory` unset, [try_mirai()] always
+#' returns a 'mirai'. Respond to a `NULL` return value by dropping the task,
+#' retrying later, or propagating backpressure upstream.
+#'
+#' Use [status()] to inspect current and peak queue usage under its `memory`
+#' field.
+#'
+#' @examplesIf interactive()
+#' # non-blocking submission - caller handles backpressure
+#' daemons(1, memory = 1)
+#' m <- try_mirai(1 + 1)
+#' if (is.null(m)) {
+#'   # queue at memory limit - drop, retry, signal upstream, etc.
+#' } else {
+#'   m[]
+#' }
+#' daemons(0)
+#'
+#' @export
+#'
+try_mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) {
+  v <- validate_dispatch(missing(.expr), list(...), .args)
+  envir <- compute_env(.compute)
+  expr <- substitute(.expr)
+
+  if (!is.null(envir)) {
+    disp <- envir[["dispatcher"]]
+    if (!is.null(disp) && !envir[["unbounded"]] && !.dispatcher_try_gate(disp)) {
+      return(invisible())
+    }
+  }
+
+  do_mirai(expr, .expr, v[[1L]], v[[2L]], .timeout, envir, parent.frame())
 }
 
 #' Evaluate Everywhere
@@ -206,7 +211,8 @@ mirai <- function(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL) 
 #' [everywhere()] call must complete on all daemons before subsequent mirai
 #' evaluations proceed.
 #'
-#' Calling [everywhere()] does not affect the RNG stream for mirai calls when
+#' Calling [everywhere()] does not affect the random number generator (RNG)
+#' stream for mirai calls when
 #' using a reproducible `seed` value at [daemons()]. This allows the seed
 #' associated with each mirai call to be the same, regardless of the number of
 #' daemons used. However, code evaluated in an [everywhere()] call is itself
@@ -318,7 +324,8 @@ everywhere <- function(.expr, ..., .args = list(), .min = 1L, .compute = NULL) {
 #'
 #' @inheritSection mirai Errors
 #'
-#' @seealso [race_mirai()]
+#' @seealso [collect_mirai()] to return the value directly rather than the
+#'   'mirai' object. [race_mirai()] to wait for the first of many.
 #'
 #' @examplesIf interactive()
 #' # using call_mirai()
@@ -426,6 +433,9 @@ race_mirai <- function(x, .compute = NULL) {
 #' @inheritSection call_mirai Alternatively
 #' @inheritSection mirai Errors
 #'
+#' @seealso [call_mirai()] to return the 'mirai' object (with the value at
+#'   `$data`) rather than the value directly.
+#'
 #' @examplesIf interactive()
 #' # using collect_mirai()
 #' df1 <- data.frame(a = 1, b = 2)
@@ -452,7 +462,7 @@ collect_mirai <- function(x, options = NULL) {
     options <- names(options)
   }
   dots <- mget(options, envir = .opts)
-  mmap(x, dots)
+  mmap(x, dots, envir = parent.frame())
 }
 
 #' mirai (Stop)
@@ -651,6 +661,71 @@ conditionMessage.miraiError <- function(c) attr(c, "message")
 
 # internals --------------------------------------------------------------------
 
+# Prelude validation shared by mirai() and try_mirai(). `where` is a lazy
+# default: never forced on the success path, so it costs only an unforced
+# promise. On the error branch it resolves to the call object of the user-
+# facing front-end, preserving `Error in mirai(...) :` / `Error in try_mirai(...) :`
+# headers.
+validate_dispatch <- function(missing_expr, globals, args, where = sys.call(-1L)) {
+  missing_expr && stop(simpleError(._[["missing_expression"]], call = where))
+  if (length(globals)) {
+    gn <- names(globals)
+    if (is.null(gn)) {
+      is.environment(globals[[1L]]) || stop(simpleError(._[["named_dots"]], call = where))
+      globals <- as.list.environment(globals[[1L]], all.names = TRUE)
+      globals[[".Random.seed"]] <- NULL
+    } else if (!all(nzchar(gn))) {
+      stop(simpleError(._[["named_dots"]], call = where))
+    }
+  }
+  if (length(args)) {
+    if (is.environment(args)) {
+      args <- as.list.environment(args, all.names = TRUE)
+    } else if (!length(names(args)) || !all(nzchar(names(args)))) {
+      stop(simpleError(._[["named_args"]], call = where))
+    }
+  }
+  list(globals, args)
+}
+
+do_mirai <- function(expr, .expr, globals, .args, .timeout, envir, parent) {
+  ctx_spn <- otel_mirai_span(envir)
+  if (length(envir[["seed"]])) {
+    globals[[".Random.seed"]] <- next_stream(envir)
+  }
+  data <- list(
+    ._expr_. = if (
+      is.symbol(expr) && exists(as.character(expr), envir = parent) && is.language(.expr)
+    ) {
+      .expr
+    } else {
+      expr
+    },
+    ._globals_. = globals,
+    ._otel_. = ctx_spn[[1L]]
+  )
+
+  if (length(.args)) {
+    data <- c(.args, data)
+  }
+
+  is.null(envir) && return(ephemeral_daemon(data, .timeout))
+
+  req <- request(
+    .context(envir[["sock"]]),
+    data,
+    send_mode = 1L,
+    recv_mode = 1L,
+    timeout = .timeout,
+    cv = envir[["cv"]],
+    id = envir[["dispatcher"]]
+  )
+
+  otel_set_span_id(ctx_spn[[2L]], attr(req, "id"))
+  envir[["sync"]] && evaluate_sync(envir)
+  invisible(req)
+}
+
 ephemeral_daemon <- function(data, timeout) {
   url <- local_url()
   sock <- req_socket(url)
@@ -702,12 +777,8 @@ mk_mirai_error <- function(cnd) {
   }
   idx <- max(which(as.logical(lapply(sc, `==`, eval_call))))
   sc <- sc[(length(sc) - 1L):(idx + 1L)]
-  if (sc[[1L]][[1L]] == ".handleSimpleError") {
-    sc <- sc[-1L]
-  }
   cnd[["stack.trace"]] <- lapply(sc, `attributes<-`, NULL)
   `class<-`(`attributes<-`(msg, cnd), c("miraiError", "errorValue", "try-error"))
 }
 
-.connReset <- serialize(`class<-`(19L, c("errorValue", "try-error")), NULL)
 .snapshot <- expression(on.exit(mirai:::snapshot(), add = TRUE))

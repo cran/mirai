@@ -2,9 +2,12 @@
 % Please edit documentation in R/mirai.R
 \name{mirai}
 \alias{mirai}
+\alias{try_mirai}
 \title{mirai (Evaluate Async)}
 \usage{
 mirai(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL)
+
+try_mirai(.expr, ..., .args = list(), .timeout = NULL, .compute = NULL)
 }
 \arguments{
 \item{.expr}{(expression) code to evaluate asynchronously, or a language
@@ -27,7 +30,10 @@ own independent set of daemons. \code{NULL} (default) uses the 'default'
 profile.}
 }
 \value{
-A 'mirai' object.
+For \code{\link[=mirai]{mirai()}}: a 'mirai' object.
+
+For \code{\link[=try_mirai]{try_mirai()}}: a 'mirai' object, or \code{NULL} (invisibly) if the
+dispatcher's \code{memory} capacity is exhausted at the time of submission.
 }
 \description{
 Evaluate an expression asynchronously in a new background R process or
@@ -98,6 +104,24 @@ If a daemon crashes or terminates unexpectedly during evaluation, an
 interrupts, and timeouts.
 }
 
+\section{Memory}{
+
+
+The \code{memory} argument to \code{\link[=daemons]{daemons()}} caps the queued task payload at
+dispatcher (in MB), preventing host out-of-memory. \code{\link[=mirai]{mirai()}} blocks the
+calling R thread on submission until queued bytes drop below this capacity.
+
+\code{\link[=try_mirai]{try_mirai()}} is a non-blocking variant for event-loop contexts (Shiny,
+promises) where the host R thread cannot afford to wait. It returns \code{NULL}
+(invisibly) immediately if the queue is at the memory limit, instead of
+blocking. With no dispatcher, or \code{memory} unset, \code{\link[=try_mirai]{try_mirai()}} always
+returns a 'mirai'. Respond to a \code{NULL} return value by dropping the task,
+retrying later, or propagating backpressure upstream.
+
+Use \code{\link[=status]{status()}} to inspect current and peak queue usage under its \code{memory}
+field.
+}
+
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 # specifying objects via '...'
@@ -152,5 +176,16 @@ expr <- quote(a + b + 2)
 args <- list(a = 2, b = 3)
 m <- mirai(.expr = expr, .args = args)
 collect_mirai(m)
+\dontshow{\}) # examplesIf}
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
+# non-blocking submission - caller handles backpressure
+daemons(1, memory = 1)
+m <- try_mirai(1 + 1)
+if (is.null(m)) {
+  # queue at memory limit - drop, retry, signal upstream, etc.
+} else {
+  m[]
+}
+daemons(0)
 \dontshow{\}) # examplesIf}
 }

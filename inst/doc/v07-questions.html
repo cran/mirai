@@ -237,7 +237,7 @@ You may be passing more than intended.</p>
 <p>To launch a daemon for one task only:</p>
 <pre><code class="language-r">launch_remote(remote = ssh_config(&quot;ssh://servername&quot;), maxtasks = 1L)
 </code></pre>
-<p>This enables on-demand HPC cluster jobs via <code>cluster_config()</code> without persistent daemons. Note: you incur latency costs from job launch time.</p>
+<p>This enables on-demand high-performance computing (HPC) cluster jobs via <code>cluster_config()</code> without persistent daemons. Note: you incur latency costs from job launch time.</p>
 <h3 id="sec:6-launching-daemons-vanilla">6. Launching daemons <code>--vanilla</code></h3>
 <p>By default, daemons load <code>.Renviron</code> and <code>.Rprofile</code> files at startup.
 This can slow down daemon initialization if these files contain expensive operations such as <code>renv::status()</code> checks.</p>

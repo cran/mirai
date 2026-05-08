@@ -26,6 +26,7 @@ test_zero(status()[["daemons"]])
 test_false(daemons(0L))
 test_error(mirai(), "missing expression, perhaps wrap in {}?")
 test_error(mirai(a, 1), "all `...` arguments must be named")
+test_error(mirai(a, foo = 1, 2), "all `...` arguments must be named")
 test_error(mirai(a, .args = list(1)), "all items in `.args` must be named")
 test_error(mirai_map(1:2, identity))
 test_error(daemons(url = "URL"))
@@ -61,12 +62,16 @@ test_identical(local_url(tcp = TRUE), "tcp://127.0.0.1:0")
 test_true(grepl("5555", local_url(tcp = TRUE, port = 5555), fixed = TRUE))
 test_type("list", ssh_config("ssh://remotehost"))
 test_type("list", ssh_config("ssh://remotehost", tunnel = TRUE))
+test_equal(ssh_config("ssh://user@remotehost")$args[[1L]][2L], "user@remotehost")
+test_equal(ssh_config("ssh://remotehost")$args[[1L]][2L], "remotehost")
 test_type("list", cluster_config())
 test_type("list", cfg <- http_config(url = "https://example.com", cookie = "abc", data = '{"cmd":"%s"}'))
 test_equal(cfg$type, "http")
 test_equal(cfg$url, "https://example.com")
 test_equal(cfg$cookie, "abc")
 test_equal(cfg$data, '{"cmd":"%s"}')
+test_identical(cfg$dots, list())
+test_identical(http_config(data = '{"%s"}', cluster = "k8s", cpus = 4)$dots, list(cluster = "k8s", cpus = 4))
 test_true(is_mirai_interrupt(r <- mirai:::mk_mirai_interrupt()))
 test_print(r)
 test_true(is_mirai_error(r <- `class<-`("Error in: testing\n", c("miraiError", "errorValue", "try-error"))))
@@ -280,7 +285,6 @@ connection && {
 }
 # advanced daemons and dispatcher tests
 connection && NOT_CRAN && {
-  Sys.sleep(0.5)
   test_true(daemons(url = "ws://:0", correctype = 0L, token = TRUE))
   test_false(daemons(0L))
   test_zero(with(daemons(url = "tcp://:0", correcttype = c(1, 0), token = TRUE), {8L - 9L + 1L}))
@@ -290,9 +294,8 @@ connection && NOT_CRAN && {
   suppressMessages(test_true(daemons(n = 2, "ws://:0")))
   restore_binding(ns, ".limit_long_secs", original_lls)
   restore_binding(ns, ".limit_long", original_ll)
-  test_type("character", nextget("dispatcher"))
+  test_type("externalptr", nextget("dispatcher"))
   test_equal(length(nextget("url")), 1L)
-  Sys.sleep(1L)
   status <- status()
   test_type("list", status)
   test_zero(status[["connections"]])
@@ -305,13 +308,11 @@ connection && NOT_CRAN && {
   test_type("list", res <- mirai_map(c(1,1), rnorm)[.progress])
   test_type("double", res[[1L]])
   test_type("double", res[[2L]])
-  Sys.sleep(0.5)
   test_false(daemons(0L))
-  Sys.sleep(1L)
   test_true(daemons(url = "tls+tcp://127.0.0.1:0", dispatcher = TRUE))
   test_type("character", launch_remote(remote = ssh_config(c("ssh://remotehost", "ssh://remotenode"), tunnel = TRUE, command = "echo")))
   test_equal(launch_local(), 1L)
-  Sys.sleep(1L)
+  everywhere({})
   test_true(grepl("CERTIFICATE", launch_remote(), fixed = TRUE))
   q <- quote(list2env(list(b = 2), envir = globalenv()))
   m <- mirai("Seattle", .timeout = 1000)
@@ -332,13 +333,13 @@ connection && NOT_CRAN && {
 }
 # TLS tests
 connection && NOT_CRAN && {
-  Sys.sleep(0.5)
   cfg <- serial_config("custom", function(x) serialize(x, NULL), unserialize)
-  test_true(daemons(url = host_url(), pass = "test", serial = cfg))
+  test_true(daemons(url = host_url(tls = TRUE), pass = "test", serial = cfg))
   if (.Platform$OS.type == "unix") test_type("character", launch_remote(remote = cluster_config(command = "/bin/sh", options = "#SBATCH", rscript = file.path(R.home("bin"), "Rscript"))))
   test_type("list", launch_remote(2L, remote = http_config(url = "http://127.0.0.1:0", data = '{"cmd":"%s"}')))
+  test_type("list", launch_remote(1L, remote = http_config(url = "http://127.0.0.1:0", data = function(label) sprintf('{"cmd":"%%s","label":"%s"}', label), label = "x")))
   test_equal(launch_local(1L), 1L)
-  Sys.sleep(1L)
+  everywhere({})
   q <- quote({ list2env(list(b = 2), envir = globalenv()); 0L})
   mm <- everywhere(q)
   test_type("list", mm)
@@ -357,10 +358,125 @@ connection && NOT_CRAN && {
   }
   test_false(test_tls(nanonext::write_cert(cn = "127.0.0.1")))
 }
+# memory tests
+connection && NOT_CRAN && {
+  # status() has no memory field with no profile / no dispatcher
+  test_null(status()[["memory"]])
+  test_true(daemons(1, dispatcher = FALSE))
+  test_null(status()[["memory"]])
+  test_false(daemons(0L))
+  # Unlimited: memory = NULL → used/peak zero, capacity reported as NA
+  test_true(daemons(1, memory = NULL))
+  qs <- status()[["memory"]]
+  test_type("double", qs)
+  test_equal(length(qs), 3L)
+  test_zero(qs[["used"]])
+  test_zero(qs[["peak"]])
+  test_identical(qs[["capacity"]], NA_real_)
+  test_false(daemons(0L))
+  # Degenerate inputs treated as unbounded (C normalizes to limit_bytes = 0)
+  for (mem in list(0, -1, NA_real_, Inf)) {
+    test_true(daemons(1, memory = mem))
+    test_equal(collect_mirai(mirai(1L + 1L)), 2L)
+    test_identical(status()[["memory"]][["capacity"]], NA_real_)
+    test_false(daemons(0L))
+  }
+  # Queue accumulates with no daemon connected; peak retained after drain.
+  # Verifying via peak (monotonic high-watermark) after drain is robust to
+  # cross-thread visibility latency in queue accounting.
+  test_true(daemons(url = local_url(), memory = 1))
+  m1 <- mirai(Sys.sleep(0.1))
+  while (status()[["memory"]][["used"]] == 0) Sys.sleep(0.05)
+  launch_local(1L)
+  test_null(call_mirai(m1)$data)
+  while (status()[["memory"]][["used"]] > 0) Sys.sleep(0.05)
+  qs <- status()[["memory"]]
+  test_zero(qs[["used"]])
+  test_true(qs[["peak"]] > 0)
+  test_equal(qs[["capacity"]], 1)
+  test_false(daemons(0L))
+  # Cancel clears used bytes; peak still reflects prior occupancy.
+  test_true(daemons(url = local_url(), memory = 1))
+  m <- mirai(Sys.sleep(0.1))
+  while (status()[["memory"]][["used"]] == 0) Sys.sleep(0.05)
+  test_true(stop_mirai(m))
+  while (status()[["memory"]][["used"]] > 0) Sys.sleep(0.05)
+  qs <- status()[["memory"]]
+  test_zero(qs[["used"]])
+  test_true(qs[["peak"]] > 0)
+  test_false(daemons(0L))
+}
+# try_mirai non-blocking submission tests
+connection && NOT_CRAN && {
+  # try_mirai returns mirai when dispatcher = FALSE (no gate to consult)
+  test_true(daemons(1, dispatcher = FALSE))
+  m_nd <- try_mirai(1L + 1L)
+  test_class("mirai", m_nd)
+  test_equal(collect_mirai(m_nd), 2L)
+  test_false(daemons(0L))
+  # try_mirai returns mirai when memory unset
+  test_true(daemons(1))
+  m_unb <- try_mirai(2L + 2L)
+  test_class("mirai", m_unb)
+  test_equal(collect_mirai(m_unb), 4L)
+  # mixed mirai() and try_mirai() interleaved
+  m_a <- mirai(3L + 4L)
+  m_b <- try_mirai(5L + 6L)
+  test_class("mirai", m_a)
+  test_class("mirai", m_b)
+  test_equal(collect_mirai(m_a), 7L)
+  test_equal(collect_mirai(m_b), 11L)
+  # symbol-resolution branch via try_mirai
+  qexpr <- quote(7L * 8L)
+  m_sym <- try_mirai(qexpr)
+  test_class("mirai", m_sym)
+  test_equal(collect_mirai(m_sym), 56L)
+  test_false(daemons(0L))
+  # Memory gate: try_mirai is non-blocking. Saturate via a URL with no
+  # daemon connected so accumulation is deterministic (no race against a
+  # daemon draining the queue) and no caller-side blocking is needed.
+  test_true(daemons(url = local_url(), memory = 0.01))
+  big <- runif(2000L)
+  # Empty queue — try_mirai returns a mirai
+  m1 <- try_mirai(NULL, .args = list(big = big))
+  test_class("mirai", m1)
+  while (info()[["awaiting"]] < 1L) Sys.sleep(0.05)
+  # Saturated queue — try_mirai returns NULL with no wall-clock blocking
+  t0 <- Sys.time()
+  m_rej <- try_mirai(NULL, .args = list(big = big))
+  test_null(m_rej)
+  test_true(as.numeric(Sys.time() - t0, units = "secs") < 0.05)
+  test_true(info()[["awaiting"]] >= 1L)
+  # 100 repeated rejections complete well under blocking-submit threshold
+  t0 <- Sys.time()
+  for (i in seq_len(100L)) test_null(try_mirai(NULL, .args = list(big = big)))
+  test_true(as.numeric(Sys.time() - t0, units = "secs") < 1)
+  # stop_mirai on rejected NULL is a silent no-op (returns FALSE)
+  test_false(stop_mirai(NULL))
+  # Connect a daemon, queue drains, try_mirai succeeds again
+  launch_local(1L)
+  test_null(call_mirai(m1)$data)
+  while (info()[["awaiting"]] > 0L) Sys.sleep(0.05)
+  m_ok <- try_mirai(1L + 1L)
+  test_class("mirai", m_ok)
+  test_equal(collect_mirai(m_ok), 2L)
+  test_false(daemons(0L))
+  # No RNG advance on rejection — same no-daemon-URL trick to saturate
+  test_true(daemons(url = local_url(), memory = 0.01, seed = 42L))
+  big <- runif(2000L)
+  m1 <- try_mirai(NULL, .args = list(big = big))
+  test_class("mirai", m1)
+  while (info()[["awaiting"]] < 1L) Sys.sleep(0.05)
+  stream_before <- nextget("stream")
+  for (i in seq_len(5L)) test_null(try_mirai(NULL, .args = list(big = big)))
+  test_identical(nextget("stream"), stream_before)
+  launch_local(1L)
+  test_null(call_mirai(m1)$data)
+  test_false(daemons(0L))
+}
 # promises tests
 connection && requireNamespace("promises", quietly = TRUE) && NOT_CRAN && {
   run_now <- getNamespace("later")[["run_now"]]
-  Sys.sleep(0.5)
   test_true(daemons(1, notused = "wrongtype"))
   test_true(grepl("://", launch_remote(1L), fixed = TRUE))
   test_true(promises::is.promise(p1 <- promises::as.promise(mirai("completed"))))
@@ -387,29 +503,27 @@ connection && requireNamespace("promises", quietly = TRUE) && NOT_CRAN && {
 }
 # mirai daemon limits tests
 connection && NOT_CRAN && {
-  Sys.sleep(0.5)
   test_true(daemons(1, cleanup = FALSE, maxtasks = 2L))
   test_true(daemons_set("default"))
   test_equal(mirai(1)[], mirai(1)[])
   m <- mirai(0L)
-  Sys.sleep(1L)
-  res <- info()
+  while ({ res <- info(); res[["connections"]] > 0L || res[["awaiting"]] != 1L }) Sys.sleep(0.05)
   test_zero(res[["connections"]])
   test_equal(res[["awaiting"]], 1L)
   test_equal(launch_local(1, idletime = 5000L, walltime = 500L), 1L)
   test_zero(m[])
-  Sys.sleep(1L)
+  while (info()[["connections"]] > 0L) Sys.sleep(0.05)
   res <- info()
   test_zero(res[["connections"]])
   test_equal(res[["cumulative"]], 2L)
   test_false(daemons(0))
   test_true(daemons(1, dispatcher = FALSE, maxtasks = 1L))
   test_zero(mirai(0L)[])
-  Sys.sleep(0.5)
+  while (info()[["connections"]] > 0L) Sys.sleep(0.05)
   test_zero(info()[["connections"]])
   test_equal(launch_local(1, idletime = 200L, walltime = 1000L), 1L)
   test_zero(mirai(0)[])
-  Sys.sleep(1L)
+  while (info()[["connections"]] > 0L) Sys.sleep(0.05)
   res <- info()
   test_zero(res[["connections"]])
   test_true(is.na(res[["cumulative"]]))
@@ -417,7 +531,6 @@ connection && NOT_CRAN && {
 }
 # mirai cancellation tests
 connection && NOT_CRAN && {
-  Sys.sleep(0.5)
   Sys.unsetenv("R_DEFAULT_PACKAGES")
   test_true(daemons(1, dispatcher = TRUE, cleanup = FALSE))
   m1 <- mirai({ Sys.sleep(1); res <<- "m1 done" })
@@ -446,7 +559,6 @@ connection && NOT_CRAN && {
 }
 # additional stress testing
 connection && NOT_CRAN && {
-  Sys.sleep(0.5)
   q <- vector(mode = "list", length = 10000L)
   Sys.setenv(R_DEFAULT_PACKAGES = "stats,utils")
   test_true(daemons(4))
@@ -471,7 +583,6 @@ connection && NOT_CRAN && {
   test_class("mirai_map", everywhere(TRUE, .min = 3L))
   m <- mirai_map(1:12, rnorm)[]
   test_false(daemons(0))
-  Sys.sleep(0.5)
   test_true(daemons(4, dispatcher = FALSE, seed = 1234L, .compute = "gpu"))
   with_daemons("gpu", {
     test_class("mirai_map", everywhere(TRUE))
@@ -480,6 +591,20 @@ connection && NOT_CRAN && {
   })
   test_false(daemons_set("gpu"))
   test_identical(m, n)
+}
+# dispatcher L'Ecuyer-CMRG C implementation tests
+connection && NOT_CRAN && {
+  oseed <- globalenv()[[".Random.seed"]]
+  RNGkind("L'Ecuyer-CMRG")
+  set.seed(1546L)
+  ref <- vector("list", 5L)
+  ref[[1L]] <- globalenv()[[".Random.seed"]]
+  for (i in 2:5) ref[[i]] <- parallel::nextRNGStream(ref[[i - 1L]])
+  `[[<-`(globalenv(), ".Random.seed", oseed)
+  test_true(daemons(4, seed = 1546L))
+  ds <- everywhere(globalenv()[[".Random.seed"]])[]
+  for (i in seq_len(4L)) test_identical(ds[[i]][2:7], ref[[i + 1L]][2:7])
+  test_false(daemons(0))
 }
 # OTel tests
 connection && requireNamespace("otelsdk", quietly = TRUE) && NOT_CRAN && {
@@ -577,6 +702,20 @@ requireNamespace("secretbase", quietly = TRUE) && requireNamespace("later", quie
   test_equal(decoded[["kwparams"]][["job"]][["container"]][["image"]], "rstudio/r-base:latest")
   result2 <- mirai:::posit_workbench_data(rscript = "/usr/bin/Rscript")
   test_equal(secretbase::jsondec(result2)[["kwparams"]][["job"]][["exe"]], "/usr/bin/Rscript")
+  decoded <- secretbase::jsondec(mirai:::posit_workbench_data(
+    job_name = "analysis_42", cluster = "k8s-cluster", resource_profile = "small"
+  ))
+  test_equal(decoded[["kwparams"]][["job"]][["name"]], "analysis_42")
+  test_equal(decoded[["kwparams"]][["job"]][["cluster"]], "k8s-cluster")
+  test_equal(decoded[["kwparams"]][["job"]][["resourceProfile"]], "small")
+  test_error(mirai:::posit_workbench_data(cluster = "no-such"), "cluster 'no-such' not found")
+  test_error(mirai:::posit_workbench_data(resource_profile = "no-such"), "resource profile 'no-such' not found")
+  decoded <- secretbase::jsondec(mirai:::posit_workbench_data(cpus = 4, memory = 8192))
+  test_null(decoded[["kwparams"]][["job"]][["resourceProfile"]])
+  test_equal(decoded[["kwparams"]][["job"]][["resources"]][["cpus"]], 4)
+  test_equal(decoded[["kwparams"]][["job"]][["resources"]][["memory"]], 8192)
+  test_equal(secretbase::jsondec(mirai:::posit_workbench_data(cpus = 2))[["kwparams"]][["job"]][["resources"]][["memory"]], 512)
+  test_equal(secretbase::jsondec(mirai:::posit_workbench_data(memory = 2048))[["kwparams"]][["job"]][["resources"]][["cpus"]], 1)
   mock_rs <- new.env(parent = emptyenv())
   mock_rs[[".rs.api.viewer"]] <- function(url) {
     nanonext::ncurl_aio(url, headers = c(cookie = "mock_browser_cookie"), timeout = 5000L)

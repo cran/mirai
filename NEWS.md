@@ -1,3 +1,25 @@
+# mirai 2.7.0
+
+#### New Features
+
+* Dispatcher reimplemented as a thread for lower overhead, removing the separate dispatcher process (#581). 
+* Adds `memory` argument to `daemons()` setting a memory budget (MB, metric) for queued task payloads at dispatcher, providing memory-based backpressure.
+  This is opt-in and `NULL` (default) is unbounded (thanks @t-kalinowski, #454).
+  Current and peak queued bytes (in MB) are surfaced under the `memory` field of `status()`.
+* Adds `try_mirai()`, a non-blocking variant of `mirai()` that returns `NULL` immediately if the dispatcher's `memory` budget is exhausted, instead of blocking.
+  Useful in event-loop contexts (Shiny, promises) where blocking the host R thread is unacceptable.
+
+#### Updates
+
+* `http_config()` accepts `...` forwarded to `data` when it is a function.
+  This allows specifying custom resources as additional arguments, which are documented for Posit Workbench (thanks @michaelmayer2, #592).
+* Fixes `ssh_config()` dropping the username from SSH URLs e.g. `ssh://user@host` (#583).
+* Fixes transfer of large data (> ~2GB) on MacOS and Windows (#579).
+* Fixes `mirai_map()` progress bar customization issues (thanks @mcol, #519).
+* Fixes `launch_remote()` with `http_config()` failing for TLS connections, where newlines in the PEM certificate produced invalid JSON in the request payload.
+* Improved performance and reduced memory consumption through optimizations in the underlying nanonext/NNG transport layer.
+* Requires nanonext >= [1.8.2.9000].
+
 # mirai 2.6.1
 
 #### Updates

@@ -198,7 +198,9 @@ remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript"
 #' option of SSH tunnelling.
 #'
 #' @param remotes (character) URL(s) to SSH into using scheme 'ssh://', e.g.
-#'   'ssh://10.75.32.90:22' or 'ssh://nodename'. Port defaults to 22.
+#'   'ssh://10.75.32.90:22' or 'ssh://nodename'. Port defaults to 22. Optionally
+#'   include a username if it differs on the remote system, e.g.
+#'   'ssh://user@10.75.32.90'.
 #' @param tunnel (logical) whether to use SSH tunnelling. Requires `url`
 #'   hostname '127.0.0.1' (use [local_url()] with `tcp = TRUE`). See SSH
 #'   Tunnelling section.
@@ -242,8 +244,8 @@ remote_config <- function(command = NULL, args = c("", "."), rscript = "Rscript"
 #'   types of remote configuration.
 #'
 #' @examples
-#' # direct SSH example
-#' ssh_config(c("ssh://10.75.32.90:222", "ssh://nodename"), timeout = 5)
+#' # direct SSH example (with username)
+#' ssh_config(c("ssh://user@10.75.32.90:222", "ssh://nodename"), timeout = 5)
 #'
 #' # SSH tunnelling example
 #' ssh_config(c("ssh://10.75.32.90:222", "ssh://nodename"), tunnel = TRUE)
@@ -276,7 +278,13 @@ ssh_config <- function(
   rscript = "Rscript"
 ) {
   premotes <- lapply(remotes, parse_url)
-  hostnames <- lapply(premotes, .subset2, "hostname")
+  hostnames <- lapply(premotes, function(p) {
+    if (nzchar(p[["userinfo"]])) {
+      sprintf("%s@%s", p[["userinfo"]], p[["hostname"]])
+    } else {
+      p[["hostname"]]
+    }
+  })
   ports <- lapply(premotes, .subset2, "port")
 
   ssh_args <- sprintf("-o ConnectTimeout=%s -fTp %s", as.character(timeout), ports)
@@ -287,8 +295,9 @@ ssh_config <- function(
 
 #' Cluster Remote Launch Configuration
 #'
-#' Generates a remote configuration for launching daemons using an HPC cluster
-#' resource manager such as Slurm sbatch, SGE and Torque/PBS qsub or LSF bsub.
+#' Generates a remote configuration for launching daemons using a high-
+#' performance computing (HPC) cluster resource manager such as Slurm sbatch,
+#' SGE and Torque/PBS qsub or LSF bsub.
 #'
 #' @param command (character) cluster manager executable: `"sbatch"` (Slurm),
 #'   `"qsub"` (SGE/Torque/PBS), or `"bsub"` (LSF).
@@ -377,8 +386,28 @@ cluster_config <- function(command = "sbatch", options = "", rscript = "Rscript"
 #'   the daemon launch command. May be a function returning the data value.
 #'   Should include a placeholder `"%s"` where the `mirai::daemon()` call
 #'   will be inserted at launch time.
+#' @param ... additional arguments passed to `data` when it is a function.
+#'   See the Posit Workbench Options section for those accepted by the
+#'   default value of `data`.
 #'
 #' @inherit remote_config return
+#'
+#' @section Posit Workbench Options:
+#'
+#' When using the default value of `data`, the following arguments may be
+#' supplied via `...` to customise the launched job:
+#'
+#' - `rscript` (character) Rscript executable path. Default `"Rscript"`.
+#' - `job_name` (character) base name for launched jobs. Default
+#'   `"mirai_daemon"`.
+#' - `cluster` (character) name of the cluster to use. Default uses the first
+#'   available cluster.
+#' - `resource_profile` (character) named resource profile (e.g. `"rstudio"`).
+#'   Default uses the first profile available on the chosen cluster.
+#' - `cpus` (integer) number of CPUs for custom resource allocation. Specify
+#'   together with or instead of `memory` to override `resource_profile`.
+#' - `memory` (integer) memory in MB for custom resource allocation. Specify
+#'   together with or instead of `cpus` to override `resource_profile`.
 #'
 #' @seealso [ssh_config()], [cluster_config()] and [remote_config()] for other
 #'   types of remote configuration.
@@ -398,6 +427,20 @@ cluster_config <- function(command = "sbatch", options = "", rscript = "Rscript"
 #' \dontrun{
 #' # Launch 2 daemons using http config default (for Posit Workbench):
 #' daemons(n = 2, url = host_url(), remote = http_config())
+#'
+#' # Customise the default Posit Workbench launch (named cluster and profile):
+#' daemons(
+#'   n = 2,
+#'   url = host_url(),
+#'   remote = http_config(cluster = "Kubernetes", resource_profile = "rstudio")
+#' )
+#'
+#' # Or specify custom resources (4 CPUs, 8 GB memory):
+#' daemons(
+#'   n = 2,
+#'   url = host_url(),
+#'   remote = http_config(cluster = "Kubernetes", cpus = 4, memory = 8192)
+#' )
 #' }
 #'
 #' @export
@@ -407,9 +450,18 @@ http_config <- function(
   method = "POST",
   cookie = posit_workbench_cookie,
   token = NULL,
-  data = posit_workbench_data
+  data = posit_workbench_data,
+  ...
 ) {
-  list(type = "http", url = url, method = method, cookie = cookie, token = token, data = data)
+  list(
+    type = "http",
+    url = url,
+    method = method,
+    cookie = cookie,
+    token = token,
+    data = data,
+    dots = list(...)
+  )
 }
 
 #' URL Constructors
@@ -494,7 +546,10 @@ resolve_field <- function(x) if (is.function(x)) x() else x
 launch_remote_http <- function(n, remote, url, write_args, dots, envir, tls) {
   api_url <- resolve_field(remote[["url"]])
   method <- remote[["method"]]
-  data <- resolve_field(remote[["data"]])
+  data <- remote[["data"]]
+  if (is.function(data)) {
+    data <- do.call(data, remote[["dots"]])
+  }
   token <- resolve_field(remote[["token"]])
   cookie <- resolve_field(remote[["cookie"]])
   headers <- c(
@@ -506,6 +561,7 @@ launch_remote_http <- function(n, remote, url, write_args, dots, envir, tls) {
     cmd <- write_args(url, dots, maybe_next_stream(envir), tls)
     cmd <- gsub("\\", "\\\\", cmd, fixed = TRUE)
     cmd <- gsub("\"", "\\\"", cmd, fixed = TRUE)
+    cmd <- gsub("\n", "\\n", cmd, fixed = TRUE)
     ncurl(
       url = api_url,
       method = method,
@@ -532,50 +588,86 @@ find_dot <- function(args) {
   sel
 }
 
-posit_workbench_cookie <- function() posit_workbench_get("cookie")
+posit_workbench_cookie <- function() {
+  is.null(.[["pwb_cookie"]]) || return(.[["pwb_cookie"]])
+  Sys.getenv("RS_SESSION_RPC_COOKIE")
+}
 
-posit_workbench_url <- function() posit_workbench_get("url")
+posit_workbench_url <- function() {
+  file.path(Sys.getenv("RS_SERVER_ADDRESS"), "api", "launch_job")
+}
 
-posit_workbench_data <- function(rscript = "Rscript") posit_workbench_get("data", rscript)
-
-posit_workbench_get <- function(what, rscript = NULL) {
-  switch(
-    what,
-    cookie = if (is.null(.[["pwb_cookie"]])) {
-      Sys.getenv("RS_SESSION_RPC_COOKIE")
-    } else {
-      .[["pwb_cookie"]]
-    },
-    url = file.path(Sys.getenv("RS_SERVER_ADDRESS"), "api", "launch_job"),
-    data = {
-      requireNamespace("secretbase", quietly = TRUE) || stop(._[["secretbase"]])
-      url <- Sys.getenv("RS_SERVER_ADDRESS")
-      cookie <- Sys.getenv("RS_SESSION_RPC_COOKIE")
-      nzchar(url) && nzchar(cookie) || stop(._[["posit_api"]])
-      envs <- ncurl(
-        file.path(url, "api", "get_compute_envs"),
-        headers = c(Cookie = cookie, `X-RS-Session-Server-RPC-Cookie` = cookie),
-        timeout = .limit_short
-      )
-      if (envs[["status"]] != 200L) {
-        envs <- posit_workbench_fetch("api/get_compute_envs")
-        envs[["status"]] == 200L || stop(._[["posit_api"]])
-        .$pwb_cookie <- envs[["cookie"]]
-      }
-      cluster <- secretbase::jsondec(envs[["data"]])[["result"]][["clusters"]][[1L]]
-      lp <- sprintf(".libPaths(c(%s))", paste(sprintf("\"%s\"", .libPaths()), collapse = ","))
-      job <- list(
-        cluster = cluster[["name"]],
-        container = list(image = cluster[["defaultImage"]]),
-        resourceProfile = cluster[["resourceProfiles"]][[1L]][["name"]],
-        name = "mirai_daemon",
-        exe = rscript,
-        args = c("-e", sprintf("{%s;%%s}", lp))
-      )
-      json <- list(method = "launch_job", kwparams = list(job = job))
-      secretbase::jsonenc(json)
-    }
+posit_workbench_data <- function(
+  rscript = "Rscript",
+  job_name = "mirai_daemon",
+  cluster = NULL,
+  resource_profile = NULL,
+  cpus = NULL,
+  memory = NULL
+) {
+  requireNamespace("secretbase", quietly = TRUE) || stop(._[["secretbase"]])
+  url <- Sys.getenv("RS_SERVER_ADDRESS")
+  cookie <- Sys.getenv("RS_SESSION_RPC_COOKIE")
+  nzchar(url) && nzchar(cookie) || stop(._[["posit_api"]])
+  envs <- ncurl(
+    file.path(url, "api", "get_compute_envs"),
+    headers = c(Cookie = cookie, `X-RS-Session-Server-RPC-Cookie` = cookie),
+    timeout = .limit_short
   )
+  if (envs[["status"]] != 200L) {
+    envs <- posit_workbench_fetch("api/get_compute_envs")
+    envs[["status"]] == 200L || stop(._[["posit_api"]])
+    .$pwb_cookie <- envs[["cookie"]]
+  }
+  clusters <- secretbase::jsondec(envs[["data"]])[["result"]][["clusters"]]
+
+  if (is.null(cluster)) {
+    cluster_obj <- clusters[[1L]]
+  } else {
+    cluster_names <- vapply(clusters, `[[`, character(1L), "name")
+    cluster %in%
+      cluster_names ||
+      stop(sprintf(
+        "cluster '%s' not found. Available: %s",
+        cluster,
+        paste(cluster_names, collapse = ", ")
+      ))
+    cluster_obj <- clusters[[which(cluster_names == cluster)]]
+  }
+
+  lp <- sprintf(".libPaths(c(%s))", paste(sprintf("\"%s\"", .libPaths()), collapse = ","))
+  job <- list(
+    cluster = cluster_obj[["name"]],
+    container = list(image = cluster_obj[["defaultImage"]]),
+    name = job_name,
+    exe = rscript,
+    args = c("-e", sprintf("{%s;%%s}", lp))
+  )
+
+  if (!is.null(resource_profile)) {
+    profiles <- cluster_obj[["resourceProfiles"]]
+    profile_names <- vapply(profiles, `[[`, character(1L), "name")
+    resource_profile %in%
+      profile_names ||
+      stop(sprintf(
+        "resource profile '%s' not found. Available: %s",
+        resource_profile,
+        paste(profile_names, collapse = ", ")
+      ))
+    job[["resourceProfile"]] <- resource_profile
+  } else if (!is.null(cpus) || !is.null(memory)) {
+    if (is.null(cpus)) {
+      cpus <- 1L
+    }
+    if (is.null(memory)) {
+      memory <- 512L
+    }
+    job[["resources"]] <- list(cpus = cpus, memory = memory)
+  } else {
+    job[["resourceProfile"]] <- cluster_obj[["resourceProfiles"]][[1L]][["name"]]
+  }
+
+  secretbase::jsonenc(list(method = "launch_job", kwparams = list(job = job)))
 }
 
 posit_workbench_fetch <- function(endpoint) {
