@@ -264,18 +264,7 @@ everywhere <- function(.expr, ..., .args = list(), .min = 1L, .compute = NULL) {
   envir <- ..[[.compute]]
 
   expr <- substitute(.expr)
-  .expr <- c(
-    .snapshot,
-    as.expression(
-      if (
-        is.symbol(expr) && exists(as.character(expr), envir = parent.frame()) && is.language(.expr)
-      ) {
-        .expr
-      } else {
-        expr
-      }
-    )
-  )
+  .expr <- c(.snapshot, as.expression(resolve_expr(expr, .expr, parent.frame())))
 
   xlen <- if (is.null(envir[["dispatcher"]])) {
     max(stat(envir[["sock"]], "pipes"), envir[["n"]])
@@ -661,11 +650,6 @@ conditionMessage.miraiError <- function(c) attr(c, "message")
 
 # internals --------------------------------------------------------------------
 
-# Prelude validation shared by mirai() and try_mirai(). `where` is a lazy
-# default: never forced on the success path, so it costs only an unforced
-# promise. On the error branch it resolves to the call object of the user-
-# facing front-end, preserving `Error in mirai(...) :` / `Error in try_mirai(...) :`
-# headers.
 validate_dispatch <- function(missing_expr, globals, args, where = sys.call(-1L)) {
   missing_expr && stop(simpleError(._[["missing_expression"]], call = where))
   if (length(globals)) {
@@ -688,19 +672,21 @@ validate_dispatch <- function(missing_expr, globals, args, where = sys.call(-1L)
   list(globals, args)
 }
 
+resolve_expr <- function(expr, .expr, parent) {
+  if (is.symbol(expr) && exists(as.character(expr), envir = parent) && is.language(.expr)) {
+    .expr
+  } else {
+    expr
+  }
+}
+
 do_mirai <- function(expr, .expr, globals, .args, .timeout, envir, parent) {
   ctx_spn <- otel_mirai_span(envir)
   if (length(envir[["seed"]])) {
     globals[[".Random.seed"]] <- next_stream(envir)
   }
   data <- list(
-    ._expr_. = if (
-      is.symbol(expr) && exists(as.character(expr), envir = parent) && is.language(.expr)
-    ) {
-      .expr
-    } else {
-      expr
-    },
+    ._expr_. = resolve_expr(expr, .expr, parent),
     ._globals_. = globals,
     ._otel_. = ctx_spn[[1L]]
   )
@@ -777,6 +763,9 @@ mk_mirai_error <- function(cnd) {
   }
   idx <- max(which(as.logical(lapply(sc, `==`, eval_call))))
   sc <- sc[(length(sc) - 1L):(idx + 1L)]
+  if (identical(sc[[1L]][[1L]], quote(.handleSimpleError))) {
+    sc <- sc[-1L]
+  }
   cnd[["stack.trace"]] <- lapply(sc, `attributes<-`, NULL)
   `class<-`(`attributes<-`(msg, cnd), c("miraiError", "errorValue", "try-error"))
 }

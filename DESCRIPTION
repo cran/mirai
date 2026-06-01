@@ -1,7 +1,7 @@
 Type: Package
 Package: mirai
 Title: Minimalist Async Evaluation Framework for R
-Version: 2.7.0
+Version: 2.7.1
 Authors@R: c(
     person("Charlie", "Gao", , "charlie.gao@posit.co", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-0750-061X")),
@@ -33,11 +33,11 @@ Config/roxygen2/version: 8.0.0
 Config/usethis/last-upkeep: 2025-04-23
 Encoding: UTF-8
 NeedsCompilation: no
-Packaged: 2026-05-08 08:33:20 UTC; cg334
+Packaged: 2026-06-01 11:11:45 UTC; shikokuchuo
 Author: Charlie Gao [aut, cre] (ORCID: <https://orcid.org/0000-0002-0750-061X>),
   Joe Cheng [ctb],
   Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>),
   Hibiki AI Limited [cph]
 Maintainer: Charlie Gao <charlie.gao@posit.co>
 Repository: CRAN
-Date/Publication: 2026-05-08 11:30:02 UTC
+Date/Publication: 2026-06-01 12:00:02 UTC

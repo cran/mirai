@@ -1,3 +1,13 @@
+# mirai 2.7.1
+
+#### Updates
+
+* mirai's agent skill is now included in the installed package at `skills` and picked up automatically by `btw` and other packages following this convention.
+* `http_config()` gains a `headers` argument, now the primary way to supply HTTP headers (including authentication such as session cookie, bearer token, or API key). `cookie` and `token` are retained as convenience arguments that append `Cookie:` and `Authorization: Bearer` entries to `headers` (thanks @ddl-dkelkhoff, #612).
+* Reduces overhead for synchronous daemons by using an in-process transport.
+* Fixes `.handleSimpleError()` appearing in `$stack.trace` on a `miraiError` (regression in mirai 2.7.0).
+* Fixes load-balanced parallel functions (e.g. `parLapplyLB()`, `foreach::%dopar%`) hanging on a mirai cluster when there are more tasks than nodes, a regression in mirai 2.5.1 (thanks @manforkr, #591).
+
 # mirai 2.7.0
 
 #### New Features
@@ -18,7 +28,7 @@
 * Fixes `mirai_map()` progress bar customization issues (thanks @mcol, #519).
 * Fixes `launch_remote()` with `http_config()` failing for TLS connections, where newlines in the PEM certificate produced invalid JSON in the request payload.
 * Improved performance and reduced memory consumption through optimizations in the underlying nanonext/NNG transport layer.
-* Requires nanonext >= [1.8.2.9000].
+* Requires nanonext >= 1.9.0.
 
 # mirai 2.6.1
 
