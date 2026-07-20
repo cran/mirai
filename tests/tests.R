@@ -214,9 +214,15 @@ connection && {
   test_true(all(mres == 7L))
   test_null(names(mres))
   test_true(all(mirai_map(list(c(a = 1, b = 1, c = 1), 3), sum)[.flat] == 3))
+  test_error(mirai_map(list("a"), function(x) x + 1L)[.flat])
   test_type("language", mirai_map(list(quote(1+2)), identity)[][[1]])
   test_class("Date", mirai_map(data.frame(x = as.Date("2020-01-01")), identity)[][[1]])
   test_true(is_mirai_error(mirai_map(1:2, function(x) daemons(1))[][[1]]))
+  test_error(mirai_map(1:2, identity, 1), "all `...` arguments must be named")
+  test_identical(mirai_map(list(1, NULL), is.null)[], list(FALSE, TRUE))
+  test_true(all(mirai_map(1:2, function(x) x + y, as.environment(list(y = 10)))[.flat] == 11:12))
+  test_error(everywhere(), "missing expression, perhaps wrap in {}?")
+  test_error(everywhere({}, 1), "all `...` arguments must be named")
   test_false(daemons(0L))
 }
 # parallel cluster tests
@@ -298,6 +304,12 @@ connection && NOT_CRAN && {
   test_true(daemons(url = "ws://:0", correctype = 0L, token = TRUE))
   test_false(daemons(0L))
   test_zero(with(daemons(url = "tcp://:0", correcttype = c(1, 0), token = TRUE), {8L - 9L + 1L}))
+  test_true(daemons(url = local_url(), dispatcher = FALSE))
+  test_equal(launch_local(), 1L)
+  m <- mirai(TRUE, .timeout = 1000)
+  test_equal(race_mirai(list(m)), 1L)
+  test_false(unresolved(m))
+  test_false(daemons(0L))
   ns <- getNamespace("mirai")
   original_ll <- mock_binding(ns, ".limit_long", 10L)
   original_lls <- mock_binding(ns, ".limit_long_secs", 1L)
@@ -334,6 +346,11 @@ connection && NOT_CRAN && {
   q <- quote(list2env(list(b = 2), envir = globalenv()))
   m <- mirai("Seattle", .timeout = 1000)
   if (!is_error_value(m[])) test_equal(m[], "Seattle")
+  od <- mirai(getOption("digits"), .timeout = 1000)[]
+  if (!is_error_value(od)) {
+    test_equal(mirai({ options(digits = getOption("digits") + 1L); getOption("digits") })[], od + 1L)
+    test_equal(mirai(getOption("digits"))[], od)
+  }
   test_class("errorValue", mirai(q(), .timeout = 1000)[])
   test_true(daemons(sync = TRUE, .compute = "seq"))
   with_daemons("seq", {
@@ -422,6 +439,10 @@ connection && NOT_CRAN && {
   test_zero(qs[["used"]])
   test_true(qs[["peak"]] > 0)
   test_false(daemons(0L))
+  # mirai_map dispatch applies the memory gate per task
+  test_true(daemons(1, memory = 1))
+  test_true(all(mirai_map(1:4, function(x) x + 1L)[.flat] == 2:5))
+  test_false(daemons(0L))
 }
 # try_mirai non-blocking submission tests
 connection && NOT_CRAN && {
@@ -493,20 +514,19 @@ connection && NOT_CRAN && {
 }
 # promises tests
 connection && requireNamespace("promises", quietly = TRUE) && NOT_CRAN && {
-  run_now <- getNamespace("later")[["run_now"]]
   test_true(daemons(1, notused = "wrongtype"))
   test_true(grepl("://", launch_remote(1L), fixed = TRUE))
   test_true(promises::is.promise(p1 <- promises::as.promise(mirai("completed"))))
   test_true(promises::is.promise(p2 <- promises::`%...>%`(mirai(Sys.sleep(0.1)), identity())))
   test_true(promises::is.promise(p3 <- promises::as.promise(call_mirai(mirai("completed")))))
   test_true(promises::is.promise(promises::then(mirai(stop()), identity, function(x) test_true(inherits(x, "simpleError")))))
-  run_now(1L)
+  nanonext::run_event_loop(1000L)
   test_true(promises::is.promise(promises::then(mirai(Sys.sleep(0.1), .timeout = 10), identity, function(x) test_true(inherits(x, "simpleError")))))
-  run_now(1L)
+  nanonext::run_event_loop(1000L)
   test_true(promises::is.promise(promises::then(call_mirai(mirai(stop())), identity, function(x) test_true(inherits(x, "simpleError")))))
-  run_now(1L)
+  nanonext::run_event_loop(1000L)
   test_true(promises::is.promise(promises::then(call_mirai(mirai(Sys.sleep(0.1), .timeout = 10)), identity, function(x) test_true(inherits(x, "simpleError")))))
-  run_now(1L)
+  nanonext::run_event_loop(1000L)
   test_zero(mirai_map(0:1, function(x) x, .promise = identity)[][[1L]])
   mat <- matrix(1:4, nrow = 2L)
   dimnames(mat) <- list(c("a", "b"), c("y", "x"))
@@ -515,11 +535,15 @@ connection && requireNamespace("promises", quietly = TRUE) && NOT_CRAN && {
   test_true(all(mp[.flat, .stop] == 2L))
   test_identical(names(mp[]), c("a", "b"))
   test_class("errorValue", mirai_map(1, function(x) stop(x), .promise = list(identity, identity))[][[1L]])
-  run_now(1L)
+  nanonext::run_event_loop(1000L)
   test_false(daemons(NULL))
 }
 # mirai daemon limits tests
 connection && NOT_CRAN && {
+  sock <- nanonext::socket("req", listen = url <- local_url())
+  test_equal(daemon(url, dispatcher = FALSE, autoexit = FALSE, output = TRUE, walltime = 500), 2L)
+  test_equal(daemon(url, dispatcher = FALSE, autoexit = FALSE, output = TRUE, idletime = 100), 1L)
+  close(sock)
   test_true(daemons(1, cleanup = FALSE, maxtasks = 2L))
   test_true(daemons_set("default"))
   test_equal(mirai(1)[], mirai(1)[])
@@ -572,6 +596,25 @@ connection && NOT_CRAN && {
     tryCatch(m[.stop], error = identity)
   }
   test_equal(info()[["connections"]], 1L)
+  ns <- getNamespace("mirai")
+  original_cli <- mock_binding(ns, "cli_enabled", FALSE)
+  mp <- mirai_map(30, Sys.sleep)
+  stop_mirai(mp)
+  test_error(mp[.stop], "In index")
+  mp <- mirai_map(0L, function(x) signalCondition(structure(class = c("interrupt", "condition"), list())))
+  test_error(mp[.stop], "Interrupted")
+  restore_binding(ns, "cli_enabled", original_cli)
+  if (original_cli) {
+    mp <- mirai_map(30, Sys.sleep)
+    stop_mirai(mp)
+    err <- tryCatch(mp[.stop], error = identity)
+    test_true(is.null(err$parent) || is.character(conditionMessage(err$parent)))
+  }
+  everywhere({ assign("lk", 0L, envir = globalenv()); lockBinding("lk", globalenv()) })
+  e <- mirai(0L, lk = 1L, .timeout = 1000)[]
+  if (is_mirai_error(e)) test_null(e$stack.trace) else test_equal(e, 5L)
+  a <- mirai("alive", .timeout = 1000)[]
+  if (!is_error_value(a)) test_equal(a, "alive")
   test_false(daemons(0))
 }
 # additional stress testing
@@ -599,15 +642,18 @@ connection && NOT_CRAN && {
   test_type("character", launch_remote())
   test_class("mirai_map", everywhere(TRUE, .min = 3L))
   m <- mirai_map(1:12, rnorm)[]
+  m2 <- mirai_map(1:3, function(x) rnorm(1L) * y, y = 10)[]
   test_false(daemons(0))
   test_true(daemons(4, dispatcher = FALSE, seed = 1234L, .compute = "gpu"))
   with_daemons("gpu", {
     test_class("mirai_map", everywhere(TRUE))
     n <- mirai_map(1:12, rnorm)[]
+    n2 <- mirai_map(1:3, function(x) rnorm(1L) * y, y = 10)[]
     test_false(daemons(NULL))
   })
   test_false(daemons_set("gpu"))
   test_identical(m, n)
+  test_identical(m2, n2)
 }
 # dispatcher L'Ecuyer-CMRG C implementation tests
 connection && NOT_CRAN && {
@@ -689,7 +735,7 @@ connection && requireNamespace("otelsdk", quietly = TRUE) && NOT_CRAN && {
 }
 # Posit Workbench tests
 nzchar(Sys.getenv("RS_SERVER_ADDRESS")) || test_error(mirai:::posit_workbench_fetch("api/test"), "Posit Workbench")
-requireNamespace("secretbase", quietly = TRUE) && requireNamespace("later", quietly = TRUE) && {
+requireNamespace("secretbase", quietly = TRUE) && requireNamespace("promises", quietly = TRUE) && {
   old_server <- Sys.getenv("RS_SERVER_ADDRESS")
   old_cookie <- Sys.getenv("RS_SESSION_RPC_COOKIE")
   Sys.setenv(RS_SERVER_ADDRESS = "http://127.0.0.1", RS_SESSION_RPC_COOKIE = "test_cookie")

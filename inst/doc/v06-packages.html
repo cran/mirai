@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en-US">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.9">
+<meta name="generator" content="litedown 0.10">
 <title>mirai - For Package Authors</title>
 <style type="text/css">
 body {
@@ -45,9 +45,9 @@ div > .caption { padding: 1px 1em; }
 table {
   &:only-child:not(.table > *) { margin: auto; }
   th, td { padding: 5px; font-variant-numeric: tabular-nums; }
-  thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
-  thead th { border-bottom: 1px solid #ddd; }
-  &:not(.datatable-table) {
+  &:not([class]) {
+    thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
+    thead th { border-bottom: 1px solid #ddd; }
     border-top: 1px solid #666;
     border-bottom: 1px solid #666;
   }
@@ -62,7 +62,7 @@ hr, .footnotes::before { border: 1px dashed #ddd; }
 .frontmatter { text-align: center; }
 #TOC {
   a { text-decoration: none; }
-  ul { list-style: none; padding-left: 1em; }
+  ul { list-style: none; padding-left: 1em; columns: 24em; }
   & > ul { padding: 0; }
   ul ul { border-left: 1px solid lightsteelblue; }
 }
@@ -73,6 +73,7 @@ span[class^="ref-number-"] { font-weight: bold; }
 .ref-number-fig::after, .ref-number-tab::after { content: ":"; }
 .cross-ref-chp::before { content: "Chapter "; }
 .cross-ref-sec::before { content: "Section "; }
+.cross-ref-apd::before { content: "Appendix "; }
 .cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
 .cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
 .cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
@@ -98,7 +99,10 @@ section.footnotes {
   background: repeating-linear-gradient(135deg, white, white 30px, #ddd 32px, #ddd 32px);
   opacity: 0.6;
 }
-
+@media (prefers-color-scheme: dark) {
+  html, img, video, iframe { filter: invert(1); }
+  body { background: #ededed; }
+}
 @media print {
   body { max-width: 100%; }
   tr, img { break-inside: avoid; }
@@ -107,25 +111,25 @@ section.footnotes {
   body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
 }
 </style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.14.14/css/prism-xcode.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.61/css/prism-xcode.min.css">
 </head>
 <body>
 <div class="frontmatter">
 <div class="title"><h1>mirai - For Package Authors</h1></div>
 </div>
 <div class="body">
-<h3 id="sec:agent-skill">Agent Skill</h3>
+<h3 id="sec:1-agent-skill">1. Agent Skill</h3>
 <p>AI coding agents: the <code>r-lib</code> agent skill from the <a href="https://github.com/posit-dev/skills"><code>posit-dev-skills</code></a> plugin provides mirai-specific guidance for writing correct async, parallel, and distributed code.</p>
-<h3 id="sec:1-developer-interfaces">1. Developer Interfaces</h3>
-<p>mirai provides these functions for package authors:</p>
+<h3 id="sec:2-developer-interfaces">2. Developer Interfaces</h3>
+<p>mirai provides these functions primarily for package authors:</p>
 <ol>
-<li><code>require_daemons()</code> - errors and prompts users to set daemons if not already set (with clickable function link if cli package available)</li>
+<li><code>require_daemons()</code> - errors and prompts users to set daemons if not already set, with a clickable function link (if the cli package is available)</li>
 <li><code>daemons_set()</code> - detects if daemons are set</li>
-<li><code>on_daemon()</code> - detects if code runs on a daemon (within a <code>mirai()</code> call)</li>
+<li><code>on_daemon()</code> - detects if it is running on a daemon (within a <code>mirai()</code> call)</li>
 <li><code>register_serial()</code> - registers custom serialization functions, automatically available for all subsequent <code>daemons()</code> calls</li>
 <li><code>nextget()</code> - queries compute profile values like ‘url’ (see function documentation). Note: only specifically-documented values are supported interfaces.</li>
 </ol>
-<h3 id="sec:2-guidance">2. Guidance</h3>
+<h3 id="sec:3-guidance">3. Guidance</h3>
 <p>mirai supports transparent, inter-operable package use. Not relying on global options or environment variables minimizes conflicts between packages.</p>
 <p><strong>Important points:</strong></p>
 <ol>
@@ -135,7 +139,7 @@ section.footnotes {
 <li>Point to <code>mirai::daemons()</code> documentation or re-export <code>daemons()</code> for convenience</li>
 <li><strong>Never call <code>daemons()</code> when using <code>mirai_map()</code></strong> to prevent accidental recursive daemon creation (e.g., if your function is used within another package’s mirai-using function)
 <ul>
-<li><strong>Exception</strong>: Can provide a synchronous fallback if users haven’t set daemons:
+<li><strong>Exception</strong>: You may provide a synchronous fallback if users have not set daemons:
 <pre><code class="language-r">with(if (!daemons_set()) daemons(sync = TRUE), {
   mirai_map(...)
 })
@@ -143,13 +147,13 @@ section.footnotes {
 </li>
 </ul>
 </li>
-<li><strong>Exceptional case</strong>: Use <code>daemons(n = 1, dispatcher = FALSE, .compute = ...)</code> for a single dedicated daemon only with a unique <code>.compute</code> value. Example: <code>logger::appender_async()</code> where logger’s ‘namespace’ maps to mirai’s ‘compute profile’.</li>
+<li><strong>Exceptional case</strong>: Use <code>daemons(n = 1, .compute = ...)</code> for a single dedicated daemon only with a unique <code>.compute</code> value. Example: <code>logger::appender_async()</code> where logger’s ‘namespace’ maps to mirai’s ‘compute profile’.</li>
 </ul>
 </li>
 <li>
 <p><strong>Don’t use <code>status()</code> programmatically.</strong> Its interface may change. Use <code>info()</code> instead.</p>
 <ul>
-<li>For <code>status()$daemons</code>, use <code>nextget(&quot;url&quot;)</code></li>
+<li>For the value of <code>status()$daemons</code>, instead use <code>nextget(&quot;url&quot;)</code></li>
 </ul>
 </li>
 <li>

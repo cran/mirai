@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en-US">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.9">
+<meta name="generator" content="litedown 0.10">
 <title>mirai - Reference Manual</title>
 <style type="text/css">
 body {
@@ -45,9 +45,9 @@ div > .caption { padding: 1px 1em; }
 table {
   &:only-child:not(.table > *) { margin: auto; }
   th, td { padding: 5px; font-variant-numeric: tabular-nums; }
-  thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
-  thead th { border-bottom: 1px solid #ddd; }
-  &:not(.datatable-table) {
+  &:not([class]) {
+    thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
+    thead th { border-bottom: 1px solid #ddd; }
     border-top: 1px solid #666;
     border-bottom: 1px solid #666;
   }
@@ -62,7 +62,7 @@ hr, .footnotes::before { border: 1px dashed #ddd; }
 .frontmatter { text-align: center; }
 #TOC {
   a { text-decoration: none; }
-  ul { list-style: none; padding-left: 1em; }
+  ul { list-style: none; padding-left: 1em; columns: 24em; }
   & > ul { padding: 0; }
   ul ul { border-left: 1px solid lightsteelblue; }
 }
@@ -73,6 +73,7 @@ span[class^="ref-number-"] { font-weight: bold; }
 .ref-number-fig::after, .ref-number-tab::after { content: ":"; }
 .cross-ref-chp::before { content: "Chapter "; }
 .cross-ref-sec::before { content: "Section "; }
+.cross-ref-apd::before { content: "Appendix "; }
 .cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
 .cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
 .cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
@@ -98,7 +99,10 @@ section.footnotes {
   background: repeating-linear-gradient(135deg, white, white 30px, #ddd 32px, #ddd 32px);
   opacity: 0.6;
 }
-
+@media (prefers-color-scheme: dark) {
+  html, img, video, iframe { filter: invert(1); }
+  body { background: #ededed; }
+}
 @media print {
   body { max-width: 100%; }
   tr, img { break-inside: avoid; }
@@ -107,7 +111,7 @@ section.footnotes {
   body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
 }
 </style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.14.14/css/prism-xcode.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.61/css/prism-xcode.min.css">
 </head>
 <body>
 <div class="frontmatter">
@@ -129,9 +133,6 @@ While the expression evaluates on a daemon, the host process continues working.<
 <li>Package functions must be namespaced with <code>::</code> or loaded via <code>library()</code> within the expression.</li>
 <li>Pass required functions, data, or objects explicitly via <code>...</code> or <code>.args</code>.</li>
 </ul>
-<blockquote>
-<p>This explicit design perfectly matches message-passing parallelism - attempting to infer global variables introduces unreliability, which we do not compromise on.</p>
-</blockquote>
 <p>This example mimics an expensive calculation:</p>
 <pre><code class="language-r">library(mirai)
 
@@ -154,14 +155,14 @@ unresolved(m)
 # Do work whilst unresolved
 
 m[]
-#&gt; [1] 5.270938 5.500935 5.818627 3.365140 5.994334
+#&gt; [1] 5.008926 5.312573 5.832515 4.781068 4.170053
 m$data
-#&gt; [1] 5.270938 5.500935 5.818627 3.365140 5.994334
+#&gt; [1] 5.008926 5.312573 5.832515 4.781068 4.170053
 </code></pre>
 <p>A mirai is <em>unresolved</em> until its result is received, then <em>resolved</em>.
 Use <code>unresolved()</code> to check its state.</p>
 <p>Access results via <code>m$data</code> once resolved.
-This will be the return value, or an ‘errorValue’ if the expression errored, crashed, or timed out (see <a href="#error-handling">Error Handling</a>).</p>
+This will be the return value, or an ‘errorValue’ if the expression errored, crashed, timed out, or was canceled (see <a href="#error-handling">Error Handling</a>).</p>
 <p>Use <code>m[]</code> to efficiently wait for and collect the value instead of repeatedly checking <code>unresolved(m)</code>.</p>
 <p>You may also wait efficiently for mirai (or lists of mirai) to resolve using:</p>
 <ul>
@@ -170,16 +171,15 @@ This will be the return value, or an ‘errorValue’ if the expression errored,
 </ul>
 <h4 id="sec:mirai-advanced">mirai (advanced)</h4>
 <p>For programmatic use, ‘.expr’ accepts a pre-constructed language object and ‘.args’ accepts a named list of arguments.
-The following is equivalent:</p>
+The following is accepted:</p>
 <pre><code class="language-r">expr &lt;- quote({Sys.sleep(time); rnorm(5L, mean)})
 args &lt;- list(time = 2L, mean = 4)
 
 m1 &lt;- mirai(.expr = expr, .args = args)
 m1[]
-#&gt; [1] 3.890969 4.009599 3.380416 3.514127 4.899060
+#&gt; [1] 3.802924 2.617349 3.017261 3.980908 3.368530
 </code></pre>
-<p>This example performs an asynchronous write operation.
-Passing <code>environment()</code> to ‘.args’ conveniently provides all objects from the calling environment (like <code>x</code> and <code>file</code>):</p>
+<p>Passing <code>environment()</code> to ‘.args’ allows you to conveniently provides all objects from the calling environment (like <code>x</code> and <code>file</code> in the following asynchronous write example):</p>
 <pre><code class="language-r">write.csv.async &lt;- function(x, file) {
   mirai(write.csv(x, file), .args = environment())
 }
@@ -266,26 +266,31 @@ is_error_value(m5$data)
 #&gt; [1] TRUE
 </code></pre>
 <p><code>is_error_value()</code> tests for all mirai execution errors, user interrupts and timeouts.</p>
+<p>Cancel a mirai with <code>stop_mirai()</code>. If the mirai was still in progress, it resolves immediately to an ‘errorValue’ of 20L (Operation canceled):</p>
+<pre><code class="language-r">m6 &lt;- mirai(Sys.sleep(10))
+stop_mirai(m6)
+m6[]
+#&gt; 'errorValue' int 20 | Operation canceled
+</code></pre>
 <h3 id="sec:3-local-daemons">3. Local Daemons</h3>
 <p>Daemons are persistent background processes that receive <code>mirai()</code> requests.</p>
 <blockquote>
 <p>Daemons inherit system configuration (’.Renviron’, ‘.Rprofile’) and load default packages.
-To load only the base package (cutting startup time in half), set <code>R_SCRIPT_DEFAULT_PACKAGES=NULL</code> before launching.</p>
+To load only the base package (cutting startup time in half), set the environment variable <code>R_SCRIPT_DEFAULT_PACKAGES=NULL</code> before launching.</p>
 </blockquote>
 <p>Specify the number of daemons to launch:</p>
 <pre><code class="language-r">daemons(6)
 </code></pre>
-<p>For CPU-bound work, set <code>n</code> to roughly one less than your number of CPU cores, leaving a core free for the host R process and OS.
-Account for any cores reserved for other purposes.
-For I/O-bound work (waiting on network, disk, or subprocess), <code>n</code> can exceed core count since daemons spend most of their time idle.
+<p>For CPU-bound work, a good rule of thumb is to set <code>n</code> to one less than your number of CPU cores, leaving a core free for the host R process and OS.
+Account for any cores reserved for other purposes.</p>
+<p>For I/O-bound work (waiting on network, disk, or subprocess), <code>n</code> can exceed core count since daemons spend most of their time idle.
 Each local daemon runs a full R process, so check that per-daemon memory footprint times <code>n</code> fits in host RAM.</p>
 <h4 id="sec:with-dispatcher-default">With Dispatcher (default)</h4>
 <p>The default <code>dispatcher = TRUE</code> enables optimal first-in-first-out (FIFO) scheduling.
 Tasks queue at the dispatcher and send to daemons as they become available.
 The <code>memory</code> argument caps the approximate total memory (MB, metric — 1 MB = 1,000,000 bytes) of queued task payloads at dispatcher.
 New tasks block until existing ones are dispatched, providing memory-based backpressure to prevent the host process from running out of memory.
-Current usage is surfaced under the <code>memory</code> field of <code>status()</code> (in MB, matching the argument unit).
-It also enables mirai cancellation via <code>stop_mirai()</code> or the <code>.timeout</code> argument to <code>mirai()</code>.</p>
+Dispatcher also enables mirai cancellation (via <code>stop_mirai()</code> or the <code>mirai(.timeout=)</code> argument).</p>
 <p><code>info()</code> provides current statistics as an integer vector:</p>
 <ul>
 <li><code>connections</code>: currently active daemons</li>
@@ -310,7 +315,7 @@ This reverts to creating a new background process per request.</p>
 <p>Tasks send immediately in round-robin fashion, ensuring even distribution.
 However, scheduling isn’t optimal since task duration is unknown beforehand.
 Tasks may queue behind long-running tasks while other daemons sit idle.</p>
-<p>This resource-light approach suits similar-length tasks or when concurrent tasks don’t exceed available daemons.</p>
+<p>This resource-light approach suits similar-length tasks or when concurrent tasks typically don’t exceed available daemons.</p>
 <p>Info now shows 6 connections:</p>
 <pre><code class="language-r">info()
 #&gt; connections  cumulative    awaiting   executing   completed 
@@ -439,13 +444,13 @@ ml[]
 #&gt; $c
 #&gt; [1] 5.302906 3.531788 6.389231
 </code></pre>
-<h4 id="sec:collecting-options">Collecting Options</h4>
+<h4 id="sec:collection-options">Collection Options</h4>
 <ul>
 <li><code>x[.flat]</code> flattens results (checks types to avoid coercion)</li>
 <li><code>x[.progress]</code> shows progress bar (via cli) or text indicator</li>
 <li><code>x[.stop]</code> applies early stopping, cancelling remaining tasks on first failure</li>
 </ul>
-<pre><code class="language-r">mirai_map(list(a = 1, b = &quot;a&quot;, c = 3), function(x) exp(x))[.stop]
+<pre><code class="language-r">mirai_map(list(a = 1, b = &quot;a&quot;, c = 3), \(x) exp(x))[.stop]
 #&gt; Error in `mirai_map()`:
 #&gt; ℹ In index: 2.
 #&gt; ℹ With name: b.
@@ -476,8 +481,10 @@ daemons(0)
 <p>To map over columns instead, use <code>as.list()</code> for dataframes or <code>t()</code> for matrices.</p>
 </blockquote>
 <h4 id="sec:nested-maps">Nested Maps</h4>
-<p>For nested mapping, don’t launch local daemons from within <code>mirai_map()</code>.
-Instead:</p>
+<p>For nested mapping, trying to launch local daemons from within <code>mirai_map()</code> in a single call like this fails:</p>
+<pre><code class="language-r">daemons(n)
+</code></pre>
+<p>Instead use:</p>
 <pre><code class="language-r">daemons(url = local_url())
 launch_local(n)
 </code></pre>
@@ -497,7 +504,7 @@ For example, port 5555 on the IPv6 address <code>::ffff:a6f:50d</code> would be 
 <p>Query <code>launch_remote()</code> for the assigned port:</p>
 <pre><code class="language-r">launch_remote()
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.7.113:53887&quot;)'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://10.37.61.174:53495&quot;)'
 </code></pre>
 <p>Dynamically scale the number of daemons up or down as needed.</p>
 <p>Reset all connections:</p>
@@ -604,30 +611,32 @@ Specify full path if needed: <code>file.path(R.home(&quot;bin&quot;), &quot;Rscr
 )
 </code></pre>
 <h4 id="sec:http-launcher">HTTP Launcher</h4>
-<p><code>http_config()</code> launches daemons via HTTP API.</p>
+<p><code>http_config()</code> launches daemons via HTTP API, as may be used by Kubernetes or other such platforms.</p>
 <p>It takes the following arguments:</p>
 <ul>
 <li><code>url</code>: API endpoint URL</li>
 <li><code>method</code>: HTTP method (typically <code>&quot;POST&quot;</code>)</li>
-<li><code>cookie</code>: session cookie for authentication</li>
-<li><code>token</code>: bearer token for authentication</li>
+<li><code>headers</code>: named character vector of HTTP headers, supplying any required authentication (session cookie, bearer token, API key) as well as other API metadata</li>
 <li><code>data</code>: request body containing a <code>&quot;%s&quot;</code> placeholder where the daemon launch command is inserted</li>
+<li><code>cookie</code>, <code>token</code>: conveniences that append <code>Cookie: &lt;value&gt;</code> and <code>Authorization: Bearer &lt;value&gt;</code> entries to <code>headers</code></li>
 </ul>
-<p>Each argument accepts either a character value or a <strong>function</strong> returning a value.
-When a function is supplied, it is called at launch time (when <code>launch_remote()</code> runs), not when the configuration is created.
-This lazy evaluation ensures that dynamic values such as session cookies, API tokens, or endpoint URLs are always fresh at the moment of use.</p>
+<p>The two pieces that adapt mirai to a new platform are <code>data</code> and <code>headers</code>.
+At launch time, the <code>&quot;%s&quot;</code> placeholder in <code>data</code> is replaced by a <code>mirai::daemon()</code> call, e.g. <code>mirai::daemon(&quot;tcp://10.0.0.7:34291&quot;)</code> — when using TLS, the certificate is also inlined in the call.
+The receiving platform only has to run this expression using <code>Rscript -e</code> to start a daemon, which then dials back to the host.</p>
+<p>Each argument other than <code>method</code> accepts either a value or a <strong>function</strong> returning a value.
+A plain value is captured when the configuration is created; a function is called at launch time (when <code>launch_remote()</code> runs).
+This lazy evaluation ensures that dynamic values such as session cookies, API tokens, or endpoint URLs are always fresh at the moment of use — and the same configuration object may be stored and reused, for example to scale up later in a session.</p>
 <h5 id="sec:default-posit-workbench">Default: Posit Workbench</h5>
 <blockquote>
 <p>Requires Posit Workbench 2026.01 or later, which supports authenticating the launcher using the session cookie.</p>
 </blockquote>
 <p>By default, <code>http_config()</code> auto-configures for Posit Workbench.
-The defaults for <code>url</code>, <code>cookie</code>, and <code>data</code> are functions (not function calls) that read Workbench environment information:</p>
+The defaults for <code>url</code>, <code>headers</code>, and <code>data</code> are functions (not function calls) that read Workbench environment information:</p>
 <pre><code class="language-r">http_config(
-  url = posit_workbench_url,     # reads server address at launch time
+  url = posit_workbench_url,         # reads server address at launch time
   method = &quot;POST&quot;,
-  cookie = posit_workbench_cookie, # reads session cookie at launch time
-  token = NULL,
-  data = posit_workbench_data    # queries the compute environment at launch time
+  headers = posit_workbench_headers, # reads session cookie at launch time
+  data = posit_workbench_data        # queries the compute environment at launch time
 )
 </code></pre>
 <p>Because these are stored as functions, calling <code>http_config()</code> does no work — it simply saves the functions into the configuration list.
@@ -636,6 +645,7 @@ This means the configuration can be created early (e.g., at session start) while
 <p>Launch daemons in Posit Workbench:</p>
 <pre><code class="language-r">daemons(n = 2, url = host_url(), remote = http_config())
 </code></pre>
+<p>Where the launched jobs run depends on the backend Posit Workbench is configured with: on a Local backend the daemons share the server hosting your session, while on a Kubernetes or Slurm backend each daemon is scheduled onto the cluster as its own job.</p>
 <p>The default Workbench launch may be customised by supplying additional options to <code>http_config()</code>, which are forwarded to the <code>data</code> builder.
 Select a named cluster and resource profile:</p>
 <pre><code class="language-r">daemons(
@@ -661,12 +671,15 @@ The <code>data</code> argument should include <code>&quot;%s&quot;</code> as a p
   remote = http_config(
     url = &quot;https://api.example.com/launch&quot;,
     method = &quot;POST&quot;,
-    token = function() Sys.getenv(&quot;MY_API_KEY&quot;),
+    headers = function() c(
+      Authorization = sprintf(&quot;Bearer %s&quot;, Sys.getenv(&quot;MY_API_KEY&quot;)),
+      `X-API-Version` = &quot;2&quot;
+    ),
     data = '{&quot;command&quot;: &quot;%s&quot;}'
   )
 )
 </code></pre>
-<p>Here, <code>token</code> is a function so the API key environment variable is read each time daemons are launched.
+<p>Here, <code>headers</code> is a function so the API key environment variable is read each time daemons are launched.
 The remaining arguments are plain character values used as-is.</p>
 <h5 id="sec:troubleshooting">Troubleshooting</h5>
 <p><code>launch_remote()</code> with an <code>http_config()</code> configuration returns a list of server response data (invisibly).
@@ -696,7 +709,7 @@ Slurm example:</p>
 <pre><code class="language-r">daemons(url = host_url())
 launch_remote()
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tcp://192.168.7.113:53888&quot;)'
+#&gt; Rscript -e 'mirai::daemon(&quot;tcp://10.37.61.174:53496&quot;)'
 daemons(0)
 </code></pre>
 <h4 id="sec:tls-secure-connections">TLS Secure Connections</h4>
@@ -710,36 +723,36 @@ Private keys remain on the host.</p>
 <p>Self-signed certificates are included in <code>launch_remote()</code> commands:</p>
 <pre><code class="language-r">launch_remote(1)
 #&gt; [1]
-#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://192.168.7.113:53889&quot;,tlscert=c(&quot;-----BEGIN CERTIFICATE-----
-#&gt; MIIFQTCCAymgAwIBAgIBATANBgkqhkiG9w0BAQsFADA4MRYwFAYDVQQDDA0xOTIu
-#&gt; MTY4LjcuMTEzMREwDwYDVQQKDAhOYW5vbmV4dDELMAkGA1UEBhMCSlAwHhcNMDEw
-#&gt; MTAxMDAwMDAwWhcNMzAxMjMxMjM1OTU5WjA4MRYwFAYDVQQDDA0xOTIuMTY4Ljcu
-#&gt; MTEzMREwDwYDVQQKDAhOYW5vbmV4dDELMAkGA1UEBhMCSlAwggIiMA0GCSqGSIb3
-#&gt; DQEBAQUAA4ICDwAwggIKAoICAQCGCUyn6GWWGAwNGQ5jhku6BWSKqRD/cgmEk7MA
-#&gt; Whsxb5nSPqsqh4ivTXJQZ1LzhcESX9eI9whwzknQ9MVCOA+Rij9EVzRu9Ypawvax
-#&gt; 1yDZmlwSG5WAUva9vGtMZirA09oMp8+8hKt9eY44DG3EikP5g7lxWwaCTsz0Q/br
-#&gt; 9YechhF458mGoDmM7yGp/L65mVsn52nMrK6QWJ7wrfqNyqzzz35IEI7PVxKk0KzD
-#&gt; bcUsFYsCg1+STNz1ADAlUtsJFD0RUg38oAUn0cBi77sLBX9TQihPWInUY51tzyvI
-#&gt; fukiiavDE5N56z3JKqTQZVk66H5kDEPz3/zZQB6YeNjV7UEua63a6FOLD/hVi2fa
-#&gt; C3S/ud2xEFudik3xVVoNf+oQbQ4aLH6YUlresFXhvlU/LKLmbyDwjzXq+QRdyhIt
-#&gt; mWJisrvK19/2cUSt1AflIt8nQYVgHhJsTxK40FLq7bGvwKPVibJYf0+8DW2VFqjj
-#&gt; Z2TMBjYom0Ynixs3quQ7j92+2o2WK6O6uL06pKiLNiJi8CD/7pqTXEHCkYGh03tL
-#&gt; 5w+00bIXWXH4OoYmtyuHjvDlTKYQVzMOTwxH9zotOvq88Ifzn5UBZH7RvDbqFyo8
-#&gt; KvsVXuVKcLL/F0tzraExI+Zv5/YjrSqK7Jxtrdd3QN1750rjnujiOjfU1iJwX20a
-#&gt; ZIc3JQIDAQABo1YwVDASBgNVHRMBAf8ECDAGAQH/AgEAMB0GA1UdDgQWBBRxU45I
-#&gt; ZGU7XK6DwHipxYuGgnsnCzAfBgNVHSMEGDAWgBRxU45IZGU7XK6DwHipxYuGgnsn
-#&gt; CzANBgkqhkiG9w0BAQsFAAOCAgEAIuzA09/e739fQ9/cwf7M6KXNHlv5Fd2aO5l/
-#&gt; g5B7h7o/bZgGghchYNAmC+e7o0QSUoS2giGx3EW1GsH587+5V6ZliBYnl5LeTlRW
-#&gt; 2OUq4odZYJvykpbyDatohnz+YzDQcdxYtOdJrHrqmjSuL2W28QnzKyYGTVbSi/4V
-#&gt; cN8QMw0i53iayWYDmHtshXOF5DmnNCF+8ffVuR+B4Tzf3XN98zZU7gwxEEIDzF5n
-#&gt; KfeVmAAUg69eQiALpJ6ZyWUFHQAd92H9Gezx8qMqCia1Iqym8Vg7aaWmXak0jYjm
-#&gt; 35Mrfn57Oej8b7epSzsWKvZu2ZuKyBJ0T2rjdpXJwqz3IrMFJDM6dV9NFDfnGiAq
-#&gt; uI64s80uRGvxZ+OtPvHD+1OMM9wcJGCfLx2INTII/AE6pWcCb2ddOfvv6JX1n54t
-#&gt; pu5woTWihH3BaI604fmt1g+CHHVzw0Rpi1uPzIumzD5B59a8BptbSPqkoy2YlOU4
-#&gt; 2c6VoY88pZvADYjzDMLVJHGax/FUDJeocN3TF+Ao2e9C0lPjrqb8i7tI49ZgNK6L
-#&gt; YeLYVjWIWm+BUGN5xef7IBS6x0Vwqgrsffwb/64g11MJx7Tk9N6oOXYEN4TbOEfn
-#&gt; evegzVN2xHKCml+R7W5/02yegUBEkzlo386v/5I4RfsqVb4yohp0HIZ6up6A+UPm
-#&gt; X1Lbtco=
+#&gt; Rscript -e 'mirai::daemon(&quot;tls+tcp://10.37.61.174:53497&quot;,tlscert=c(&quot;-----BEGIN CERTIFICATE-----
+#&gt; MIIFPzCCAyegAwIBAgIBATANBgkqhkiG9w0BAQsFADA3MRUwEwYDVQQDDAwxMC4z
+#&gt; Ny42MS4xNzQxETAPBgNVBAoMCE5hbm9uZXh0MQswCQYDVQQGEwJKUDAeFw0wMTAx
+#&gt; MDEwMDAwMDBaFw0zMDEyMzEyMzU5NTlaMDcxFTATBgNVBAMMDDEwLjM3LjYxLjE3
+#&gt; NDERMA8GA1UECgwITmFub25leHQxCzAJBgNVBAYTAkpQMIICIjANBgkqhkiG9w0B
+#&gt; AQEFAAOCAg8AMIICCgKCAgEAxBtcE5KYuZL4gZfhjxDol8kyFqO5VjOujgILe/hE
+#&gt; t7p3Idxj3lgPtKUpmOC+IRVQb0DPdyM1iHN6EXc9gK/Dd3r6q/oN1b6N8iOzXaNA
+#&gt; QhMAWCoJb2ypOpseUhqQMLrh5kitX6+vkc0FoWod1DEEmKhSUvO0tRfx5JJuv0vL
+#&gt; A57rtoksdqb+gD5uaRPW/F4etrSkQSdkJwbvJhzhCHmfDWflwJY6fvnAdoSTryhj
+#&gt; pUKCnNy6qMeakAvr7wwNPXSBSTMUE30t5xPtdtL44mkluUFdrGtvdXjOpekNsjAb
+#&gt; cV8jrEai6d1zxBLreEXS5GGskLERxybPkrRLJuyViaP2X4LVaAISO/5JDOeFuTLz
+#&gt; yEOHH7eLmsiJgpn5ro7AfUmlWneGax993rl9yb1NHkyteyXwZ6V91pu+N6EubS01
+#&gt; 0gXIIgU0HVBfy3eF7Fu8pWUVa2xBPqmlNHT77IBpuMW3RdG/3R18VF9guEMFdOH7
+#&gt; a7yA2IrwsUckdRhvKeiY3+EanclFyzImkOretrCzaPjxBhPbw3o9zVzbLxAaL5uX
+#&gt; LrPUs03VXNjRVuRyNarpkvCrGAw5Nrkot2ArfXPvR2V/RJESbyPgc/gsLAr82WdF
+#&gt; 1B6hS5njWkMLYPRtiFAgK0MFHdydDP23WJnXTSmaPcpBUCvm6lCHhhef9hC/b9hx
+#&gt; hFMCAwEAAaNWMFQwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQUNtJpF4oC
+#&gt; 4qrypmQuxMDEnqunL0cwHwYDVR0jBBgwFoAUNtJpF4oC4qrypmQuxMDEnqunL0cw
+#&gt; DQYJKoZIhvcNAQELBQADggIBAA9QLMSdMDG6vWTwnNfIC4i48XuiqdKwkwxZEfUW
+#&gt; n6r2LV7z6qBXKLftRmaWaTElFdkEi8A5n3ei7IZBdPHzfj+pR+SEmQQVX26KiP6j
+#&gt; yk7JOy6j+GdugNm9miwjm1/yVF4SAsb7J283DYXyj/t9fEtv1dcOdi4yteIsrS+F
+#&gt; s7bQYS7TWMFp8txnNyr/NNusYgkD6c/oiFSpL2dnJLE7qRcTsU4Zf7DpOi76tZMe
+#&gt; 4Tw/Rvjx32d63h4kCbO5f/QPgQix7oxzwxvkp8SZ6wDzbinLU2k0qvfJXb9T1Ixm
+#&gt; Op6M/OmYrsWDPaAWAdu6ce6dehJgHDZCmuQfL+wTXBBy1Zyjz76LAinddpT7wY4u
+#&gt; +Tvlk6ClY2GcuKcp3ifpddZGHD8OIVz7Dlg7Puyxw5vxOKMKMyso6o7Of3Kla6YK
+#&gt; FIzFhbKbHIRJow/5IpqTonNPTG3bT22KnXUlq3hrrZdsn6z/xGvEmsl1rAY0/GUT
+#&gt; bxF2juBic0n/TCy8mCiW+KvP0lwrjRFprgFmc/tl5gjDgxDZfblxGzrfbhtyIrpk
+#&gt; GMhVqce0snQ1nxz/GCLw2YzFpUI/xkfVYqDRPYWD4xrdE7ZBdn9JNOjzSsFuGNOq
+#&gt; tGwzgtP3ec2Lmja+DaTMRp7S0FLd7VIFhe13Bio2MLY0zTHHYtNrUxi17tJ0OvPk
+#&gt; HcUs
 #&gt; -----END CERTIFICATE-----
 #&gt; &quot;,&quot;&quot;))'
 </code></pre>
@@ -805,14 +818,14 @@ with_daemons(&quot;gpu&quot;, {
 })
 
 m1[]
-#&gt; [1] 42715
+#&gt; [1] 25298
 m2[] # different to m1
-#&gt; [1] 42730
+#&gt; [1] 25313
 
 m3[] # same as m1
-#&gt; [1] 42715
+#&gt; [1] 25298
 m4[] # same as m1
-#&gt; [1] 42715
+#&gt; [1] 25298
 
 with_daemons(&quot;cpu&quot;, daemons(0))
 with_daemons(&quot;gpu&quot;, daemons(0))
@@ -859,10 +872,10 @@ mp &lt;- mirai_map(1:2, \(x) Sys.getpid())
 daemons(0)
 mp[]
 #&gt; [[1]]
-#&gt; [1] 5757
+#&gt; [1] 23355
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] 5757
+#&gt; [1] 23355
 
 
 # Use sync with the 'sync' compute profile:
@@ -873,10 +886,10 @@ with_daemons(&quot;sync&quot;, {
 daemons(0, .compute = &quot;sync&quot;)
 mp[]
 #&gt; [[1]]
-#&gt; [1] 5757
+#&gt; [1] 23355
 #&gt; 
 #&gt; [[2]]
-#&gt; [1] 5757
+#&gt; [1] 23355
 </code></pre>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>

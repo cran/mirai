@@ -124,7 +124,7 @@ daemon <- function(
         is.integer(m) &&
           {
             m == 5L || next
-            xc <- 1L
+            xc <- 1L + (maxtime && mclock() >= maxtime)
             break
           }
         (task >= maxtasks || maxtime && mclock() >= maxtime) &&
@@ -154,7 +154,7 @@ daemon <- function(
       m <- collect_aio(aio)
       is.integer(m) &&
         {
-          xc <- 1L
+          xc <- 1L + (maxtime && mclock() >= maxtime)
           break
         }
       (task >= maxtasks || maxtime && mclock() >= maxtime) &&
@@ -200,7 +200,7 @@ daemon <- function(
   dial(sock, url = url, autostart = NA, fail = 2L)
   `[[<-`(., "sock", sock)
   m <- recv(sock, mode = 1L, block = TRUE)
-  marked(send(sock, eval_mirai(m), mode = 1L, block = TRUE)) || wait(cv)
+  invisible(marked(send(sock, eval_mirai(m), mode = 1L, block = TRUE)) || wait(cv))
 }
 
 # internals --------------------------------------------------------------------
@@ -249,7 +249,7 @@ do_cleanup <- function() {
 }
 
 snapshot <- function() {
-  `[[<-`(`[[<-`(`[[<-`(., "op", .Options), "se", search()), "vars", names(globalenv()))
+  `[[<-`(`[[<-`(`[[<-`(., "op", as.list(.Options)), "se", search()), "vars", names(globalenv()))
 }
 
 flag_value <- function(autoexit) {

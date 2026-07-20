@@ -149,20 +149,23 @@
 #' @export
 #'
 mirai_map <- function(.x, .f, ..., .args = list(), .promise = NULL, .compute = NULL) {
-  require_daemons(.compute = .compute, call = environment())
+  envir <- require_env(.compute, environment())
   is.function(.f) || stop(sprintf(._[["function_required"]], typeof(.f)))
-  if (is.null(.compute)) {
-    .compute <- .[["cp"]]
-  }
 
-  spn <- otel_map_span(.compute)
+  spn <- otel_map_span(envir)
+
+  globals <- validate_globals(list(...))
+  disp <- envir[["dispatcher"]]
+  gated <- !is.null(disp) && !envir[["unbounded"]]
 
   dispatch_one <- function(elem, .expr) {
-    mirai(
-      .expr = .expr,
-      ...,
-      .args = list(.f = .f, .x = elem, .args = .args, .mirai_within_map = TRUE),
-      .compute = .compute
+    gated && .dispatcher_gate(disp)
+    do_mirai(
+      .expr,
+      globals,
+      list(.f = .f, .x = elem, .args = .args, .mirai_within_map = TRUE),
+      NULL,
+      envir
     )
   }
 
@@ -225,25 +228,26 @@ print.mirai_map <- function(x, ...) {
 .flat <- compiler::compile(quote(
   if (i == 0L) {
     xi <- TRUE
-  } else if (i == 1L) {
-    typ <<- typeof(xi)
   } else {
     is_error_value(xi) && stop_m(x, i, xi)
-    typeof(xi) != typ &&
-      {
-        stop_mirai(x)
-        cli_enabled ||
-          stop(
-            sprintf("Cannot flatten outputs of differing type: %s / %s", typ, typeof(xi)),
-            call. = FALSE
+    if (typeof(xi) != typ) {
+      i == 1L ||
+        {
+          stop_mirai(x)
+          cli_enabled ||
+            stop(
+              sprintf("Cannot flatten outputs of differing type: %s / %s", typ, typeof(xi)),
+              call. = FALSE
+            )
+          cli::cli_abort(
+            c(`!` = "cannot flatten outputs of differing type: {typ} / {typeof(xi)}"),
+            location = i,
+            name = names(x)[i],
+            call = quote(mirai_map())
           )
-        cli::cli_abort(
-          c(`!` = "cannot flatten outputs of differing type: {typ} / {typeof(xi)}"),
-          location = i,
-          name = names(x)[i],
-          call = quote(mirai_map())
-        )
-      }
+        }
+      typ <<- typeof(xi)
+    }
   }
 ))
 
@@ -303,13 +307,24 @@ mmap <- function(x, dots, envir = parent.frame()) {
 
 stop_m <- function(x, i, xi) {
   stop_mirai(x)
-  cli_enabled || stop(sprintf("In index %d:\n%s", i, attr(xi, "message")), call. = FALSE)
+  msg <- if (is_mirai_error(xi)) {
+    attr(xi, "message")
+  } else if (is_mirai_interrupt(xi)) {
+    "Interrupted"
+  } else {
+    nng_error(xi)
+  }
+  cli_enabled || stop(sprintf("In index %d:\n%s", i, msg), call. = FALSE)
   name <- names(x)[i]
   cli::cli_abort(
     c(i = "In index: {i}.", i = if (length(name) && nzchar(name)) "With name: {name}."),
     location = i,
     name = name,
-    parent = `class<-`(attributes(xi), c("error", "condition")),
+    parent = if (is_mirai_error(xi)) {
+      `class<-`(attributes(xi), c("error", "condition"))
+    } else {
+      errorCondition(msg)
+    },
     call = quote(mirai_map())
   )
 }

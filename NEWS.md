@@ -1,3 +1,19 @@
+# mirai 2.7.2
+
+#### Updates
+
+* Fixes uninformative errors from `mirai_map()` collection when a task resolves to a non-mirai 'errorValue', e.g. cancelled or timed out (#642).
+* Fixes `mirai_map()` collection option `.flat` ignoring an 'errorValue' in the first element (#639).
+* Fixes `daemon()` returning exit code 1 (idletime) instead of 2 (walltime) when `walltime` elapses while idle (#637).
+* Fixes `race_mirai()` not waiting for resolution on compute profiles set with `url` and `dispatcher = FALSE` (#635).
+* Fixes daemon crash for errors raised before evaluation begins (#633).
+* Fixes daemon cleanup not restoring options modified during evaluation (#631).
+* Removes an ineffective promise cache from the `as.promise()` method for 'mirai_map' objects.
+* `mirai_map()` dispatches tasks with lower per-element overhead.
+* `everywhere()` dispatches with lower overhead, and errors upfront for a missing expression or invalid `...` arguments.
+* Ephemeral daemons return invisibly so that they do not print unnecessary output when this is being logged (thanks @jan-swissre, #619).
+* Requires nanonext >= 1.10.1.
+
 # mirai 2.7.1
 
 #### Updates

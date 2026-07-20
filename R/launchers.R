@@ -369,15 +369,24 @@ cluster_config <- function(command = "sbatch", options = "", rscript = "Rscript"
 
 #' HTTP Remote Launch Configuration
 #'
-#' Generates a remote configuration for launching daemons via HTTP API. By
-#' default, automatically configures for Posit Workbench using environment
-#' variables.
+#' Generates a remote configuration for launching daemons via HTTP API, as may
+#' be used by Kubernetes or other such platforms. By default, automatically
+#' configures for Posit Workbench using environment variables.
 #'
 #' Arguments accepting either a value or a function (`url`, `headers`, `data`,
-#' `cookie`, `token`) may be supplied as a function to defer evaluation until
-#' the time of launch. This is the recommended way to supply credentials, so
-#' that they are fetched lazily when needed rather than captured when the
-#' configuration is created.
+#' `cookie`, `token`) may be supplied as a function to defer evaluation: a
+#' plain value is captured when the configuration is created, whereas a
+#' function is evaluated at the time each daemon is launched. This is the
+#' recommended way to supply credentials such as session cookies or API
+#' tokens, as the same configuration object may be stored and reused (for
+#' example to scale up later in a session), with a fresh credential fetched
+#' at each launch.
+#'
+#' At launch time, the `"%s"` placeholder in `data` is replaced by a
+#' `mirai::daemon()` call, e.g. `mirai::daemon("tcp://10.0.0.7:34291")` (when
+#' using TLS, the certificate is also inlined in the call). The receiving
+#' platform only has to run this expression using `Rscript -e` to start a
+#' daemon, which then dials back to the host.
 #'
 #' @param url (character or function) URL endpoint for the launch API. May be a
 #'   function returning the URL value.
@@ -404,7 +413,8 @@ cluster_config <- function(command = "sbatch", options = "", rscript = "Rscript"
 #'
 #' @section Posit Workbench Options:
 #'
-#' When using the default value of `data`, the following arguments may be
+#' The default values of `url`, `headers` and `data` configure the launch
+#' automatically on Posit Workbench. The following arguments may additionally be
 #' supplied via `...` to customise the launched job:
 #'
 #' - `rscript` (character) Rscript executable path. Default `"Rscript"`.
@@ -547,9 +557,7 @@ local_url <- function(tcp = FALSE, port = 0) {
 #' @export
 #'
 print.miraiLaunchCmd <- function(x, ...) {
-  for (i in seq_along(x)) {
-    cat(sprintf("[%d]\n%s\n\n", i, x[i]), file = stdout())
-  }
+  cat(sprintf("[%d]\n%s\n", seq_along(x), x), file = stdout(), sep = "\n")
   invisible(x)
 }
 
@@ -571,18 +579,16 @@ launch_remote_http <- function(n, remote, url, write_args, dots, envir, tls) {
   if (!is.null(remote[["token"]])) {
     headers <- c(headers, Authorization = sprintf("Bearer %s", resolve_field(remote[["token"]])))
   }
-  lapply(seq_len(n), function(i) {
-    cmd <- write_args(url, dots, maybe_next_stream(envir), tls)
-    cmd <- gsub("\\", "\\\\", cmd, fixed = TRUE)
-    cmd <- gsub("\"", "\\\"", cmd, fixed = TRUE)
-    cmd <- gsub("\n", "\\n", cmd, fixed = TRUE)
-    ncurl(
-      url = api_url,
-      method = method,
-      headers = headers,
-      data = sprintf(data, cmd),
-      timeout = .limit_short
-    )
+  cmds <- vapply(
+    seq_len(n),
+    function(i) write_args(url, dots, maybe_next_stream(envir), tls),
+    character(1L)
+  )
+  cmds <- gsub("\\", "\\\\", cmds, fixed = TRUE)
+  cmds <- gsub("\"", "\\\"", cmds, fixed = TRUE)
+  cmds <- gsub("\n", "\\n", cmds, fixed = TRUE)
+  lapply(sprintf(data, cmds), function(body) {
+    ncurl(url = api_url, method = method, headers = headers, data = body, timeout = .limit_short)
   })
 }
 
@@ -710,7 +716,7 @@ posit_workbench_fetch <- function(endpoint) {
   rs[[".rs.api.viewer"]](srv$url)
   timeout <- mclock() + .limit_short
   while (is.null(cookie) && mclock() < timeout) {
-    later::run_now(1L)
+    nanonext::run_event_loop(1000L)
   }
   is.null(cookie) && stop(._[["posit_api"]])
   rs[[".rs.api.executeCommand"]]("activateConsole")

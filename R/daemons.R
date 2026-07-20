@@ -590,6 +590,12 @@ defer <- function(expr, envir) {
 
 compute_env <- function(x) ..[[if (is.null(x)) .[["cp"]] else x]]
 
+require_env <- function(.compute, call) {
+  envir <- compute_env(.compute)
+  is.null(envir) && stop_d(.compute, call)
+  envir
+}
+
 configure_tls <- function(url, tls, pass, envir) {
   purl <- parse_url(url)
   sch <- purl[["scheme"]]
@@ -745,6 +751,7 @@ launch_daemons <- function(seq, dots, envir) {
 
 create_sock <- function(envir, url, tls) {
   sock <- req_socket(url, tls = tls)
+  `[[<-`(envir, "cv", cv())
   `[[<-`(envir, "sock", sock)
   `[[<-`(envir, "url", attr(attr(sock, "listener")[[1L]], "url"))
 }

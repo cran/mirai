@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en-US">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.9">
+<meta name="generator" content="litedown 0.10">
 <title>mirai - Serialization (Arrow, ADBC, polars, torch)</title>
 <style type="text/css">
 body {
@@ -45,9 +45,9 @@ div > .caption { padding: 1px 1em; }
 table {
   &:only-child:not(.table > *) { margin: auto; }
   th, td { padding: 5px; font-variant-numeric: tabular-nums; }
-  thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
-  thead th { border-bottom: 1px solid #ddd; }
-  &:not(.datatable-table) {
+  &:not([class]) {
+    thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
+    thead th { border-bottom: 1px solid #ddd; }
     border-top: 1px solid #666;
     border-bottom: 1px solid #666;
   }
@@ -62,7 +62,7 @@ hr, .footnotes::before { border: 1px dashed #ddd; }
 .frontmatter { text-align: center; }
 #TOC {
   a { text-decoration: none; }
-  ul { list-style: none; padding-left: 1em; }
+  ul { list-style: none; padding-left: 1em; columns: 24em; }
   & > ul { padding: 0; }
   ul ul { border-left: 1px solid lightsteelblue; }
 }
@@ -73,6 +73,7 @@ span[class^="ref-number-"] { font-weight: bold; }
 .ref-number-fig::after, .ref-number-tab::after { content: ":"; }
 .cross-ref-chp::before { content: "Chapter "; }
 .cross-ref-sec::before { content: "Section "; }
+.cross-ref-apd::before { content: "Appendix "; }
 .cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
 .cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
 .cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
@@ -98,7 +99,10 @@ section.footnotes {
   background: repeating-linear-gradient(135deg, white, white 30px, #ddd 32px, #ddd 32px);
   opacity: 0.6;
 }
-
+@media (prefers-color-scheme: dark) {
+  html, img, video, iframe { filter: invert(1); }
+  body { background: #ededed; }
+}
 @media print {
   body { max-width: 100%; }
   tr, img { break-inside: avoid; }
@@ -107,7 +111,7 @@ section.footnotes {
   body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
 }
 </style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.14.14/css/prism-xcode.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.13.61/css/prism-xcode.min.css">
 </head>
 <body>
 <div class="frontmatter">
@@ -136,7 +140,7 @@ daemons(0)
 <pre><code class="language-r">cfg &lt;- serial_config(
   &quot;ArrowTabular&quot;,
   arrow::write_to_raw,
-  function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)
+  \(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)
 )
 
 daemons(1, serial = cfg)
@@ -169,7 +173,7 @@ This example combines Arrow with <a href="https://pola-rs.github.io/r-polars/"><
   serial = serial_config(
     c(&quot;ArrowTabular&quot;, &quot;polars_data_frame&quot;),
     list(arrow::write_to_raw, \(x) x$serialize()),
-    list(function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE), polars::pl$deserialize_df)
+    list(\(x) arrow::read_ipc_stream(x, as_data_frame = FALSE), polars::pl$deserialize_df)
   )
 )
 
@@ -225,7 +229,7 @@ everywhere(library(torch))
     self$conv1 &lt;- nn_conv2d(in_size, out_size, 5)
     self$conv2 &lt;- nn_conv2d(in_size, out_size, 5)
   },
-  forward = function(x) {
+  forward = \(x) {
     x &lt;- self$conv1(x)
     x &lt;- nnf_relu(x)
     x &lt;- self$conv2(x)
@@ -249,35 +253,35 @@ m[]
 <pre><code class="language-r">m$data$parameters$conv1.weight
 #&gt; torch_tensor
 #&gt; (1,1,.,.) = 
-#&gt;  -0.1218  0.1835 -0.1114 -0.1365 -0.1824
-#&gt;   0.1107 -0.0498 -0.1219 -0.0938 -0.1570
-#&gt;  -0.1944  0.0355  0.1750 -0.1612 -0.1590
-#&gt;  -0.0806 -0.1906 -0.0272 -0.1732 -0.0491
-#&gt;  -0.0079 -0.0874 -0.1256  0.1276  0.0664
+#&gt; -0.0857 -0.1251  0.1377  0.1328 -0.1928
+#&gt;   0.0165 -0.1619  0.0201  0.0201 -0.1663
+#&gt;  -0.1365 -0.0559  0.0189 -0.1072 -0.0852
+#&gt;   0.1580 -0.0606  0.1258 -0.1551 -0.0132
+#&gt;  -0.0780  0.0685 -0.1514  0.1451  0.0735
 #&gt; 
 #&gt; (2,1,.,.) = 
-#&gt;  -0.1450 -0.0371  0.0601 -0.1578  0.0918
-#&gt;   0.1118 -0.0800  0.0359  0.0452  0.1182
-#&gt;   0.0516  0.0109  0.0186  0.1399 -0.1431
-#&gt;   0.1720 -0.0919  0.0616  0.0937  0.1511
-#&gt;  -0.0270  0.0936  0.1510  0.1995  0.1934
+#&gt; -0.0758 -0.1536  0.1792  0.1410 -0.1115
+#&gt;   0.1274 -0.0175 -0.1426  0.0470 -0.0959
+#&gt;  -0.0682  0.1954  0.0961 -0.0061  0.1571
+#&gt;   0.1654  0.0397 -0.1638 -0.1155  0.1208
+#&gt;  -0.1486 -0.1936  0.1217 -0.1016  0.0139
 #&gt; 
 #&gt; (3,1,.,.) = 
-#&gt;   0.1055  0.0056  0.0491 -0.0096  0.0655
-#&gt;   0.1950  0.0676  0.0254  0.0834 -0.0401
-#&gt;   0.1658  0.1767 -0.0338  0.1644  0.1806
-#&gt;  -0.0346 -0.1521  0.0490  0.1153  0.0755
-#&gt;  -0.0832  0.0074 -0.0607  0.1704  0.1454
+#&gt;  0.1694  0.0830  0.1361 -0.0924 -0.0131
+#&gt;   0.1325  0.0720  0.1806 -0.1409 -0.0302
+#&gt;  -0.1241  0.1135 -0.1845 -0.0455  0.1466
+#&gt;  -0.0849 -0.1224  0.1740 -0.1332  0.0679
+#&gt;   0.0436 -0.0271  0.0862 -0.1048 -0.1420
 #&gt; 
 #&gt; (4,1,.,.) = 
-#&gt;   0.1091  0.1982  0.1185  0.1655  0.1716
-#&gt;   0.1987 -0.0517 -0.0115 -0.0641  0.0294
-#&gt;   0.0078 -0.0942 -0.1629 -0.1114 -0.0833
-#&gt;   0.0395 -0.0101  0.0837  0.1523  0.0673
-#&gt;  -0.0984  0.0988 -0.1154  0.0453 -0.1577
+#&gt;  0.1299  0.0352  0.1679 -0.0350  0.1596
+#&gt;   0.0006 -0.1701  0.0643 -0.1827 -0.1157
+#&gt;   0.1647  0.0789  0.0277  0.0672  0.0694
+#&gt;   0.1079 -0.0205 -0.0281 -0.0550  0.1013
+#&gt;   0.1596  0.0933  0.1892 -0.1925 -0.1579
 #&gt; 
 #&gt; (5,1,.,.) = 
-#&gt;   0.0630 -0.0820 -0.1399  0.0528 -0.0896
+#&gt; -0.0214  0.1610  0.0383  0.0132  0.1843
 #&gt; ... [the output was truncated (use n=-1 to disable)]
 #&gt; [ CPUFloatType{20,1,5,5} ][ requires_grad = TRUE ]
 </code></pre>
@@ -317,7 +321,7 @@ The class is ‘nanoarrow_array_stream’ since <code>nanoarrow</code> backs all
 cfg &lt;- serial_config(
   class = &quot;nanoarrow_array_stream&quot;,
   sfunc = arrow::write_to_raw,
-  ufunc = function(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)
+  ufunc = \(x) arrow::read_ipc_stream(x, as_data_frame = FALSE)
 )
 
 daemons(1, serial = cfg)
