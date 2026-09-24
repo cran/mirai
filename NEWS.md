@@ -1,3 +1,10 @@
+# mirai 2.7.3
+
+#### Updates
+
+* Fixes a custom unserialization function (`ufunc`) that errors crashing the daemon; the object now unserializes as an 'errorValue' 1000 instead (thanks @eitsupi, #646).
+* Requires nanonext >= 1.10.3.
+
 # mirai 2.7.2
 
 #### Updates

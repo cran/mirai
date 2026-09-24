@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<meta name="generator" content="litedown 0.10">
+<meta name="generator" content="litedown 0.11">
 <title>mirai - Reference Manual</title>
 <style type="text/css">
 body {
@@ -390,7 +390,7 @@ Which is right is application-specific.</p>
 <h4 id="sec:shared-memory-with-local-daemons">Shared Memory with Local Daemons</h4>
 <p>Each <code>mirai()</code> call serialises its arguments to the daemon and the result back, even when the daemon is on the same machine.
 For large objects, this copy can dominate evaluation time.</p>
-<p>The <a href="https://github.com/shikokuchuo/mori"><code>mori</code></a> package provides shared-memory R objects that local daemons read in place, without copying.
+<p>The <a href="https://mori.r-lib.org"><code>mori</code></a> package provides shared-memory R objects that local daemons read in place, without copying.
 Wrap an atomic vector, list, or dataframe with <code>mori::share()</code>:</p>
 <pre><code class="language-r">library(lobstr)
 daemons(4)
